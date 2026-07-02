@@ -936,7 +936,8 @@ function AssistantView({S,stock,checkouts,setView}){
   const speak=(text,onEnd)=>{
     if(!(ttsRef.current||voiceReplyRef.current)||!window.speechSynthesis){onEnd&&onEnd();return}
     window.speechSynthesis.cancel();
-    const u=new SpeechSynthesisUtterance(text);
+    const spoken=(text||"").replace(/\bшт\b\.?/g,"штук").replace(/[×✕]/g," по ").replace(/[•]/g,"").replace(/₸/g,"сом");
+    const u=new SpeechSynthesisUtterance(spoken);
     u.lang="ru-RU";if(voiceRef.current)u.voice=voiceRef.current;
     u.rate=0.94;u.pitch=1.06;u.volume=1;
     speakingRef.current=true;setVstate("speaking");
@@ -944,7 +945,7 @@ function AssistantView({S,stock,checkouts,setView}){
     u.onend=done;u.onerror=done;
     window.speechSynthesis.speak(u);
   };
-  const say=(t,listenAfter)=>{push("system",t);speak(t,()=>{if(listenAfter&&hfRef.current)armListen(false)})};
+  const say=(t,listenAfter)=>{push("system",t);speak(t,()=>{if(listenAfter){if(hfRef.current)armListen(false);else if(micOK&&voiceReplyRef.current)startOnce()}})};
 
   const armListen=(announce)=>{
     modeRef.current="wake";setVstate("listening");
@@ -977,7 +978,7 @@ function AssistantView({S,stock,checkouts,setView}){
     setPending({kind:"confirm",action:a});
     const sum=`${TL[a.type]}: ${a.qty} шт «${a.product_name||pName(a.product_id)}»${a.recipient_id?(a.type==="return"?" от ":" → ")+(a.recipient_name||rName(a.recipient_id)):""}${a.purpose?" · "+a.purpose:""}${a.due_date?" · до "+a.due_date:""}`;
     push("system","Проверьте и подтвердите:",{type:"confirm",summary:sum});
-    speak(`Подтвердить? ${TL[a.type]} ${a.qty} штук ${a.product_name||pName(a.product_id)}. Скажите «да» или «нет».`,()=>{if(hfRef.current)armListen(false)});
+    speak(`Подтвердить? ${TL[a.type]} ${a.qty} штук ${a.product_name||pName(a.product_id)}. Скажите «да» или «нет».`,()=>{if(hfRef.current)armListen(false);else if(micOK&&voiceReplyRef.current)startOnce()});
   };
 
   const execute=async a=>{
@@ -1010,8 +1011,38 @@ function AssistantView({S,stock,checkouts,setView}){
     say(`Получатель «${nm}» добавлен.`);return data;
   };
 
+  const llmCfg=()=>{try{return JSON.parse(localStorage.getItem("mkt_llm"))}catch(e){return null}};
+  const setupLLM=()=>{
+    const cur=llmCfg()||{};
+    const key=window.prompt("Ключ ИИ (OpenAI-совместимый, напр. OpenRouter). Хранится только в этом браузере:",cur.key||"");
+    if(key===null)return;
+    const url=window.prompt("URL эндпоинта (Enter — OpenRouter по умолчанию):",cur.url||"https://openrouter.ai/api/v1/chat/completions")||"https://openrouter.ai/api/v1/chat/completions";
+    const model=window.prompt("Модель:",cur.model||"openai/gpt-4o-mini")||"openai/gpt-4o-mini";
+    localStorage.setItem("mkt_llm",JSON.stringify({key:key.trim(),url:url.trim(),model:model.trim()}));
+    say("ИИ подключён. Теперь можно спрашивать что угодно.",true);
+  };
+  const askLLM=async(q)=>{
+    if(navigator.onLine===false){say("Сейчас нет сети — на общие вопросы отвечу при подключении. По складу помогу и офлайн.",true);return}
+    const cfg=llmCfg();
+    if(!cfg||!cfg.key){say("Чтобы отвечать на любые вопросы (хоть про галактику, хоть посоветоваться), подключите ИИ: нажмите ⚙ вверху и вставьте ключ. Пока помогаю по складу: остатки, приход, выдача, возврат, списание, просрочки.",true);return}
+    const id=idRef.current++;setMessages(m=>[...m,{id,from:"system",text:"…думаю"}]);
+    try{
+      const r=await fetch(cfg.url,{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+cfg.key},
+        body:JSON.stringify({model:cfg.model,messages:[
+          {role:"system",content:"Ты — дружелюбный голосовой помощник складского учёта банка. Отвечай кратко, по-русски, живым тоном. Помогаешь и по складу, и на общие вопросы (наука, советы и т.п.). Ответы для озвучивания — без разметки."},
+          {role:"user",content:q}]})});
+      const d=await r.json();
+      const t=(d.choices&&d.choices[0]&&d.choices[0].message&&d.choices[0].message.content)||(d.error&&d.error.message)||"Не удалось получить ответ.";
+      setMessages(m=>m.map(x=>x.id===id?{...x,text:t}:x));
+      speak(t,()=>{if(hfRef.current)armListen(false);else if(micOK&&voiceReplyRef.current)startOnce()});
+    }catch(e){
+      setMessages(m=>m.map(x=>x.id===id?{...x,text:"Не получилось связаться с ИИ: "+(e.message||e)+". Проверьте ключ, URL и что эндпоинт разрешает запросы из браузера (CORS)."}:x));
+    }
+  };
+
   const answerQuery=(intent,low)=>{
-    if(intent==="q_stock"){const pm=matchEntity(low,products.filter(p=>!p.archived));if(!pm.item){say("Не нашёл такой товар. Уточните название.");return}const q=stock[pm.item.id]||0;say(`«${pm.item.name}»: ${q} шт на складе${q<5?" — заканчивается":""}.`)}
+    if(intent==="q_inventory"){const act=products.filter(p=>!p.archived).map(p=>({p,q:stock[p.id]||0})).sort((a,b)=>b.q-a.q);const have=act.filter(x=>x.q>0);if(!have.length){say("На складе пока пусто — нет остатков. Оформите приход.",true);return}const tot=have.reduce((a,x)=>a+x.q,0);push("system","На складе:\n"+have.slice(0,20).map(x=>`• ${x.p.name}: ${x.q} шт`).join("\n")+(have.length>20?`\n…и ещё ${have.length-20}`:""));say(`На складе ${have.length} позиций, всего ${tot} штук. Показала список.`,true);return}
+    if(intent==="q_stock"){const pm=matchEntity(low,products.filter(p=>!p.archived));if(!pm.item){say("Не нашла такой товар. Уточните название.",true);return}const q=stock[pm.item.id]||0;say(`«${pm.item.name}»: ${q} шт на складе${q<5?" — заканчивается":""}.`,true)}
     else if(intent==="q_overdue"){const od=checkouts.filter(c=>c.due_date&&c.due_date<TODAY);if(!od.length){say("Просроченных выдач нет.");return}push("system",`Просрочено ${od.length}:\n`+od.slice(0,12).map(c=>`• ${rName(c.recipient_id)} — ${pName(c.product_id)} ×${c.remaining} (с ${c.due_date})`).join("\n"));speak(`Просрочено ${od.length} выдач.`)}
     else if(intent==="q_low"){const lw=products.filter(p=>!p.archived&&(stock[p.id]||0)<5);if(!lw.length){say("Всё в достатке, ничего не заканчивается.");return}push("system","Заканчивается:\n"+lw.slice(0,15).map(p=>`• ${p.name}: ${stock[p.id]||0} шт`).join("\n"));speak(`Заканчивается ${lw.length} позиций.`)}
     else if(intent==="q_top"){const rank=products.filter(p=>!p.archived).map(p=>({p,out:(flows[p.id]||{}).out_q||0})).filter(x=>x.out>0).sort((a,b)=>b.out-a.out).slice(0,10);if(!rank.length){say("Ещё нет выдач для рейтинга.");return}push("system","Больше всего выдано:\n"+rank.map((x,i)=>`${i+1}. ${x.p.name} — ${x.out} шт`).join("\n"));speak("Показываю топ выдач.")}
@@ -1028,14 +1059,28 @@ function AssistantView({S,stock,checkouts,setView}){
 
     if(pend){
       if(pend.kind==="confirm"){
-        if(/^(да|ага|подтверждаю|верно|ок|окей|давай|да,|конечно|yes)/.test(norm(low))){execute(pend.action);return}
-        if(/^(нет|отмена|стоп|не надо|no)/.test(norm(low))){setPending(null);say("Операция отменена.");return}
+        if(/^(да|ага|угу|подтверждаю|подтверди|верно|точно|хорошо|ок|окей|давай|конечно|валяй|yes|сохрани)/.test(norm(low))){execute(pend.action);return}
+        if(/^(нет|неа|отмена|отмени|стоп|не надо|не нужно|отставить|no)/.test(norm(low))){setPending(null);say("Операция отменена.",true);return}
+        say("Скажите «да» для подтверждения или «нет» для отмены.",true);return;
       }
       if(pend.kind==="slot"){
         const a={...pend.action};const slot=pend.awaiting;
-        if(slot==="product"){const pm=matchEntity(low,products.filter(p=>!p.archived));if(pm.item){a.product_id=pm.item.id;a.product_name=pm.item.name}else{const cp=await createProduct(text.trim());if(cp){a.product_id=cp.id;a.product_name=cp.name}else return}}
-        else if(slot==="recipient"){const rm=matchEntity(low,recipients);if(rm.item){a.recipient_id=rm.item.id;a.recipient_name=rm.item.name}else{const nr=await createRecipient(text);if(nr){a.recipient_id=nr.id;a.recipient_name=nr.name}else return}}
-        else if(slot==="qty"){const q=parseQtyRu(low);if(q==null){say("Не понял количество. Назовите число, например «пять».",true);return}a.qty=q}
+        if(slot==="product"){
+          const pm=matchEntity(low,products.filter(p=>!p.archived));
+          if(pm.item){a.product_id=pm.item.id;a.product_name=pm.item.name}
+          else if(/(созда|добавь|добавить|новый|заведи)/.test(low)||pend.retry){
+            const nm=text.replace(/.*?(созда[йть]*|добавь(те)?|заведи|новый товар|новый|товар)\s*/i,"").trim()||pend.pname||text.trim();
+            const cp=await createProduct(nm);if(cp){a.product_id=cp.id;a.product_name=cp.name}else return;
+          }else{setPending({kind:"slot",action:a,awaiting:"product",retry:true,pname:text.trim()});say(`Не нашла товар «${text.trim()}». Повторите название чётче или скажите «создай», чтобы добавить новый.`,true);return}
+        }
+        else if(slot==="recipient"){
+          const rm=matchEntity(low,recipients);
+          if(rm.item){a.recipient_id=rm.item.id;a.recipient_name=rm.item.name}
+          else if(/(созда|добавь|добавить|новый|заведи)/.test(low)||pend.retry){
+            const nr=await createRecipient(pend.rname||text);if(nr){a.recipient_id=nr.id;a.recipient_name=nr.name}else return;
+          }else{setPending({kind:"slot",action:a,awaiting:"recipient",retry:true,rname:text.trim()});say(`Не нашла получателя «${text.trim()}». Повторите имя чётче или скажите «создай», чтобы добавить.`,true);return}
+        }
+        else if(slot==="qty"){const q=parseQtyRu(low);if(q==null){say("Не расслышала количество. Назовите число, например «пять».",true);return}a.qty=q}
         setPending(null);proceed(a);return;
       }
     }
@@ -1051,12 +1096,13 @@ function AssistantView({S,stock,checkouts,setView}){
     if(/(спасибо|благодар)/.test(low)){say("Всегда рад помочь!");return}
     if(/^(привет|здравствуй|салам|добр|эй)/.test(norm(low))&&low.length<20){say("Здравствуйте! Что оформить — выдачу, приход, или показать остатки?",true);return}
 
+    if(/(что (есть )?на складе|что на складе|весь склад|список товаров|покажи товары|какие товары|инвентар|остатки по всем|что имеется)/.test(low)&&!/(выдай|прими|спиши|возврат)/.test(low)){answerQuery("q_inventory",low);return}
     if(/(сколько|остаток|остатки|есть ли|в наличии)/.test(low)&&!/(выдай|прими|спиши|возврат)/.test(low)){answerQuery("q_stock",low);return}
     if(/(просроч|должник|кто не вернул)/.test(low)){answerQuery("q_overdue",low);return}
     if(/(заканчива|мало на складе|заканчиваются|низкий остаток)/.test(low)){answerQuery("q_low",low);return}
     if(/(топ|популярн|больше всего выда|рейтинг)/.test(low)){answerQuery("q_top",low);return}
     if(/(что у |что взял|на руках у|числится за)/.test(low)){answerQuery("q_holder",low);return}
-    if(/(стоимость склада|общая стоимость|сколько всего на складе|склад стоит)/.test(low)){answerQuery("q_value",low);return}
+    if(/(стоимость склада|общая стоимость|сколько всего на складе|склад стоит|на какую сумму)/.test(low)){answerQuery("q_value",low);return}
 
     let type=null;
     if(/(выдай|выдать|выдач|дай|отправь|передай)/.test(low))type="out";
@@ -1065,11 +1111,8 @@ function AssistantView({S,stock,checkouts,setView}){
     else if(/(спиши|списан|списать|брак|испорч|утил)/.test(low))type="writeoff";
 
     if(!type){
-      const pm=matchEntity(low,products.filter(p=>!p.archived));
-      if(pm.item){answerQuery("q_stock",low);return}
-      const rm=matchEntity(low,recipients);
-      if(rm.item){answerQuery("q_holder",low);return}
-      say("Я помощник склада: оформляю приход, выдачу, возврат и списание, отвечаю по остаткам, просрочкам, топу выдач и по получателям. По темам вне учёта пока не подскажу. Что оформить?",true);return;
+      if(!can("move")&&/(выдай|прими|спиши|возврат)/.test(low)){say("У вас нет прав на операции — только просмотр.");return}
+      askLLM(text);return;
     }
     if(!can("move")){say("У вас нет прав на операции — только просмотр.");return}
 
@@ -1111,7 +1154,7 @@ function AssistantView({S,stock,checkouts,setView}){
       startingRef.current=false;
       if(e.error==="not-allowed"||e.error==="service-not-allowed"){toast("Нет доступа к микрофону","error");stopHandsFree()}
     };
-    r.onend=()=>{startingRef.current=false;if(hfRef.current)setTimeout(()=>{if(hfRef.current)startRec()},350)};
+    r.onend=()=>{startingRef.current=false;if(hfRef.current)setTimeout(()=>{if(hfRef.current)startRec()},120)};
     recRef.current=r;
     try{r.start()}catch(e){startingRef.current=false}
   };
@@ -1154,6 +1197,7 @@ function AssistantView({S,stock,checkouts,setView}){
         <div style={{display:"flex",alignItems:"center",gap:10}}><span style={{fontSize:20}}>🎙</span><div><span className="ff" style={{fontSize:17,fontWeight:700}}>Голосовой помощник</span><div style={{fontSize:11,color:"var(--tx3)"}}>Операции и аналитика · голос и текст</div></div></div>
         <div style={{display:"flex",gap:8,alignItems:"center"}}>
           {hf&&<span style={{display:"inline-flex",alignItems:"center",gap:6,padding:"4px 10px",borderRadius:999,background:STATE_UI.bg,color:STATE_UI.c,fontSize:12,fontWeight:600}}><span style={{width:8,height:8,borderRadius:"50%",background:STATE_UI.c,animation:vstate==="listening"||vstate==="speaking"?"pulse 1.2s infinite":"none"}}/>{STATE_UI.t}</span>}
+          <button onClick={setupLLM} title="Подключить ИИ для любых вопросов" style={{display:"flex",alignItems:"center",gap:6,padding:"6px 12px",borderRadius:20,border:"1px solid var(--brd)",background:"var(--sur)",color:"var(--tx2)",fontSize:12,fontWeight:600,cursor:"pointer"}}>⚙ ИИ</button>
           <button onClick={()=>setTts(t=>!t)} style={{display:"flex",alignItems:"center",gap:6,padding:"6px 12px",borderRadius:20,border:`1px solid ${tts?"var(--ink)":"var(--brd)"}`,background:tts?"var(--ink-l)":"var(--sur)",color:tts?"var(--ink)":"var(--tx2)",fontSize:12,fontWeight:600,cursor:"pointer"}}>{tts?"🔊 Голос вкл":"🔈 Голос выкл"}</button>
           <button onClick={()=>hf?stopHandsFree():startHandsFree()} style={{display:"flex",alignItems:"center",gap:6,padding:"6px 14px",borderRadius:20,border:`1px solid ${hf?"var(--gr)":"var(--brd)"}`,background:hf?"var(--gr-l)":"var(--sur)",color:hf?"var(--gr-m)":"var(--tx2)",fontSize:12,fontWeight:700,cursor:"pointer"}}>{hf?"🟢 Руки свободны":"🎧 Руки свободны"}</button>
         </div>
