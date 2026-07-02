@@ -71,6 +71,7 @@ const TODAY = new Date().toISOString().split("T")[0];
 const IN3D  = new Date(Date.now()+3*864e5).toISOString().split("T")[0];
 const ROLES = {admin:"Администратор",manager:"Маркетолог",employee:"Сотрудник",director:"Руководитель"};
 const TL = {in:"Приход",out:"Выдача",return:"Возврат",writeoff:"Списание"};
+const BUILD = "сборка v6 · 02.07";
 const TC = {in:"var(--gr)",out:"var(--ink)",return:"var(--pu)",writeoff:"var(--rd)"};
 const som = n => `${new Intl.NumberFormat("ru-RU").format(Math.round(n||0))} с`;
 const ONBOARD = "mkt_onboard_v5";
@@ -962,7 +963,8 @@ function AssistantView({S,stock,checkouts,setView}){
   const extract=(low,base)=>{
     const a={...base};
     const pm=matchEntity(low,products.filter(p=>!p.archived));
-    if(pm.item){a.product_id=pm.item.id;a.product_name=pm.item.name;ctx.current.product=pm.item.id}
+    if(pm.item&&pm.strong){a.product_id=pm.item.id;a.product_name=pm.item.name;ctx.current.product=pm.item.id}
+    else if(pm.item){a._pguess=pm.item}
     const rm=matchEntity(low,recipients);
     if(rm.item){a.recipient_id=rm.item.id;a.recipient_name=rm.item.name;ctx.current.recipient=rm.item.id}
     const q=parseQtyRu(low);if(q!=null)a.qty=q;
@@ -1058,27 +1060,49 @@ function AssistantView({S,stock,checkouts,setView}){
     const pend=pendingRef.current;
 
     if(pend){
+      const YES=/^(да|ага|угу|верно|точно|правильно|это оно|подтверждаю|подтверди|хорошо|ок|окей|давай|конечно|создай|создать|yes|сохрани)/;
+      const NO=/^(нет|неа|отмена|отмени|стоп|не надо|не нужно|не то|отставить|no)/;
       if(pend.kind==="confirm"){
-        if(/^(да|ага|угу|подтверждаю|подтверди|верно|точно|хорошо|ок|окей|давай|конечно|валяй|yes|сохрани)/.test(norm(low))){execute(pend.action);return}
-        if(/^(нет|неа|отмена|отмени|стоп|не надо|не нужно|отставить|no)/.test(norm(low))){setPending(null);say("Операция отменена.",true);return}
+        if(YES.test(norm(low))){execute(pend.action);return}
+        if(NO.test(norm(low))){setPending(null);say("Операция отменена.",true);return}
         say("Скажите «да» для подтверждения или «нет» для отмены.",true);return;
+      }
+      if(pend.kind==="guess"){
+        const a={...pend.action};delete a._pguess;
+        if(YES.test(norm(low))){a.product_id=pend.guess.id;a.product_name=pend.guess.name;setPending(null);proceed(a);return}
+        const pm=matchEntity(low,products.filter(p=>!p.archived));
+        if(pm.item&&pm.strong){a.product_id=pm.item.id;a.product_name=pm.item.name;setPending(null);proceed(a);return}
+        if(pm.item){setPending({kind:"guess",action:a,guess:pm.item});say(`Тогда «${pm.item.name}»? Скажите «да» или назовите иначе.`,true);return}
+        setPending({kind:"create",action:a,pname:text.trim()});say(`Не нашла такой товар. Создать новый — «${text.trim()}»? Скажите «да» или «нет».`,true);return;
+      }
+      if(pend.kind==="create"){
+        const a={...pend.action};
+        if(NO.test(norm(low))){setPending({kind:"slot",action:a,awaiting:"product"});say("Хорошо, не создаю. Назовите товар ещё раз.",true);return}
+        if(YES.test(norm(low))){const cp=await createProduct(pend.pname);if(cp){a.product_id=cp.id;a.product_name=cp.name;setPending(null);proceed(a)}return}
+        const pm=matchEntity(low,products.filter(p=>!p.archived));
+        if(pm.item&&pm.strong){a.product_id=pm.item.id;a.product_name=pm.item.name;setPending(null);proceed(a);return}
+        setPending({kind:"create",action:a,pname:text.trim()});say(`Создать новый товар «${text.trim()}»? Скажите «да» или «нет».`,true);return;
+      }
+      if(pend.kind==="create_rec"){
+        const a={...pend.action};
+        if(NO.test(norm(low))){setPending({kind:"slot",action:a,awaiting:"recipient"});say("Хорошо. Назовите получателя ещё раз.",true);return}
+        if(YES.test(norm(low))){const nr=await createRecipient(pend.rname);if(nr){a.recipient_id=nr.id;a.recipient_name=nr.name;setPending(null);proceed(a)}return}
+        const rm=matchEntity(low,recipients);
+        if(rm.item){a.recipient_id=rm.item.id;a.recipient_name=rm.item.name;setPending(null);proceed(a);return}
+        setPending({kind:"create_rec",action:a,rname:text.trim()});say(`Добавить получателя «${text.trim()}»? Скажите «да» или «нет».`,true);return;
       }
       if(pend.kind==="slot"){
         const a={...pend.action};const slot=pend.awaiting;
         if(slot==="product"){
           const pm=matchEntity(low,products.filter(p=>!p.archived));
-          if(pm.item){a.product_id=pm.item.id;a.product_name=pm.item.name}
-          else if(/(созда|добавь|добавить|новый|заведи)/.test(low)||pend.retry){
-            const nm=text.replace(/.*?(созда[йть]*|добавь(те)?|заведи|новый товар|новый|товар)\s*/i,"").trim()||pend.pname||text.trim();
-            const cp=await createProduct(nm);if(cp){a.product_id=cp.id;a.product_name=cp.name}else return;
-          }else{setPending({kind:"slot",action:a,awaiting:"product",retry:true,pname:text.trim()});say(`Не нашла товар «${text.trim()}». Повторите название чётче или скажите «создай», чтобы добавить новый.`,true);return}
+          if(pm.item&&pm.strong){a.product_id=pm.item.id;a.product_name=pm.item.name}
+          else if(pm.item){setPending({kind:"guess",action:a,guess:pm.item});say(`Вы имели в виду «${pm.item.name}»? Скажите «да» или назовите точнее.`,true);return}
+          else{setPending({kind:"create",action:a,pname:text.trim()});say(`Не нашла товар «${text.trim()}». Создать новый? Скажите «да» или «нет».`,true);return}
         }
         else if(slot==="recipient"){
           const rm=matchEntity(low,recipients);
           if(rm.item){a.recipient_id=rm.item.id;a.recipient_name=rm.item.name}
-          else if(/(созда|добавь|добавить|новый|заведи)/.test(low)||pend.retry){
-            const nr=await createRecipient(pend.rname||text);if(nr){a.recipient_id=nr.id;a.recipient_name=nr.name}else return;
-          }else{setPending({kind:"slot",action:a,awaiting:"recipient",retry:true,rname:text.trim()});say(`Не нашла получателя «${text.trim()}». Повторите имя чётче или скажите «создай», чтобы добавить.`,true);return}
+          else{setPending({kind:"create_rec",action:a,rname:text.trim()});say(`Не нашла получателя «${text.trim()}». Добавить нового? Скажите «да» или «нет».`,true);return}
         }
         else if(slot==="qty"){const q=parseQtyRu(low);if(q==null){say("Не расслышала количество. Назовите число, например «пять».",true);return}a.qty=q}
         setPending(null);proceed(a);return;
@@ -1116,7 +1140,9 @@ function AssistantView({S,stock,checkouts,setView}){
     }
     if(!can("move")){say("У вас нет прав на операции — только просмотр.");return}
 
-    proceed(extract(low,{type}));
+    const a=extract(low,{type});
+    if(!a.product_id&&a._pguess){setPending({kind:"guess",action:a,guess:a._pguess});say(`Вы имели в виду «${a._pguess.name}»? Скажите «да» или назовите товар точнее.`,true);return}
+    proceed(a);
   };
   handleRef.current=handleText;
 
@@ -1284,6 +1310,7 @@ function Login({onLogin}){
             {net&&<div style={{padding:"9px 12px",borderRadius:10,fontSize:12,lineHeight:1.5,background:net.startsWith("ok")?"var(--gr-l)":net.startsWith("warn")?"var(--am-l)":"var(--rd-l)",border:`1px solid ${net.startsWith("ok")?"var(--gr)":net.startsWith("warn")?"var(--am)":"var(--rd)"}`,color:net.startsWith("ok")?"var(--gr-m)":net.startsWith("warn")?"var(--am-m)":"var(--rd-m)"}}>{net.slice(net.indexOf(":")+1)}</div>}
             <Btn onClick={submit} loading={loading} size="lg" style={{width:"100%",marginTop:4}}>Войти</Btn>
             <button onClick={checkConn} disabled={checking} style={{fontSize:12,color:"var(--tx3)",cursor:"pointer",background:"none",border:"none",padding:"2px 0"}}>{checking?"Проверяю…":"Проверить соединение с сервером"}</button>
+            <div style={{textAlign:"center",fontSize:10.5,color:"var(--tx3)",marginTop:2}}>{BUILD}</div>
           </div>
         </div>
       </div>
