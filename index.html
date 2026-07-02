@@ -654,7 +654,7 @@ function ItemModal({p,stock,S,checkouts,onClose}){
   const doAction=async(type,qty_,extra={})=>{
     const avail=(S.stock&&S.stock[p.id])||0;
     if((type==="out"||type==="writeoff")&&qty_>avail){S.toast(`Недостаточно на складе: доступно ${avail} шт`,"error");setConfirm(null);return}
-    const{error}=await sb.from("movements").insert({type,product_id:p.id,qty:qty_,location_id:p.location_id,issuer_id:S.profile.id,date:TODAY,...extra});
+    const{error}=await sb.from("movements").insert({type,product_id:p.id,qty:qty_,location_id:p.location_id,issuer_id:S.profile.id,...extra});
     if(error)S.toast("Ошибка","error");else S.toast(`${TL[type]} сохранена`);setConfirm(null);
   };
   return(
@@ -762,7 +762,7 @@ function BranchesView({S,checkouts}){
   const byRec={};bOuts.forEach(c=>{if(!byRec[c.recipient_id])byRec[c.recipient_id]=[];byRec[c.recipient_id].push(c)});
   const tQ=bOuts.reduce((a,c)=>a+c.remaining,0);const tV=bOuts.reduce((a,c)=>a+(products.find(p=>p.id===c.product_id)?.price||0)*c.remaining,0);
   const rName=id=>recipients.find(r=>r.id===id)?.name??"—";const pName=id=>products.find(p=>p.id===id)?.name??"—";
-  const doReturn=async c=>{const{error}=await sb.from("movements").insert({type:"return",product_id:c.product_id,qty:c.remaining,location_id:products.find(p=>p.id===c.product_id)?.location_id,issuer_id:profile.id,recipient_id:c.recipient_id,branch_id:c.branch_id,condition:"хорошее",date:TODAY});if(error)toast("Ошибка","error");else toast("Возврат оформлен");setConfirm(null)};
+  const doReturn=async c=>{const{error}=await sb.from("movements").insert({type:"return",product_id:c.product_id,qty:c.remaining,location_id:products.find(p=>p.id===c.product_id)?.location_id,issuer_id:profile.id,recipient_id:c.recipient_id,branch_id:c.branch_id,condition:"хорошее"});if(error)toast("Ошибка","error");else toast("Возврат оформлен");setConfirm(null)};
   return(
     <div style={{display:"flex",flexDirection:"column",height:"100%"}}>
       {confirm&&<Confirm title="Оформить возврат?" message={`Возврат ${confirm.remaining} шт "${pName(confirm.product_id)}" от ${rName(confirm.recipient_id)}`} onOk={()=>doReturn(confirm)} onCancel={()=>setConfirm(null)}/>}
@@ -853,6 +853,7 @@ function parseQtyRu(low){
   norm(low).split(/\s+/).forEach(w=>{if(NUM_WORDS[w]!=null){total+=NUM_WORDS[w];found=true}});
   return found?total:null;
 }
+function commonPref(a,b){let i=0;const n=Math.min(a.length,b.length);while(i<n&&a[i]===b[i])i++;return i}
 function matchEntity(input,items,nameKey){
   nameKey=nameKey||"name";
   const words=norm(input).split(/\s+/).filter(w=>w.length>2);
@@ -863,9 +864,11 @@ function matchEntity(input,items,nameKey){
     const nToks=nm.split(/\s+/).filter(w=>w.length>2);
     let score=0;
     nToks.forEach(nt=>words.forEach(w=>{
-      if(w===nt)score+=3;
-      else if(w.length>3&&(w.includes(nt)||nt.includes(w)))score+=2;
-      else if(nt.length>3&&lev(w,nt)<=1)score+=1.5;
+      if(w===nt){score+=3;return}
+      const cp=commonPref(w,nt),ml=Math.min(w.length,nt.length),Ml=Math.max(w.length,nt.length);
+      if(cp>=5||(cp>=4&&ml<=6)||(cp>=3&&ml<=5)){score+=2.5;return}          // склонение: общий корень
+      if(Ml>=4&&lev(w,nt)<=Math.max(1,Math.round(Ml/3))){score+=2;return}   // опечатка/форма
+      if(w.length>3&&(w.includes(nt)||nt.includes(w))){score+=2}
     }));
     if(nm.length>2&&full.includes(nm))score+=4;
     if(score>bestScore){second=bestScore;bestScore=score;best=it}
@@ -895,14 +898,17 @@ function detectNav(low){
 
 function AssistantView({S,stock,checkouts,setView}){
   const{products,recipients,suppliers,branches,flows,profile,can,toast}=S;
-  const[messages,setMessages]=useState([{id:0,from:"system",text:"Здравствуйте! Я голосовой помощник склада. Напишите или скажите: «выдай Айгерим 5 футболок», «прими 100 ручек», «сколько блокнотов», «что просрочено». Включите режим «Руки свободны» и позовите «Эй, склад» — я начну слушать и отвечать голосом.\n\nГолосовой ввод работает в Chrome/Edge при наличии интернета. Ответы голосом и весь текстовый режим — всегда."}]);
+  const CHAT_KEY="mkt_assist_chat_v1";
+  const INTRO="Здравствуйте! Я голосовой помощник склада. Скажите или напишите, что нужно: «выдай Айгерим 5 футболок», «прими 100 ручек», «сколько блокнотов», «что просрочено», «что у Айгерим». Включите «Руки свободны» и позовите «Эй, склад».";
+  const[messages,setMessages]=useState(()=>{try{const s=JSON.parse(localStorage.getItem(CHAT_KEY));if(Array.isArray(s)&&s.length)return s}catch(e){}return[{id:0,from:"system",text:INTRO}]});
   const[input,setInput]=useState("");
   const[vstate,setVstate]=useState("off"); // off | idle | listening | speaking
   const[hf,setHf]=useState(false);
   const[tts,setTts]=useState(true);
   const[pending,setPending]=useState(null);
   const[micOK,setMicOK]=useState(true);
-  const endRef=useRef(null);const idRef=useRef(1);const ctx=useRef({product:null,recipient:null});
+  const endRef=useRef(null);const idRef=useRef(messages.reduce((m,x)=>Math.max(m,x.id||0),0)+1);const ctx=useRef({product:null,recipient:null});
+  useEffect(()=>{try{localStorage.setItem(CHAT_KEY,JSON.stringify(messages.slice(-60)))}catch(e){}},[messages]);
   const recRef=useRef(null);const modeRef=useRef("off");const hfRef=useRef(false);
   const pendingRef=useRef(null);const cmdTimer=useRef(null);const voiceRef=useRef(null);
   const speakingRef=useRef(false);const ttsRef=useRef(true);const voiceReplyRef=useRef(false);
@@ -918,7 +924,8 @@ function AssistantView({S,stock,checkouts,setView}){
     if(!window.speechSynthesis)return;
     const pick=()=>{
       const vs=window.speechSynthesis.getVoices();
-      voiceRef.current=vs.find(v=>/ru[-_]?RU/i.test(v.lang)&&/google|yandex|milena|alena/i.test(v.name))
+      voiceRef.current=vs.find(v=>/ru/i.test(v.lang)&&/tatyana|татьяна|alena|алёна|алена|milena|милена|katya|катя|female|женск/i.test(v.name))
+        ||vs.find(v=>/ru/i.test(v.lang)&&/google/i.test(v.name))
         ||vs.find(v=>/ru[-_]?RU/i.test(v.lang))||vs.find(v=>/^ru/i.test(v.lang))||null;
     };
     pick();window.speechSynthesis.onvoiceschanged=pick;
@@ -931,7 +938,7 @@ function AssistantView({S,stock,checkouts,setView}){
     window.speechSynthesis.cancel();
     const u=new SpeechSynthesisUtterance(text);
     u.lang="ru-RU";if(voiceRef.current)u.voice=voiceRef.current;
-    u.rate=1;u.pitch=1;u.volume=1;
+    u.rate=0.94;u.pitch=1.06;u.volume=1;
     speakingRef.current=true;setVstate("speaking");
     const done=()=>{speakingRef.current=false;setVstate(hfRef.current?"listening":"off");onEnd&&onEnd()};
     u.onend=done;u.onerror=done;
@@ -984,7 +991,7 @@ function AssistantView({S,stock,checkouts,setView}){
       recipient_id:a.recipient_id||null,branch_id:a.branch_id||rec?.branch_id||null,
       supplier_id:a.type==="in"?(a.supplier_id||prod?.supplier_id||null):null,
       purpose:a.type==="out"?(a.purpose||null):null,due_date:a.type==="out"?(a.due_date||null):null,sz:a.type==="out"?(a.sz||null):null,
-      condition:a.type==="return"?"хорошее":null,date:TODAY
+      condition:a.type==="return"?"хорошее":null
     });
     if(error){say("Не удалось сохранить: "+error.message)}
     else{push("system",`Готово! ${TL[a.type]} — ${a.qty} шт «${pName(a.product_id)}» сохранена.`);speak("Готово, операция сохранена.")}
@@ -995,6 +1002,13 @@ function AssistantView({S,stock,checkouts,setView}){
     if(error){say("Ошибка создания: "+error.message);return null}
     say(`Товар «${name}» создан.`);return data;
   };
+  const createRecipient=async raw=>{
+    const nm=(raw||"").trim().replace(/^(для|кому|получатель|это)\s+/i,"").trim();
+    if(!nm)return null;
+    const{data,error}=await sb.from("recipients").insert({name:nm}).select().single();
+    if(error){say("Не удалось добавить получателя: "+error.message);return null}
+    say(`Получатель «${nm}» добавлен.`);return data;
+  };
 
   const answerQuery=(intent,low)=>{
     if(intent==="q_stock"){const pm=matchEntity(low,products.filter(p=>!p.archived));if(!pm.item){say("Не нашёл такой товар. Уточните название.");return}const q=stock[pm.item.id]||0;say(`«${pm.item.name}»: ${q} шт на складе${q<5?" — заканчивается":""}.`)}
@@ -1002,7 +1016,7 @@ function AssistantView({S,stock,checkouts,setView}){
     else if(intent==="q_low"){const lw=products.filter(p=>!p.archived&&(stock[p.id]||0)<5);if(!lw.length){say("Всё в достатке, ничего не заканчивается.");return}push("system","Заканчивается:\n"+lw.slice(0,15).map(p=>`• ${p.name}: ${stock[p.id]||0} шт`).join("\n"));speak(`Заканчивается ${lw.length} позиций.`)}
     else if(intent==="q_top"){const rank=products.filter(p=>!p.archived).map(p=>({p,out:(flows[p.id]||{}).out_q||0})).filter(x=>x.out>0).sort((a,b)=>b.out-a.out).slice(0,10);if(!rank.length){say("Ещё нет выдач для рейтинга.");return}push("system","Больше всего выдано:\n"+rank.map((x,i)=>`${i+1}. ${x.p.name} — ${x.out} шт`).join("\n"));speak("Показываю топ выдач.")}
     else if(intent==="q_holder"){const rm=matchEntity(low,recipients);if(!rm.item){say("Не нашёл получателя. Уточните имя.");return}const hold=checkouts.filter(c=>c.recipient_id===rm.item.id);if(!hold.length){say(`У «${rm.item.name}» ничего не числится на руках.`);return}push("system",`На руках у ${rm.item.name}:\n`+hold.map(c=>`• ${pName(c.product_id)} ×${c.remaining}${c.due_date?" (до "+c.due_date+")":""}`).join("\n"));speak(`Показываю, что взял ${rm.item.name}.`)}
-    else if(intent==="q_value"){const active=products.filter(p=>!p.archived);const val=active.reduce((a,p)=>a+(stock[p.id]||0)*p.price,0);const qty=active.reduce((a,p)=>a+(stock[p.id]||0),0);say(`На складе ${active.length} позиций, ${qty} штук, общая стоимость ${som(val)}.`)}
+    else if(intent==="q_value"){const active=products.filter(p=>!p.archived);const val=active.reduce((a,p)=>a+(stock[p.id]||0)*p.price,0);const qty=active.reduce((a,p)=>a+(stock[p.id]||0),0);say(`На складе ${active.length} позиций, ${qty} штук, общая стоимость ${fmt(val)} сом.`)}
   };
 
   const handleText=async(raw,spoken)=>{
@@ -1020,7 +1034,7 @@ function AssistantView({S,stock,checkouts,setView}){
       if(pend.kind==="slot"){
         const a={...pend.action};const slot=pend.awaiting;
         if(slot==="product"){const pm=matchEntity(low,products.filter(p=>!p.archived));if(pm.item){a.product_id=pm.item.id;a.product_name=pm.item.name}else{const cp=await createProduct(text.trim());if(cp){a.product_id=cp.id;a.product_name=cp.name}else return}}
-        else if(slot==="recipient"){const rm=matchEntity(low,recipients);if(rm.item){a.recipient_id=rm.item.id;a.recipient_name=rm.item.name}else{say("Такого получателя нет. Добавьте его в разделе «Получатели» или назовите точнее.",true);return}}
+        else if(slot==="recipient"){const rm=matchEntity(low,recipients);if(rm.item){a.recipient_id=rm.item.id;a.recipient_name=rm.item.name}else{const nr=await createRecipient(text);if(nr){a.recipient_id=nr.id;a.recipient_name=nr.name}else return}}
         else if(slot==="qty"){const q=parseQtyRu(low);if(q==null){say("Не понял количество. Назовите число, например «пять».",true);return}a.qty=q}
         setPending(null);proceed(a);return;
       }
@@ -1045,12 +1059,18 @@ function AssistantView({S,stock,checkouts,setView}){
     if(/(стоимость склада|общая стоимость|сколько всего на складе|склад стоит)/.test(low)){answerQuery("q_value",low);return}
 
     let type=null;
-    if(/(выдай|выдать|дай|отправь|передай)/.test(low))type="out";
-    else if(/(прими|приход|поступил|принял|принять|завоз|привезл)/.test(low))type="in";
-    else if(/(возврат|верни|вернул|вернуть)/.test(low))type="return";
-    else if(/(спиши|списание|списать|брак|испорч)/.test(low))type="writeoff";
+    if(/(выдай|выдать|выдач|дай|отправь|передай)/.test(low))type="out";
+    else if(/(прими|приход|приня|поступил|завоз|привезл|закуп|поставк)/.test(low))type="in";
+    else if(/(возврат|верни|вернул|вернуть|сдал|сдать)/.test(low))type="return";
+    else if(/(спиши|списан|списать|брак|испорч|утил)/.test(low))type="writeoff";
 
-    if(!type){say("Не понял команду. Скажите «выдай», «прими», «возврат» или «спиши», либо спросите про остатки.",true);return}
+    if(!type){
+      const pm=matchEntity(low,products.filter(p=>!p.archived));
+      if(pm.item){answerQuery("q_stock",low);return}
+      const rm=matchEntity(low,recipients);
+      if(rm.item){answerQuery("q_holder",low);return}
+      say("Я помощник склада: оформляю приход, выдачу, возврат и списание, отвечаю по остаткам, просрочкам, топу выдач и по получателям. По темам вне учёта пока не подскажу. Что оформить?",true);return;
+    }
     if(!can("move")){say("У вас нет прав на операции — только просмотр.");return}
 
     proceed(extract(low,{type}));
