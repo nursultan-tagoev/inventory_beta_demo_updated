@@ -71,7 +71,7 @@ const TODAY = new Date().toISOString().split("T")[0];
 const IN3D  = new Date(Date.now()+3*864e5).toISOString().split("T")[0];
 const ROLES = {admin:"Администратор",manager:"Маркетолог",employee:"Сотрудник",director:"Руководитель"};
 const TL = {in:"Приход",out:"Выдача",return:"Возврат",writeoff:"Списание"};
-const BUILD = "сборка v7 · Люси-кнопка";
+const BUILD = "сборка v8 · списание+товар";
 const TC = {in:"var(--gr)",out:"var(--ink)",return:"var(--pu)",writeoff:"var(--rd)"};
 const som = n => `${new Intl.NumberFormat("ru-RU").format(Math.round(n||0))} с`;
 const ONBOARD = "mkt_onboard_v5";
@@ -318,7 +318,7 @@ function Sidebar({view,setView,profile,onLogout,overdueCount,rtOn}){
     {id:"home",     l:"Главная",     ico:"⌂"},
     {id:"items",    l:"Товары",      ico:"◻"},
     {id:"activity", l:"Движения",    ico:"↕",badge:overdueCount},
-    {id:"assistant",l:"Ассистент",   ico:"🎙"},
+    {id:"assistant",l:"Люси",   ico:"🎙"},
     ...(r==="admin"||r==="director"||r==="manager"?[{id:"branches",l:"Филиалы",ico:"◎"},{id:"recipients",l:"Получатели",ico:"◉"}]:[]),
   ];
   const NAV_MGMT=[
@@ -408,13 +408,16 @@ function ItemCard({p,stock,categories,checkouts,onClick,onArchive,canArchive}){
 function OpForm({type,prefill={},onSave,onCancel,S}){
   const{products,recipients,suppliers,directions,branches,profile,toast,stock}=S;
   const t=type;
-  const totalSteps=t==="in"?2:3;
+  const totalSteps=t==="in"?2:t==="writeoff"?1:3;
   const[step,setStep]=useState(1);
   const[dirty,setDirty]=useState(false);
   const[loading,setL]=useState(false);
   const[confirm,setConfirm]=useState(false);
   const[showNewRec,setShowNewRec]=useState(false);
   const[newRec,setNewRec]=useState({name:"",branch_id:branches[0]?.id||"",sz_id:""});
+  const[showNewProd,setShowNewProd]=useState(false);
+  const[newProd,setNewProd]=useState({name:"",sku:"",price:""});
+  const[createdProd,setCreatedProd]=useState(null);
   const[form,setForm]=useState({
     product_id:prefill.product_id||"",qty:prefill.qty||1,
     recipient_id:prefill.recipient_id||"",branch_id:prefill.branch_id||"",
@@ -444,6 +447,12 @@ function OpForm({type,prefill={},onSave,onCancel,S}){
     if(error){toast("Ошибка: "+error.message,"error");return}
     setForm(f=>({...f,recipient_id:data.id,branch_id:data.branch_id||f.branch_id}));
     setShowNewRec(false);setNewRec({name:"",branch_id:branches[0]?.id||"",sz_id:""});toast("Получатель создан");
+  };
+  const createProduct=async()=>{
+    if(!newProd.name.trim()){toast("Введите название","error");return}
+    const{data,error}=await sb.from("products").insert({name:newProd.name.trim(),sku:newProd.sku||null,price:Number(newProd.price)||0,archived:false}).select().single();
+    if(error){toast("Ошибка: "+error.message,"error");return}
+    setForm(f=>({...f,product_id:data.id}));setCreatedProd(data);setShowNewProd(false);setNewProd({name:"",sku:"",price:""});toast("Товар создан");
   };
 
   const doSave=async()=>{
@@ -491,11 +500,12 @@ function OpForm({type,prefill={},onSave,onCancel,S}){
 
       {step===1&&(
         <div style={{display:"flex",flexDirection:"column",gap:12}}>
-          <Fld label="Товар"><Sel value={form.product_id} onChange={e=>upd("product_id",e.target.value)}><option value="">— выбрать товар —</option>{products.filter(p=>!p.archived).map(p=><option key={p.id} value={p.id}>{p.name}{p.sku?` (${p.sku})`:""}</option>)}</Sel></Fld>
+          <Fld label="Товар"><Sel value={form.product_id} onChange={e=>{if(e.target.value==="new"){setShowNewProd(true)}else{upd("product_id",e.target.value);setCreatedProd(null)}}}><option value="">— выбрать товар —</option>{createdProd&&<option value={createdProd.id}>{createdProd.name} (новый)</option>}{products.filter(p=>!p.archived).map(p=><option key={p.id} value={p.id}>{p.name}{p.sku?` (${p.sku})`:""}</option>)}<option value="new">➕ Добавить новый товар</option></Sel></Fld>
+          {showNewProd&&<div className="card" style={{padding:14,background:"var(--bg)"}}><div className="ff" style={{fontWeight:600,fontSize:13,marginBottom:10}}>Новый товар</div><div style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr",gap:10,marginBottom:10}}><Fld label="Название"><Inp value={newProd.name} onChange={e=>setNewProd({...newProd,name:e.target.value})} placeholder="Например, Кружка" autoFocus/></Fld><Fld label="Артикул"><Inp value={newProd.sku} onChange={e=>setNewProd({...newProd,sku:e.target.value})} placeholder="STA-001"/></Fld><Fld label="Цена, сом"><Inp type="number" value={newProd.price} onChange={e=>setNewProd({...newProd,price:e.target.value})} placeholder="0"/></Fld></div><div style={{display:"flex",gap:8}}><Btn size="sm" onClick={createProduct}>Сохранить</Btn><Btn v="secondary" size="sm" onClick={()=>setShowNewProd(false)}>Отмена</Btn></div></div>}
           {selProd&&<div style={{display:"flex",gap:10,padding:"10px 14px",background:"var(--ink-l)",borderRadius:9,fontSize:12,color:"var(--ink)",alignItems:"center"}}><span className="ff" style={{fontWeight:700,fontSize:16}}>{stock?.[selProd.id]||0} шт</span><span>на складе · {som(selProd.price)} за шт.</span></div>}
           <Fld label="Количество"><Inp type="number" value={form.qty} onChange={e=>upd("qty",e.target.value)}/></Fld>
           {t==="in"&&suppliers.length>0&&<Fld label="Поставщик"><Sel value={form.supplier_id} onChange={e=>upd("supplier_id",e.target.value)}>{suppliers.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</Sel></Fld>}
-          <div style={{display:"flex",gap:8,marginTop:4}}>{onCancel&&<Btn v="secondary" onClick={onCancel}>Отмена</Btn>}<Btn onClick={handleNext} style={{flex:1}} disabled={!form.product_id}>Далее →</Btn></div>
+          <div style={{display:"flex",gap:8,marginTop:4}}>{onCancel&&<Btn v="secondary" onClick={onCancel}>Отмена</Btn>}<Btn onClick={handleNext} style={{flex:1}} disabled={!form.product_id}>{t==="writeoff"?"Списать":"Далее →"}</Btn></div>
         </div>
       )}
 
@@ -560,7 +570,7 @@ function Home({S,stock,checkouts,setView}){
       <div style={{padding:"28px 28px 24px",background:"var(--sur)",borderBottom:"1px solid var(--brd)"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:24}}>
           <div><h1 className="ff" style={{fontSize:28,fontWeight:700,color:"var(--tx)",letterSpacing:"-.02em"}}>{morning}, {profile?.name||profile?.email?.split("@")[0]} 👋</h1><p style={{fontSize:13,color:"var(--tx3)",marginTop:4}}>{ROLES[profile?.role]} · {new Date().toLocaleDateString("ru-RU",{weekday:"long",day:"numeric",month:"long"})}</p></div>
-          <div style={{display:"flex",gap:8}}><Btn v="secondary" onClick={()=>setView("assistant")} icon="🎙">Ассистент</Btn><Btn v="secondary" onClick={()=>setView("items")}>Все товары →</Btn></div>
+          <div style={{display:"flex",gap:8}}><Btn v="secondary" onClick={()=>setView("assistant")} icon="🎙">Люси</Btn><Btn v="secondary" onClick={()=>setView("items")}>Все товары →</Btn></div>
         </div>
         {can("move")?<div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:14}}>{ACTION_ITEMS.map(item=><ActionCard key={item.type} item={item} onOpen={()=>setSheet({type:item.type,prefill:item.prefill})}/>)}</div>
         :<div style={{padding:"16px 18px",background:"var(--bg)",borderRadius:12,border:"1px solid var(--brd)",fontSize:13,color:"var(--tx3)",display:"flex",gap:10,alignItems:"center"}}><span>👁</span><span>Режим просмотра. Операции доступны маркетологам и администраторам.</span></div>}
