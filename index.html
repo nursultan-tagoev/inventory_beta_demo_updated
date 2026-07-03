@@ -71,7 +71,7 @@ const TODAY = new Date().toISOString().split("T")[0];
 const IN3D  = new Date(Date.now()+3*864e5).toISOString().split("T")[0];
 const ROLES = {admin:"Администратор",manager:"Маркетолог",employee:"Сотрудник",director:"Руководитель"};
 const TL = {in:"Приход",out:"Выдача",return:"Возврат",writeoff:"Списание"};
-const BUILD = "сборка v6 · 02.07";
+const BUILD = "сборка v7 · Люси-кнопка";
 const TC = {in:"var(--gr)",out:"var(--ink)",return:"var(--pu)",writeoff:"var(--rd)"};
 const som = n => `${new Intl.NumberFormat("ru-RU").format(Math.round(n||0))} с`;
 const ONBOARD = "mkt_onboard_v5";
@@ -897,7 +897,7 @@ function detectNav(low){
   return null;
 }
 
-function AssistantView({S,stock,checkouts,setView}){
+function AssistantView({S,stock,checkouts,setView,autostart,onAutostart}){
   const{products,recipients,suppliers,branches,flows,profile,can,toast}=S;
   const CHAT_KEY="mkt_assist_chat_v1";
   const INTRO="Здравствуйте! Я голосовой помощник склада. Скажите или напишите, что нужно: «выдай Айгерим 5 футболок», «прими 100 ручек», «сколько блокнотов», «что просрочено», «что у Айгерим». Включите «Руки свободны» и позовите «Эй, склад».";
@@ -1199,6 +1199,7 @@ function AssistantView({S,stock,checkouts,setView}){
     window.speechSynthesis&&window.speechSynthesis.cancel();speakingRef.current=false;
   };
 
+  useEffect(()=>{if(autostart){setTimeout(()=>{try{startOnce()}catch(e){}},350);onAutostart&&onAutostart()}},[]);
   const startOnce=()=>{
     const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
     if(!SR){toast("Голосовой ввод доступен в Chrome/Edge","warn");return}
@@ -1220,7 +1221,7 @@ function AssistantView({S,stock,checkouts,setView}){
   return(
     <div style={{height:"100%",display:"flex",flexDirection:"column",background:"var(--bg)"}}>
       <div style={{background:"var(--sur)",borderBottom:"1px solid var(--brd)",padding:"14px 22px",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap"}}>
-        <div style={{display:"flex",alignItems:"center",gap:10}}><span style={{fontSize:20}}>🎙</span><div><span className="ff" style={{fontSize:17,fontWeight:700}}>Голосовой помощник</span><div style={{fontSize:11,color:"var(--tx3)"}}>Операции и аналитика · голос и текст</div></div></div>
+        <div style={{display:"flex",alignItems:"center",gap:10}}><span style={{fontSize:20}}>🎙</span><div><span className="ff" style={{fontSize:17,fontWeight:700}}>Люси</span><div style={{fontSize:11,color:"var(--tx3)"}}>голосовой помощник склада · операции, аналитика, навигация</div></div></div>
         <div style={{display:"flex",gap:8,alignItems:"center"}}>
           {hf&&<span style={{display:"inline-flex",alignItems:"center",gap:6,padding:"4px 10px",borderRadius:999,background:STATE_UI.bg,color:STATE_UI.c,fontSize:12,fontWeight:600}}><span style={{width:8,height:8,borderRadius:"50%",background:STATE_UI.c,animation:vstate==="listening"||vstate==="speaking"?"pulse 1.2s infinite":"none"}}/>{STATE_UI.t}</span>}
           <button onClick={setupLLM} title="Подключить ИИ для любых вопросов" style={{display:"flex",alignItems:"center",gap:6,padding:"6px 12px",borderRadius:20,border:"1px solid var(--brd)",background:"var(--sur)",color:"var(--tx2)",fontSize:12,fontWeight:600,cursor:"pointer"}}>⚙ ИИ</button>
@@ -1324,6 +1325,7 @@ function App(){
   const[session,setSession]=useState(undefined);
   const[profile,setProfile]=useState(null);
   const[view,setView]=useState("home");
+  const[assistAuto,setAssistAuto]=useState(false);
   const[rtOn,setRtOn]=useState(false);
   const[online,setOnline]=useState(typeof navigator!=="undefined"?navigator.onLine!==false:true);
   const[syncedAt,setSyncedAt]=useState(null);
@@ -1482,7 +1484,7 @@ function App(){
     home:<Home S={S} stock={stock} checkouts={checkouts} setView={setView}/>,
     items:<ItemsView S={S} stock={stock} checkouts={checkouts}/>,
     activity:<ActivityView S={S} checkouts={checkouts} overdue={overdue}/>,
-    assistant:<AssistantView S={S} stock={stock} checkouts={checkouts} setView={setView}/>,
+    assistant:<AssistantView S={S} stock={stock} checkouts={checkouts} setView={setView} autostart={assistAuto} onAutostart={()=>setAssistAuto(false)}/>,
     branches:<BranchesView S={S} checkouts={checkouts}/>,
     recipients:<RecipientsView S={S}/>,
     reports:<ReportsView S={S} stock={stock}/>,
@@ -1505,6 +1507,14 @@ function App(){
         {VIEWS[safeView]}
       </main>
       <Toasts ts={ts}/>
+      {safeView!=="assistant"&&<button onClick={()=>{setAssistAuto(true);setView("assistant")}} title="Люси — голосовой помощник"
+        style={{position:"fixed",right:26,bottom:26,zIndex:70,width:58,height:58,borderRadius:"50%",border:"none",cursor:"pointer",
+          background:"linear-gradient(150deg,var(--ink),var(--pu))",color:"#fff",display:"grid",placeItems:"center",
+          boxShadow:"0 8px 24px color-mix(in srgb,var(--ink) 45%,transparent),0 2px 6px rgba(0,0,0,.2)",transition:"transform .16s"}}
+        onMouseEnter={e=>e.currentTarget.style.transform="translateY(-2px) scale(1.04)"}
+        onMouseLeave={e=>e.currentTarget.style.transform="none"}>
+        <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v6a3 3 0 0 0 3 3ZM6 11a6 6 0 0 0 12 0M12 19v3"/></svg>
+      </button>}
     </div>
   );
 }
