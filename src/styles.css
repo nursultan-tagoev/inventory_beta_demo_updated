@@ -31,3 +31,4 @@ input,select,textarea{font-family:inherit;outline:none;color:inherit}
 @keyframes spin{to{transform:rotate(360deg)}}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
 .card{background:var(--sur);border:1px solid var(--brd);border-radius:var(--r);box-shadow:var(--sh)}
+@keyframes slideUp{from{transform:translateY(100%)}to{transform:none}}
