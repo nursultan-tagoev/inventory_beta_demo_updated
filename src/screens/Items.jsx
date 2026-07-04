@@ -1,37 +1,107 @@
-import { useState } from 'react'
-import { fmt, som } from '../lib/format'
+import { useState, useEffect } from 'react'
+import { supabase } from '../supabaseClient'
+import { Btn, Field, Input, Select, Badge, Confirm, useToast } from '../components/ui'
+import { fmt, som, TL } from '../lib/format'
 
-export default function Items({ data }) {
-  const { products, stock } = data
+export default function Items({ data, can }) {
+  const toast = useToast()
+  const { products, categories, suppliers, locations, stock, flows, checkouts, recipients, reload } = data
   const [q, setQ] = useState('')
-  const list = products.filter((p) => !p.archived && (!q || p.name.toLowerCase().includes(q.toLowerCase())))
+  const [add, setAdd] = useState(false)
+  const [sel, setSel] = useState(null)
+  const [nf, setNf] = useState({ name: '', sku: '', category_id: '', price: '', location_id: '', supplier_id: '' })
+  const [loading, setLoading] = useState(false)
+  const list = products.filter((p) => !p.archived && (!q || p.name.toLowerCase().includes(q.toLowerCase()) || (p.sku || '').toLowerCase().includes(q.toLowerCase())))
+
+  const save = async () => {
+    if (!nf.name.trim()) return toast('Название обязательно', 'error')
+    setLoading(true)
+    const { error } = await supabase.from('products').insert({ name: nf.name.trim(), sku: nf.sku || null, category_id: nf.category_id ? Number(nf.category_id) : null, price: Number(nf.price) || 0, location_id: nf.location_id ? Number(nf.location_id) : null, supplier_id: nf.supplier_id ? Number(nf.supplier_id) : null, archived: false })
+    setLoading(false)
+    if (error) return toast('Ошибка: ' + error.message, 'error')
+    setAdd(false); setNf({ name: '', sku: '', category_id: '', price: '', location_id: '', supplier_id: '' }); toast('Товар добавлен'); reload()
+  }
+
   return (
-    <div style={{ maxWidth: 1120, margin: '0 auto', padding: '24px', animation: 'fadeUp .3s ease' }}>
+    <div style={{ maxWidth: 1120, margin: '0 auto', padding: 24, animation: 'fadeUp .3s ease' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18, flexWrap: 'wrap' }}>
         <span className="ff" style={{ fontSize: 20, fontWeight: 600 }}>Товары</span>
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Поиск…" style={{ marginLeft: 'auto', height: 38, padding: '0 14px', borderRadius: 11, border: '1px solid var(--brd2)', background: 'var(--sur)', fontSize: 14, minWidth: 220 }} />
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Поиск…" style={{ marginLeft: 'auto', height: 38, padding: '0 14px', borderRadius: 11, border: '1px solid var(--brd2)', background: 'var(--sur)', fontSize: 14, minWidth: 200 }} />
+        {can('edit') && <Btn onClick={() => setAdd(!add)}>➕ Добавить</Btn>}
       </div>
+
+      {add && <div className="card" style={{ padding: 18, marginBottom: 16, border: '1.5px solid var(--ink)' }}>
+        <div style={{ fontWeight: 600, marginBottom: 12 }}>Новый товар</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: 10, marginBottom: 12 }}>
+          <Field label="Название"><Input value={nf.name} onChange={(e) => setNf({ ...nf, name: e.target.value })} autoFocus /></Field>
+          <Field label="Артикул"><Input value={nf.sku} onChange={(e) => setNf({ ...nf, sku: e.target.value })} /></Field>
+          <Field label="Категория"><Select value={nf.category_id} onChange={(e) => setNf({ ...nf, category_id: e.target.value })}><option value="">—</option>{categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</Select></Field>
+          <Field label="Цена"><Input type="number" value={nf.price} onChange={(e) => setNf({ ...nf, price: e.target.value })} /></Field>
+          <Field label="Место"><Select value={nf.location_id} onChange={(e) => setNf({ ...nf, location_id: e.target.value })}><option value="">—</option>{locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}</Select></Field>
+          <Field label="Поставщик"><Select value={nf.supplier_id} onChange={(e) => setNf({ ...nf, supplier_id: e.target.value })}><option value="">—</option>{suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</Select></Field>
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}><Btn onClick={save} loading={loading}>Сохранить</Btn><Btn v="secondary" onClick={() => setAdd(false)}>Отмена</Btn></div>
+      </div>}
+
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(184px,1fr))', gap: 14 }}>
         {list.map((p) => {
           const s = stock[p.id] || 0
           const c = s === 0 ? 'var(--tx3)' : s < 5 ? 'var(--am)' : 'var(--gr)'
+          const cat = categories.find((x) => x.id === p.category_id)
           return (
-            <div key={p.id} className="card" style={{ padding: 0, overflow: 'hidden' }}>
-              <div style={{ height: 66, background: 'var(--sur2)', display: 'flex', alignItems: 'flex-end', padding: '10px 14px' }}>
-                <span className="mono" style={{ fontSize: 24, fontWeight: 600, color: c }}>{s}<span style={{ fontFamily: 'var(--f)', fontSize: 11, color: 'var(--tx3)' }}> шт</span></span>
+            <div key={p.id} onClick={() => setSel(p)} className="card" style={{ padding: 0, overflow: 'hidden', cursor: 'pointer' }}>
+              <div style={{ height: 60, background: 'var(--sur2)', display: 'flex', alignItems: 'flex-end', padding: '10px 14px' }}>
+                <span className="mono" style={{ fontSize: 23, fontWeight: 600, color: c }}>{s}<span style={{ fontFamily: 'var(--f)', fontSize: 11, color: 'var(--tx3)' }}> шт</span></span>
               </div>
               <div style={{ padding: '12px 14px' }}>
                 <div style={{ fontSize: 13.5, fontWeight: 600, minHeight: 36, lineHeight: 1.3 }}>{p.name}</div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
-                  <span className="mono" style={{ fontSize: 12, color: 'var(--tx2)' }}>{fmt(p.price)} сом</span>
-                  <span className="mono" style={{ fontSize: 12, fontWeight: 600 }}>{fmt((p.price || 0) * s)}</span>
-                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}><span className="mono" style={{ fontSize: 12, color: 'var(--tx2)' }}>{fmt(p.price)} сом</span>{cat && <Badge>{cat.name}</Badge>}</div>
               </div>
             </div>
           )
         })}
       </div>
-      {list.length === 0 && <div style={{ padding: 60, textAlign: 'center', color: 'var(--tx3)' }}>Товаров нет. Добавьте их в справочниках или через операцию прихода.</div>}
+      {list.length === 0 && !add && <div style={{ padding: 60, textAlign: 'center', color: 'var(--tx3)' }}>{q ? 'Ничего не найдено.' : 'Товаров нет. Добавьте первый или оформите приход.'}</div>}
+
+      {sel && <ItemModal p={sel} data={data} can={can} onClose={() => setSel(null)} />}
+    </div>
+  )
+}
+
+function ItemModal({ p, data, can, onClose }) {
+  const toast = useToast()
+  const { stock, flows, checkouts, recipients, reload } = data
+  const [tab, setTab] = useState('info')
+  const [hist, setHist] = useState(null)
+  const s = stock[p.id] || 0
+  const fl = flows[p.id] || { in: 0, out: 0, return: 0, writeoff: 0 }
+  const onHand = checkouts.filter((c) => c.product_id === p.id)
+  const rName = (id) => recipients.find((r) => r.id === id)?.name || '—'
+  useEffect(() => {
+    if (tab === 'history' && hist === null) {
+      supabase.from('movements').select('*').eq('product_id', p.id).order('created_at', { ascending: false }).limit(100).then(({ data: d }) => setHist(d || []))
+    }
+  }, [tab])
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'grid', placeItems: 'center', padding: 20, background: 'rgba(8,10,14,.5)', backdropFilter: 'blur(4px)' }}>
+      <div onClick={(e) => e.stopPropagation()} className="card" style={{ width: '100%', maxWidth: 600, maxHeight: '88vh', overflow: 'auto', animation: 'fadeUp .2s' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '20px 22px', borderBottom: '1px solid var(--brd)' }}>
+          <div><div className="ff" style={{ fontSize: 18, fontWeight: 600 }}>{p.name}</div><div style={{ fontSize: 12, color: 'var(--tx3)', marginTop: 2 }}>{p.sku || '—'} · {som(p.price)}</div></div>
+          <div className="mono" style={{ fontSize: 26, fontWeight: 600, color: s === 0 ? 'var(--rd)' : s < 5 ? 'var(--am)' : 'var(--gr)' }}>{s}<span style={{ fontSize: 13, color: 'var(--tx3)', fontFamily: 'var(--f)' }}> шт</span></div>
+        </div>
+        <div style={{ display: 'flex', gap: 4, padding: '14px 22px 0' }}>
+          {[['info', 'Обзор'], ['history', 'История']].map(([t, l]) => <button key={t} onClick={() => setTab(t)} style={{ padding: '7px 14px', borderRadius: 9, fontSize: 12.5, fontWeight: tab === t ? 600 : 400, background: tab === t ? 'var(--ink-l)' : 'transparent', color: tab === t ? 'var(--ink)' : 'var(--tx2)' }}>{l}</button>)}
+        </div>
+        <div style={{ padding: 22 }}>
+          {tab === 'info' && <>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10, marginBottom: 16 }}>
+              {[['Приход', fl.in, 'var(--gr)'], ['Выдано', fl.out, 'var(--ink)'], ['Возврат', fl.return, 'var(--pu)'], ['Списано', fl.writeoff, 'var(--rd)']].map(([l, v, c]) => <div key={l} style={{ padding: '10px 12px', background: 'var(--bg)', borderRadius: 10 }}><div className="mono" style={{ fontSize: 18, fontWeight: 600, color: c }}>{v}</div><div style={{ fontSize: 10.5, color: 'var(--tx3)' }}>{l}</div></div>)}
+            </div>
+            {onHand.length > 0 && <div><div style={{ fontSize: 11, fontWeight: 600, color: 'var(--tx3)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 8 }}>На руках — {onHand.reduce((a, c) => a + c.remaining, 0)} шт</div>{onHand.map((c, i) => <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '7px 0', borderBottom: '1px solid var(--brd)', fontSize: 13 }}><span>{rName(c.recipient_id)}</span><b className="mono">{c.remaining} шт{c.due_date ? <span style={{ fontWeight: 400, color: 'var(--tx3)', fontFamily: 'var(--f)' }}> · до {c.due_date}</span> : null}</b></div>)}</div>}
+          </>}
+          {tab === 'history' && <div>{hist === null ? <div style={{ textAlign: 'center', padding: 20, color: 'var(--tx3)' }}>Загрузка…</div> : hist.length === 0 ? <div style={{ textAlign: 'center', padding: 20, color: 'var(--tx3)' }}>Нет операций</div> : hist.map((m) => <div key={m.id} style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--brd)', fontSize: 13 }}><Badge color={{ in: 'green', out: 'ink', return: 'purple', writeoff: 'red' }[m.type]}>{TL[m.type]}</Badge><b className="mono">×{m.qty}</b><span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--tx3)' }} className="mono">{new Date(m.created_at).toLocaleDateString('ru-RU')}</span></div>)}</div>}
+        </div>
+      </div>
     </div>
   )
 }
