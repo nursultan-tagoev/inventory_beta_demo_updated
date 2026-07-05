@@ -10,6 +10,7 @@ import Movements from './screens/Movements'
 import Recipients from './screens/Recipients'
 import Reports from './screens/Reports'
 import Settings from './screens/Settings'
+import Lucy from './screens/Lucy'
 import Stub from './screens/Stub'
 
 class ErrorBoundary extends React.Component {
@@ -41,6 +42,7 @@ export default function App() {
   const [session, setSession] = useState(undefined)
   const [profile, setProfile] = useState(null)
   const [view, setView] = useState('home')
+  const [assistAuto, setAssistAuto] = useState(false)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session || null))
@@ -79,7 +81,7 @@ export default function App() {
     recipients: <Recipients data={data} can={can} />,
     reports: <Reports data={data} />,
     settings: <Settings data={data} />,
-    lucy: <Stub title="Люси — голосовой помощник" />,
+    lucy: <Lucy data={data} profile={profile} can={can} setView={setView} autostart={assistAuto} onAutostart={() => setAssistAuto(false)} />,
   }
 
   return (
@@ -91,6 +93,12 @@ export default function App() {
           {data.error && <div style={{ padding: '10px 24px', background: 'var(--am-l)', color: 'var(--am-m)', fontSize: 12.5, borderBottom: '1px solid var(--am)' }}>Доступ к данным закрыт: {data.error}. Проверьте, что выполнены RLS-политики.</div>}
           <ErrorBoundary k={safeView}>{SCREENS[safeView]}</ErrorBoundary>
         </main>
+        {safeView !== 'lucy' && (
+          <button onClick={() => { setAssistAuto(true); setView('lucy') }} title="Люси"
+            style={{ position: 'fixed', right: 26, bottom: 26, zIndex: 70, width: 58, height: 58, borderRadius: '50%', border: 'none', cursor: 'pointer', background: 'linear-gradient(150deg,var(--ink),var(--pu))', color: '#fff', display: 'grid', placeItems: 'center', boxShadow: '0 8px 24px color-mix(in srgb,var(--ink) 45%,transparent),0 2px 6px rgba(0,0,0,.2)' }}>
+            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v6a3 3 0 0 0 3 3ZM6 11a6 6 0 0 0 12 0M12 19v3" /></svg>
+          </button>
+        )}
       </div>
     </ToastProvider>
   )
