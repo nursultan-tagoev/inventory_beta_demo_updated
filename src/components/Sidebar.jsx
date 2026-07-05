@@ -2,6 +2,7 @@ const NAV = [
   { id: 'home', label: 'Главная', icon: '◉', roles: ['admin', 'manager', 'employee', 'director'] },
   { id: 'items', label: 'Товары', icon: '▤', roles: ['admin', 'manager', 'employee', 'director'] },
   { id: 'movements', label: 'Движения', icon: '⇅', roles: ['admin', 'manager', 'employee', 'director'] },
+  { id: 'acts', label: 'Акты', icon: '🧾', roles: ['admin', 'manager', 'director'] },
   { id: 'lucy', label: 'Люси', icon: '🎙', roles: ['admin', 'manager', 'employee', 'director'] },
   { id: 'recipients', label: 'Получатели', icon: '☺', roles: ['admin', 'manager', 'director'] },
   { id: 'reports', label: 'Аналитика', icon: '▧', roles: ['admin', 'director'] },
