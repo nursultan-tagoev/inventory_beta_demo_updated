@@ -32,3 +32,16 @@ input,select,textarea{font-family:inherit;outline:none;color:inherit}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
 .card{background:var(--sur);border:1px solid var(--brd);border-radius:var(--r);box-shadow:var(--sh)}
 @keyframes slideUp{from{transform:translateY(100%)}to{transform:none}}
+/* Печать акта: печатаем только бланк */
+@media print {
+  body * { visibility: hidden !important; }
+  #act-print, #act-print * { visibility: visible !important; }
+  #act-print { position: absolute; left: 0; top: 0; width: 100%; padding: 0 6mm !important; box-shadow: none !important; border: none !important; }
+  .no-print { display: none !important; }
+  @page { size: A4; margin: 14mm; }
+}
+.act-in { border: none; border-bottom: 1px solid var(--brd2); background: transparent; padding: 1px 4px; font-size: inherit; color: var(--tx); }
+.act-tbl { width: 100%; border-collapse: collapse; margin: 12px 0 6px; font-size: 12px; }
+.act-tbl th { background: var(--sur2); border: 1px solid var(--brd2); padding: 6px 7px; font-size: 10px; font-weight: 600; text-transform: uppercase; color: var(--tx2); text-align: left; }
+.act-tbl td { border: 1px solid var(--brd2); padding: 3px 6px; }
+.act-tbl td input { width: 100%; border: none; background: transparent; font-size: 12px; }
