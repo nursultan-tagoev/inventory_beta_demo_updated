@@ -11,7 +11,10 @@ const TOOLS = [
     }, required: ['type', 'items'] } },
   { name: 'get_stock', description: 'Остаток товара.', parameters: { type: 'object', properties: { product: { type: 'string' } }, required: ['product'] } },
   { name: 'list_inventory', description: 'Список остатков.', parameters: { type: 'object', properties: {} } },
+  { name: 'list_low', description: 'Товары, которые заканчиваются.', parameters: { type: 'object', properties: {} } },
   { name: 'list_overdue', description: 'Просроченные выдачи.', parameters: { type: 'object', properties: {} } },
+  { name: 'warehouse_value', description: 'Общая стоимость остатков склада.', parameters: { type: 'object', properties: {} } },
+  { name: 'who_holds', description: 'Что числится на руках у получателя.', parameters: { type: 'object', properties: { recipient: { type: 'string' } }, required: ['recipient'] } },
   { name: 'open_screen', description: 'Открыть экран.', parameters: { type: 'object', properties: { screen: { type: 'string', enum: ['home', 'items', 'movements', 'recipients', 'reports'] } }, required: ['screen'] } },
 ]
 
