@@ -1,14 +1,16 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import { supabase } from '../supabaseClient'
 import { Btn, Field, Input, Select, Confirm, useToast } from './ui'
 import { som } from '../lib/format'
 import { saveMovement } from '../lib/ops'
+import { norm, parseQty, matchName, askLucy } from '../lib/lucy'
+import ActModal from './ActModal'
 
 const TL = { in: 'Приход', out: 'Выдача', return: 'Возврат', writeoff: 'Списание' }
 const TC = { in: 'var(--gr)', out: 'var(--ink)', return: 'var(--pu)', writeoff: 'var(--rd)' }
 const ICO = { in: '📥', out: '📤', return: '🔄', writeoff: '🗑' }
 
-export default function OperationSheet({ type, data, profile, onDone }) {
+export default function OperationSheet({ type, data, profile, can, onDone }) {
   const toast = useToast()
   const { products, recipients, suppliers, branches, directions, stock } = data
   const steps = type === 'in' ? 2 : type === 'writeoff' ? 1 : 3
@@ -20,10 +22,46 @@ export default function OperationSheet({ type, data, profile, onDone }) {
   const [createdProd, setCreatedProd] = useState(null)
   const [showNewRec, setShowNewRec] = useState(false)
   const [newRec, setNewRec] = useState({ name: '', branch_id: '' })
+  const [dictating, setDictating] = useState(false)
+  const [act, setAct] = useState(null)   // данные для акта после сохранения
   const [f, setF] = useState({ product_id: '', qty: 1, recipient_id: '', branch_id: '', supplier_id: suppliers[0]?.id || '', purpose: '', due_date: '', sz: '', condition: 'хорошее', direction_id: '', notes: '' })
   const up = (k, v) => setF((s) => ({ ...s, [k]: v }))
   const selProd = useMemo(() => products.find((p) => p.id == f.product_id) || createdProd, [f.product_id, products, createdProd])
   const selRec = recipients.find((r) => r.id == f.recipient_id)
+  const SR = typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition)
+
+  // ── голосовой ввод: Люси заполняет поля ──
+  const fillFrom = async (text) => {
+    let productName = null, qty = null, recipientName = null
+    try {
+      const res = await askLucy(text, profile?.role || 'employee', [])
+      if (res?.call?.name === 'create_operation') {
+        const a = res.call.args || {}
+        const it = (a.items && a.items[0]) || (a.product ? { product: a.product, quantity: a.quantity } : null)
+        if (it) { productName = it.product; qty = it.quantity }
+        recipientName = a.recipient
+      }
+    } catch (e) {}
+    const low = norm(text)
+    if (!productName) productName = matchName(low, products.filter((p) => !p.archived).map((p) => p.name))
+    if (qty == null) qty = parseQty(low)
+    if (!recipientName) recipientName = matchName(low, recipients.map((r) => r.name))
+    const p = products.find((x) => x.name === matchName(norm(productName || ''), products.map((pp) => pp.name)) || x.name === productName)
+    if (p) up('product_id', p.id)
+    if (qty != null) up('qty', qty)
+    const r = recipients.find((x) => x.name === matchName(norm(recipientName || ''), recipients.map((rr) => rr.name)) || x.name === recipientName)
+    if (r) { up('recipient_id', r.id); if (r.branch_id) up('branch_id', r.branch_id) }
+    if (p || qty != null || r) toast('Люси заполнила — проверьте')
+    else toast('Не расслышала, попробуйте ещё раз', 'warn')
+  }
+  const dictate = () => {
+    if (!SR) { toast('Голос доступен в Chrome/Edge', 'warn'); return }
+    const rec = new SR(); rec.lang = 'ru-RU'; rec.interimResults = false; rec.maxAlternatives = 1
+    setDictating(true)
+    rec.onresult = (e) => { const t = e.results[0][0].transcript; fillFrom(t) }
+    rec.onerror = () => setDictating(false); rec.onend = () => setDictating(false)
+    try { rec.start() } catch (e) { setDictating(false) }
+  }
 
   const createProduct = async () => {
     if (!newProd.name.trim()) return toast('Введите название', 'error')
@@ -43,10 +81,26 @@ export default function OperationSheet({ type, data, profile, onDone }) {
     const { error } = await saveMovement({ ...f, type, issuer_id: profile.id, branch_id: f.branch_id || selRec?.branch_id, location_id: selProd?.location_id }, stock)
     setLoading(false)
     if (error) return toast(error, 'error')
-    toast(TL[type] + ' сохранена'); onDone()
+    toast(TL[type] + ' сохранена')
+    if ((type === 'out' || type === 'return') && selProd) {
+      setAct({ type, items: [{ name: selProd.name, sku: selProd.sku, price: selProd.price, qty: Number(f.qty), product_id: selProd.id }], recipient: selRec?.name || '', recipient_id: selRec?.id || null, purpose: f.purpose, branch_id: f.branch_id || selRec?.branch_id || null, branchName: branches.find((b) => b.id === (f.branch_id || selRec?.branch_id))?.name })
+    } else { onDone() }
   }
-
   const next = () => { if (step < steps) setStep(step + 1); else setConfirm(true) }
+
+  // экран после сохранения выдачи/возврата — предложить акт
+  if (act) return (<div>
+    <div style={{ textAlign: 'center', padding: '10px 0 18px' }}>
+      <div style={{ fontSize: 40, marginBottom: 8 }}>✅</div>
+      <div className="ff" style={{ fontSize: 19, fontWeight: 600 }}>{TL[act.type]} сохранена</div>
+      <div style={{ fontSize: 13, color: 'var(--tx3)', marginTop: 4 }}>Сформировать акт приёма-передачи?</div>
+    </div>
+    <div style={{ display: 'flex', gap: 8 }}>
+      <Btn v="secondary" onClick={onDone} style={{ flex: 1 }}>Не нужно</Btn>
+      <Btn onClick={() => setAct({ ...act, open: true })} style={{ flex: 1 }}>🧾 Сформировать акт</Btn>
+    </div>
+    {act.open && <ActModal init={act} profile={profile} onClose={() => { setAct(null); onDone() }} onSaved={() => {}} />}
+  </div>)
 
   return (
     <div>
@@ -54,13 +108,16 @@ export default function OperationSheet({ type, data, profile, onDone }) {
         message={`${TL[type]} ${f.qty} шт «${selProd?.name || '—'}»${selRec ? (type === 'return' ? ' от ' : ' для ') + selRec.name : ''}`}
         onOk={() => { setConfirm(false); doSave() }} onCancel={() => setConfirm(false)} />}
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
         <span style={{ fontSize: 22 }}>{ICO[type]}</span>
         <span className="ff" style={{ fontSize: 19, fontWeight: 600, color: TC[type] }}>{TL[type]}</span>
         {steps > 1 && <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--tx3)' }}>Шаг {step} из {steps}</span>}
       </div>
 
       {step === 1 && <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <button onClick={dictate} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 14px', borderRadius: 12, border: `1px solid ${dictating ? 'var(--gr)' : 'var(--brd2)'}`, background: dictating ? 'var(--gr-l)' : 'var(--ink-l)', color: dictating ? 'var(--gr-m)' : 'var(--ink)', fontWeight: 600, fontSize: 13 }}>
+          <span style={{ fontSize: 17 }}>🎙</span>{dictating ? 'Слушаю… говорите' : 'Надиктовать Люси — например «10 футболок UFC для Айгерим»'}
+        </button>
         <Field label="Товар">
           <Select value={f.product_id} onChange={(e) => { if (e.target.value === 'new') setShowNewProd(true); else { up('product_id', e.target.value); setCreatedProd(null) } }}>
             <option value="">— выбрать товар —</option>
@@ -70,7 +127,6 @@ export default function OperationSheet({ type, data, profile, onDone }) {
           </Select>
         </Field>
         {showNewProd && <div className="card" style={{ padding: 14, background: 'var(--bg)' }}>
-          <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 10 }}>Новый товар</div>
           <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 10, marginBottom: 10 }}>
             <Field label="Название"><Input value={newProd.name} onChange={(e) => setNewProd({ ...newProd, name: e.target.value })} autoFocus /></Field>
             <Field label="Артикул"><Input value={newProd.sku} onChange={(e) => setNewProd({ ...newProd, sku: e.target.value })} /></Field>
@@ -118,9 +174,7 @@ export default function OperationSheet({ type, data, profile, onDone }) {
           <Field label="Номер СЗ"><Input value={f.sz} onChange={(e) => up('sz', e.target.value)} placeholder="СЗ-001" /></Field>
         </>}
         <Field label="Примечание"><Input value={f.notes} onChange={(e) => up('notes', e.target.value)} /></Field>
-        <div style={{ padding: '12px 14px', background: 'var(--bg)', borderRadius: 10, fontSize: 12.5, color: 'var(--tx2)' }}>
-          Товар: <b style={{ color: 'var(--tx)' }}>{selProd?.name}</b> × {f.qty} шт{selRec ? <> · {selRec.name}</> : null}
-        </div>
+        <div style={{ padding: '12px 14px', background: 'var(--bg)', borderRadius: 10, fontSize: 12.5, color: 'var(--tx2)' }}>Товар: <b style={{ color: 'var(--tx)' }}>{selProd?.name}</b> × {f.qty} шт{selRec ? <> · {selRec.name}</> : null}</div>
         <div style={{ display: 'flex', gap: 8 }}><Btn v="secondary" onClick={() => setStep(2)}>← Назад</Btn><Btn loading={loading} onClick={() => setConfirm(true)} style={{ flex: 1 }}>Сохранить</Btn></div>
       </div>}
     </div>
