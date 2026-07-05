@@ -9,6 +9,7 @@ import Items from './screens/Items'
 import Movements from './screens/Movements'
 import Recipients from './screens/Recipients'
 import Reports from './screens/Reports'
+import Acts from './screens/Acts'
 import Settings from './screens/Settings'
 import Lucy from './screens/Lucy'
 import Stub from './screens/Stub'
@@ -32,9 +33,9 @@ class ErrorBoundary extends React.Component {
 }
 
 const ROLE_VIEWS = {
-  admin: ['home', 'items', 'movements', 'lucy', 'recipients', 'reports', 'settings'],
-  manager: ['home', 'items', 'movements', 'lucy', 'recipients'],
-  director: ['home', 'items', 'movements', 'lucy', 'recipients', 'reports'],
+  admin: ['home', 'items', 'movements', 'acts', 'lucy', 'recipients', 'reports', 'settings'],
+  manager: ['home', 'items', 'movements', 'acts', 'lucy', 'recipients'],
+  director: ['home', 'items', 'movements', 'acts', 'lucy', 'recipients', 'reports'],
   employee: ['home', 'items', 'movements', 'lucy'],
 }
 
@@ -80,6 +81,7 @@ export default function App() {
     movements: <Movements data={data} profile={profile} can={can} />,
     recipients: <Recipients data={data} can={can} />,
     reports: <Reports data={data} />,
+    acts: <Acts data={data} />,
     settings: <Settings data={data} />,
     lucy: <Lucy data={data} profile={profile} can={can} setView={setView} autostart={assistAuto} onAutostart={() => setAssistAuto(false)} />,
   }
