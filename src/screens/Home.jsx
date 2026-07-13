@@ -4,7 +4,7 @@ import { fmt, som, TL } from '../lib/format'
 import OperationSheet from '../components/OperationSheet'
 
 export default function Home({ data, profile, can }) {
-  const { products, movements, stock, checkouts } = data
+  const { products, movements, stock, stockByWh, warehouses, checkouts } = data
   const [sheet, setSheet] = useState(null)
   const active = products.filter((p) => !p.archived)
   const totalVal = active.reduce((a, p) => a + (stock[p.id] || 0) * (p.price || 0), 0)
@@ -15,12 +15,14 @@ export default function Home({ data, profile, can }) {
   const hr = new Date().getHours()
   const hi = hr < 12 ? 'Доброе утро' : hr < 18 ? 'Добрый день' : 'Добрый вечер'
   const recent = movements.slice(0, 6)
+  const whTotal = (wid) => !wid ? 0 : active.reduce((a, p) => a + ((stockByWh?.[p.id]?.[wid]) || 0), 0)
   const pName = (id) => products.find((p) => p.id === id)?.name || '—'
 
   const actions = [
-    { t: 'in', ico: '📥', title: 'Принять товар', sub: 'Поставка от поставщика', c: 'var(--gr)' },
-    { t: 'out', ico: '📤', title: 'Выдать', sub: 'Сотруднику на мероприятие', c: 'var(--ink)' },
-    { t: 'return', ico: '🔄', title: 'Принять возврат', sub: 'Товар вернули', c: 'var(--pu)' },
+    { t: 'in', ico: '📥', title: 'Принять товар', sub: 'Поставка на склад', c: 'var(--gr)' },
+    { t: 'out', ico: '📤', title: 'Выдать', sub: 'Получателю / в филиал', c: 'var(--ink)' },
+    { t: 'return', ico: '🔄', title: 'Возврат', sub: 'Товар вернули', c: 'var(--pu)' },
+    { t: 'transfer', ico: '⇄', title: 'Перемещение', sub: 'Склад → склад', c: 'var(--am-m)' },
   ]
 
   return (
@@ -30,22 +32,23 @@ export default function Home({ data, profile, can }) {
         <div style={{ fontSize: 13, color: 'var(--tx3)', marginTop: 3 }}>{new Date().toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
       </div>
 
-      {can('move') && <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, marginBottom: 22 }}>
+      {can('move') && <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 22 }}>
         {actions.map((a) => (
-          <button key={a.t} onClick={() => setSheet(a.t)} className="card" style={{ padding: 20, textAlign: 'left', cursor: 'pointer', transition: 'all .15s' }}
+          <button key={a.t} onClick={() => setSheet(a.t)} className="card" style={{ padding: 17, textAlign: 'left', cursor: 'pointer', transition: 'all .15s' }}
             onMouseEnter={(e) => { e.currentTarget.style.borderColor = a.c; e.currentTarget.style.transform = 'translateY(-2px)' }}
             onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--brd)'; e.currentTarget.style.transform = 'none' }}>
-            <div style={{ fontSize: 28, marginBottom: 10 }}>{a.ico}</div>
+            <div style={{ fontSize: 25, marginBottom: 8 }}>{a.ico}</div>
             <div className="ff" style={{ fontSize: 15.5, fontWeight: 600 }}>{a.title}</div>
             <div style={{ fontSize: 12, color: 'var(--tx3)', marginTop: 2 }}>{a.sub}</div>
           </button>
         ))}
       </div>}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14, marginBottom: 22 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 12, marginBottom: 22 }}>
         <Stat label="Стоимость" value={fmt(totalVal)} unit="сом" color="var(--ink)" accent />
         <Stat label="Единиц" value={fmt(totalUnits)} unit="шт" color="var(--gr)" />
-        <Stat label="Позиций" value={active.length} />
+        <Stat label={warehouses[0]?.name || 'Склад 1'} value={fmt(whTotal(warehouses[0]?.id))} unit="шт" />
+        <Stat label={warehouses[1]?.name || 'Склад 2'} value={fmt(whTotal(warehouses[1]?.id))} unit="шт" />
         <Stat label="Просрочено" value={overdue.length} color={overdue.length ? 'var(--rd)' : 'var(--gr)'} />
       </div>
 
@@ -54,7 +57,7 @@ export default function Home({ data, profile, can }) {
           <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--brd)', fontWeight: 600, fontSize: 14.5 }}>Последние движения</div>
           {recent.length === 0 && <div style={{ padding: 30, textAlign: 'center', color: 'var(--tx3)', fontSize: 13 }}>Пока пусто.</div>}
           {recent.map((m, i) => <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 18px', borderBottom: i < recent.length - 1 ? '1px solid var(--brd)' : 'none' }}>
-            <Badge color={{ in: 'green', out: 'ink', return: 'purple', writeoff: 'red' }[m.type]}>{TL[m.type]}</Badge>
+            <Badge color={{ in: 'green', out: 'ink', return: 'purple', writeoff: 'red', transfer: 'amber' }[m.type]}>{TL[m.type]}</Badge>
             <span style={{ flex: 1, fontSize: 13.5, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pName(m.product_id)}</span>
             <span className="mono" style={{ fontWeight: 600 }}>×{m.qty}</span>
           </div>)}

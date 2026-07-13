@@ -24,7 +24,17 @@ export default function Lucy({ data, profile, can, setView, autostart, onAutosta
   useEffect(() => { endRef.current?.scrollIntoView?.({ behavior: 'smooth' }) }, [messages, pending])
   useEffect(() => {
     if (!window.speechSynthesis) return
-    const pick = () => { const v = window.speechSynthesis.getVoices(); voiceRef.current = v.find((x) => /ru/i.test(x.lang) && /tatyana|татьяна|alena|милена|milena|female|женск/i.test(x.name)) || v.find((x) => /ru/i.test(x.lang) && /google/i.test(x.name)) || v.find((x) => /ru/i.test(x.lang)) || null }
+    const pick = () => {
+      const v = window.speechSynthesis.getVoices()
+      const ru = v.filter((x) => /ru/i.test(x.lang))
+      voiceRef.current =
+        ru.find((x) => /svetlana|светлана/i.test(x.name)) ||                 // приоритет — Svetlana
+        ru.find((x) => /natural|online \(natural\)/i.test(x.name)) ||        // любые нейро-голоса Microsoft (Natural)
+        ru.find((x) => /dariya|дария|tatyana|татьяна|alena|милена|milena|female|женск/i.test(x.name)) ||
+        ru.find((x) => /google/i.test(x.name)) ||
+        ru.find((x) => /enhanced|premium/i.test(x.name)) ||                  // улучшенные системные (iOS Enhanced)
+        ru[0] || null
+    }
     pick(); window.speechSynthesis.onvoiceschanged = pick
   }, [])
   useEffect(() => () => { hfRef.current = false; try { recRef.current?.stop() } catch (e) {}; try { micRef.current?.getTracks().forEach((t) => t.stop()) } catch (e) {}; window.speechSynthesis?.cancel() }, [])
