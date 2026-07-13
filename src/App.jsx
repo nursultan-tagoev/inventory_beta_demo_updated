@@ -96,7 +96,7 @@ export default function App() {
           <ErrorBoundary k={safeView}>{SCREENS[safeView]}</ErrorBoundary>
         </main>
         {safeView !== 'lucy' && (
-          <button onClick={() => { setAssistAuto(true); setView('lucy') }} title="Люси"
+          <button onClick={() => { setAssistAuto(true); setView('lucy') }} title="Люси" className="lucy-fab"
             style={{ position: 'fixed', right: 26, bottom: 26, zIndex: 70, width: 58, height: 58, borderRadius: '50%', border: 'none', cursor: 'pointer', background: 'linear-gradient(150deg,var(--ink),var(--pu))', color: '#fff', display: 'grid', placeItems: 'center', boxShadow: '0 8px 24px color-mix(in srgb,var(--ink) 45%,transparent),0 2px 6px rgba(0,0,0,.2)' }}>
             <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v6a3 3 0 0 0 3 3ZM6 11a6 6 0 0 0 12 0M12 19v3" /></svg>
           </button>

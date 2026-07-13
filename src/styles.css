@@ -45,3 +45,36 @@ input,select,textarea{font-family:inherit;outline:none;color:inherit}
 .act-tbl th { background: var(--sur2); border: 1px solid var(--brd2); padding: 6px 7px; font-size: 10px; font-weight: 600; text-transform: uppercase; color: var(--tx2); text-align: left; }
 .act-tbl td { border: 1px solid var(--brd2); padding: 3px 6px; }
 .act-tbl td input { width: 100%; border: none; background: transparent; font-size: 12px; }
+
+/* ─────────── АДАПТИВ ─────────── */
+/* Нижнее меню — только на телефоне */
+.bottom-nav { display: none; }
+
+@media (max-width: 860px) {
+  /* Прячем боковое меню, показываем нижнее */
+  .side-nav { display: none !important; }
+  .bottom-nav {
+    display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 80;
+    background: var(--sur); border-top: 1px solid var(--brd);
+    padding-bottom: env(safe-area-inset-bottom, 0);
+    box-shadow: 0 -2px 12px rgba(16,18,24,.06);
+  }
+  /* Место под нижнее меню */
+  main { padding-bottom: 68px !important; }
+
+  /* Вход: прячем правую витрину */
+  .login-showcase { display: none !important; }
+
+  /* Главная: действия в 2 колонки, KPI в 2, панели в столбик */
+  .home-actions { grid-template-columns: repeat(2,1fr) !important; }
+  .home-kpi { grid-template-columns: repeat(2,1fr) !important; }
+  .home-panels { grid-template-columns: 1fr !important; }
+
+  /* Плавающая кнопка Люси выше меню */
+  .lucy-fab { bottom: 84px !important; right: 18px !important; }
+}
+
+@media (max-width: 520px) {
+  .home-actions { grid-template-columns: repeat(2,1fr) !important; }
+  .home-kpi { grid-template-columns: repeat(2,1fr) !important; }
+}
