@@ -24,7 +24,7 @@ export default function ActModal({ init, profile, onClose, onSaved }) {
   const [basis, setBasis] = useState(init.purpose ? 'Цель: ' + init.purpose : 'Служебная записка № ___')
   const [showInv, setShowInv] = useState(true)
   const [mode, setMode] = useState('e')
-  const [rows, setRows] = useState(init.items.map((it) => ({ name: it.name, sku: it.sku || '', inv: '', unit: 'шт', qty: it.qty, price: it.price || 0, cond: 'новое', product_id: it.product_id })))
+  const [rows, setRows] = useState(init.items.map((it) => ({ name: it.name, sku: it.sku || '', inv: '', unit: 'шт', qty: it.qty, price: it.price || 0, cond: 'новое', product_id: it.product_id, warehouse_id: it.warehouse_id })))
   const [scan, setScan] = useState(null)
   const [savedNo, setSavedNo] = useState(null)
   const [saving, setSaving] = useState(false)

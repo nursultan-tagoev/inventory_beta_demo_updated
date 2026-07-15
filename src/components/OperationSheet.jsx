@@ -89,7 +89,7 @@ export default function OperationSheet({ type, data, profile, can, onDone }) {
     if (error) return toast(error, 'error')
     toast(TL[type] + ' сохранена')
     if ((type === 'out' || type === 'return') && selProd) {
-      setAct({ type, items: [{ name: selProd.name, sku: selProd.sku, price: selProd.price, qty: Number(f.qty), product_id: selProd.id }], recipient: selRec?.name || '', recipient_id: selRec?.id || null, purpose: f.purpose, branch_id: f.branch_id || selRec?.branch_id || null, branchName: branches.find((b) => b.id === (f.branch_id || selRec?.branch_id))?.name })
+      setAct({ type, items: [{ name: selProd.name, sku: selProd.sku, price: selProd.price, qty: Number(f.qty), product_id: selProd.id, warehouse_id: Number(f.warehouse_id) }], recipient: selRec?.name || '', recipient_id: selRec?.id || null, purpose: f.purpose, branch_id: f.branch_id || selRec?.branch_id || null, branchName: branches.find((b) => b.id === (f.branch_id || selRec?.branch_id))?.name })
     } else { onDone() }
   }
   const next = () => { if (step < steps) setStep(step + 1); else setConfirm(true) }
