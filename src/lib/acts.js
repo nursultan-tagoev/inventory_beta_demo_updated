@@ -33,7 +33,7 @@ export async function createAct({ act, items, sigGiver, sigRecipient, scanFile }
   const { data: a, error } = await supabase.from('acts').insert({ ...act, number, sig_giver_path, sig_recipient_path, scan_path, status }).select().single()
   if (error) throw new Error('Сохранение акта: ' + error.message)
 
-  const rows = items.map((it) => ({ act_id: a.id, product_id: it.product_id || null, name: it.name, sku: it.sku || null, inv_number: it.inv || null, unit: it.unit || 'шт', qty: Number(it.qty) || 0, price: Number(it.price) || 0, sum: (Number(it.qty) || 0) * (Number(it.price) || 0), condition: it.condition || null }))
+  const rows = items.map((it) => ({ act_id: a.id, product_id: it.product_id || null, warehouse_id: it.warehouse_id || null, name: it.name, sku: it.sku || null, inv_number: it.inv || null, unit: it.unit || 'шт', qty: Number(it.qty) || 0, price: Number(it.price) || 0, sum: (Number(it.qty) || 0) * (Number(it.price) || 0), condition: it.condition || null }))
   const { error: e2 } = await supabase.from('act_items').insert(rows)
   if (e2) throw new Error('Позиции акта: ' + e2.message)
   return { number, id: a.id }
