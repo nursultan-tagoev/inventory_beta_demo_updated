@@ -125,6 +125,7 @@ export default function Items({ data, can }) {
 function ItemModal({ p, data, can, onClose }) {
   const toast = useToast()
   const { stock, flows, checkouts, recipients, reload } = data
+  const [confirmDel, setConfirmDel] = useState(false)
   const [tab, setTab] = useState('info')
   const [hist, setHist] = useState(null)
   const s = stock[p.id] || 0
@@ -136,13 +137,34 @@ function ItemModal({ p, data, can, onClose }) {
       supabase.from('movements').select('*').eq('product_id', p.id).order('created_at', { ascending: false }).limit(100).then(({ data: d }) => setHist(d || []))
     }
   }, [tab])
+
+  const hasMoves = (flows[p.id] && (flows[p.id].in || flows[p.id].out || flows[p.id].return || flows[p.id].writeoff))
+  const removeProduct = async () => {
+    if (hasMoves) {
+      // есть движения — архивируем (мягко скрываем)
+      const { error } = await supabase.from('products').update({ archived: true }).eq('id', p.id)
+      if (error) return toast('Ошибка: ' + error.message, 'error')
+      toast('Товар архивирован'); reload(); onClose()
+    } else {
+      // нет движений — можно удалить полностью
+      const { error } = await supabase.from('products').delete().eq('id', p.id)
+      if (error) return toast(error.message.includes('foreign key') ? 'Есть связанные записи — товар архивирован' : 'Ошибка: ' + error.message, 'error')
+      toast('Товар удалён'); reload(); onClose()
+    }
+  }
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'grid', placeItems: 'center', padding: 20, background: 'rgba(8,10,14,.5)', backdropFilter: 'blur(4px)' }}>
       <div onClick={(e) => e.stopPropagation()} className="card" style={{ width: '100%', maxWidth: 600, maxHeight: '88vh', overflow: 'auto', animation: 'fadeUp .2s' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '20px 22px', borderBottom: '1px solid var(--brd)' }}>
           <div><div className="ff" style={{ fontSize: 18, fontWeight: 600 }}>{p.name}</div><div style={{ fontSize: 12, color: 'var(--tx3)', marginTop: 2 }}>{p.sku || '—'} · {som(p.price)}</div></div>
-          <div className="mono" style={{ fontSize: 26, fontWeight: 600, color: s === 0 ? 'var(--rd)' : s < 5 ? 'var(--am)' : 'var(--gr)' }}>{s}<span style={{ fontSize: 13, color: 'var(--tx3)', fontFamily: 'var(--f)' }}> шт</span></div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <div className="mono" style={{ fontSize: 26, fontWeight: 600, color: s === 0 ? 'var(--rd)' : s < 5 ? 'var(--am)' : 'var(--gr)' }}>{s}<span style={{ fontSize: 13, color: 'var(--tx3)', fontFamily: 'var(--f)' }}> шт</span></div>
+            {can('edit') && <button onClick={() => setConfirmDel(true)} title="Удалить товар" style={{ width: 34, height: 34, borderRadius: 9, display: 'grid', placeItems: 'center', color: 'var(--rd-m)', background: 'var(--rd-l)', fontSize: 15 }}>🗑</button>}
+          </div>
         </div>
+        {confirmDel && <Confirm title="Удалить товар?" danger
+          message={hasMoves ? `У товара «${p.name}» есть движения, поэтому он будет архивирован (скрыт из списка), а история сохранится.` : `Товар «${p.name}» будет удалён полностью. Действие необратимо.`}
+          onOk={() => { setConfirmDel(false); removeProduct() }} onCancel={() => setConfirmDel(false)} />}
         <div style={{ display: 'flex', gap: 4, padding: '14px 22px 0' }}>
           {[['info', 'Обзор'], ['history', 'История']].map(([t, l]) => <button key={t} onClick={() => setTab(t)} style={{ padding: '7px 14px', borderRadius: 9, fontSize: 12.5, fontWeight: tab === t ? 600 : 400, background: tab === t ? 'var(--ink-l)' : 'transparent', color: tab === t ? 'var(--ink)' : 'var(--tx2)' }}>{l}</button>)}
         </div>

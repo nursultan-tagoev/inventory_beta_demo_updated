@@ -23,8 +23,13 @@ export default function Settings({ data }) {
   }
   const del = async (table, id) => {
     const { error } = await supabase.from(table).delete().eq('id', id)
-    if (error) return toast('Ошибка: ' + error.message, 'error')
+    if (error) return toast(error.message.includes('foreign key') ? 'Нельзя удалить — есть связанные записи. Переименуйте.' : 'Ошибка: ' + error.message, 'error')
     toast('Удалено'); reload()
+  }
+  const upd = async (table, id, patch) => {
+    const { error } = await supabase.from(table).update(patch).eq('id', id)
+    if (error) return toast('Ошибка: ' + error.message, 'error')
+    toast('Сохранено'); reload()
   }
 
   return (
@@ -46,11 +51,11 @@ export default function Settings({ data }) {
         {/* Контент */}
         <div style={{ flex: 1, minWidth: 300 }}>
           {tab === 'hier' && <Hierarchy {...{ directions, productTypes, campaigns, ins, del }} />}
-          {tab === 'warehouses' && <Simple title="Склады" hint="Где физически лежит товар и считается остаток." table="warehouses" rows={warehouses} cols={[['name', 'Название'], ['city', 'Город']]} ins={ins} del={del} />}
+          {tab === 'warehouses' && <Simple title="Склады" hint="Где физически лежит товар и считается остаток." table="warehouses" rows={warehouses} cols={[['name', 'Название'], ['city', 'Город']]} ins={ins} del={del} upd={upd} />}
           {tab === 'locations' && <Places {...{ locations, warehouses, ins, del }} />}
-          {tab === 'branches' && <Simple title="Филиалы-адресаты" hint="Куда выдаём товар. Город — для группировки в аналитике." table="branches" rows={branches} cols={[['name', 'Название'], ['city', 'Город']]} ins={ins} del={del} />}
-          {tab === 'categories' && <Simple title="Категории" table="categories" rows={categories} cols={[['name', 'Название']]} ins={ins} del={del} />}
-          {tab === 'suppliers' && <Simple title="Поставщики" table="suppliers" rows={suppliers} cols={[['name', 'Название']]} ins={ins} del={del} />}
+          {tab === 'branches' && <Simple title="Филиалы-адресаты" hint="Куда выдаём товар. Город — для группировки в аналитике." table="branches" rows={branches} cols={[['name', 'Название'], ['city', 'Город']]} ins={ins} del={del} upd={upd} />}
+          {tab === 'categories' && <Simple title="Категории" table="categories" rows={categories} cols={[['name', 'Название']]} ins={ins} del={del} upd={upd} />}
+          {tab === 'suppliers' && <Simple title="Поставщики" table="suppliers" rows={suppliers} cols={[['name', 'Название']]} ins={ins} del={del} upd={upd} />}
         </div>
       </div>
     </div>
@@ -158,8 +163,9 @@ function Places({ locations, warehouses, ins, del }) {
 }
 
 /* ── Простой справочник ── */
-function Simple({ title, hint, table, rows, cols, ins, del }) {
+function Simple({ title, hint, table, rows, cols, ins, del, upd }) {
   const [f, setF] = useState({})
+  const [edit, setEdit] = useState(null)
   const add = () => {
     const row = {}
     for (const [k] of cols) { const v = (f[k] || '').trim(); if (v) row[k] = v }
@@ -181,10 +187,19 @@ function Simple({ title, hint, table, rows, cols, ins, del }) {
       <div className="card" style={{ overflow: 'hidden' }}>
         {rows.length === 0 && <div style={{ padding: 30, textAlign: 'center', color: 'var(--tx3)', fontSize: 13 }}>Пусто.</div>}
         {rows.map((r, i) => (
-          <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 16px', borderBottom: i < rows.length - 1 ? '1px solid var(--brd)' : 'none', fontSize: 13 }}>
-            <span style={{ flex: 1, fontWeight: 500 }}>{r.name}</span>
-            {r.city && <span style={{ fontSize: 11.5, color: 'var(--tx3)' }}>{r.city}</span>}
-            <button onClick={() => del(table, r.id)} style={{ fontSize: 11, color: 'var(--tx3)' }}>×</button>
+          <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px', borderBottom: i < rows.length - 1 ? '1px solid var(--brd)' : 'none', fontSize: 13 }}>
+            {edit && edit.id === r.id ? <>
+              {cols.map(([k, l]) => (
+                <Input key={k} value={edit[k] || ''} onChange={(e) => setEdit({ ...edit, [k]: e.target.value })} placeholder={l} style={{ flex: 1, height: 34 }} />
+              ))}
+              <Btn size="sm" onClick={() => { const patch = {}; cols.forEach(([k]) => { patch[k] = (edit[k] || '').trim() || null }); upd(table, r.id, patch); setEdit(null) }}>✓</Btn>
+              <Btn size="sm" v="secondary" onClick={() => setEdit(null)}>×</Btn>
+            </> : <>
+              <span style={{ flex: 1, fontWeight: 500 }}>{r.name}</span>
+              {r.city && <span style={{ fontSize: 11.5, color: 'var(--tx3)' }}>{r.city}</span>}
+              {upd && <button onClick={() => setEdit({ id: r.id, ...Object.fromEntries(cols.map(([k]) => [k, r[k] || ''])) })} style={{ fontSize: 13, color: 'var(--ink)', padding: '0 5px' }}>✎</button>}
+              <button onClick={() => del(table, r.id)} style={{ fontSize: 13, color: 'var(--tx3)', padding: '0 5px' }}>×</button>
+            </>}
           </div>
         ))}
       </div>
