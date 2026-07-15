@@ -3,6 +3,7 @@ import { supabase } from '../supabaseClient'
 import { Btn, Field, Input, Select, Confirm, useToast } from './ui'
 import { som } from '../lib/format'
 import { saveMovement, stockAt } from '../lib/ops'
+import { chainOf } from '../lib/data'
 import { norm, parseQty, matchName, askLucy } from '../lib/lucy'
 import ActModal from './ActModal'
 
@@ -12,13 +13,13 @@ const ICO = { in: '📥', out: '📤', return: '🔄', writeoff: '🗑', transfe
 
 export default function OperationSheet({ type, data, profile, can, onDone }) {
   const toast = useToast()
-  const { products, recipients, suppliers, branches, directions, locations, warehouses, stockByWh } = data
+  const { products, recipients, suppliers, branches, directions, productTypes, campaigns, locations, warehouses, stockByWh } = data
   const steps = type === 'in' ? 2 : type === 'writeoff' || type === 'transfer' ? 1 : 3
   const [step, setStep] = useState(1)
   const [loading, setLoading] = useState(false)
   const [confirm, setConfirm] = useState(false)
   const [showNewProd, setShowNewProd] = useState(false)
-  const [newProd, setNewProd] = useState({ name: '', sku: '', price: '' })
+  const [newProd, setNewProd] = useState({ name: '', sku: '', price: '', direction_id: '', product_type_id: '', campaign_id: '' })
   const [createdProd, setCreatedProd] = useState(null)
   const [showNewRec, setShowNewRec] = useState(false)
   const [newRec, setNewRec] = useState({ name: '', branch_id: '' })
@@ -70,9 +71,9 @@ export default function OperationSheet({ type, data, profile, can, onDone }) {
 
   const createProduct = async () => {
     if (!newProd.name.trim()) return toast('Введите название', 'error')
-    const { data: d, error } = await supabase.from('products').insert({ name: newProd.name.trim(), sku: newProd.sku || null, price: Number(newProd.price) || 0, archived: false }).select().single()
+    const { data: d, error } = await supabase.from('products').insert({ name: newProd.name.trim(), sku: newProd.sku || null, price: Number(newProd.price) || 0, campaign_id: newProd.campaign_id ? Number(newProd.campaign_id) : null, direction_id: newProd.direction_id ? Number(newProd.direction_id) : null, archived: false }).select().single()
     if (error) return toast('Ошибка: ' + error.message, 'error')
-    up('product_id', d.id); setCreatedProd(d); setShowNewProd(false); setNewProd({ name: '', sku: '', price: '' }); toast('Товар создан')
+    up('product_id', d.id); setCreatedProd(d); setShowNewProd(false); setNewProd({ name: '', sku: '', price: '', direction_id: '', product_type_id: '', campaign_id: '' }); toast('Товар создан')
   }
   const createRecipient = async () => {
     if (!newRec.name.trim()) return toast('Введите имя', 'error')
@@ -141,12 +142,35 @@ export default function OperationSheet({ type, data, profile, can, onDone }) {
           </Select>
         </Field>
         {showNewProd && <div className="card" style={{ padding: 14, background: 'var(--bg)' }}>
+          <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--ink)', marginBottom: 10 }}>Новый товар</div>
           <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 10, marginBottom: 10 }}>
             <Field label="Название"><Input value={newProd.name} onChange={(e) => setNewProd({ ...newProd, name: e.target.value })} autoFocus /></Field>
             <Field label="Артикул"><Input value={newProd.sku} onChange={(e) => setNewProd({ ...newProd, sku: e.target.value })} /></Field>
             <Field label="Цена"><Input type="number" value={newProd.price} onChange={(e) => setNewProd({ ...newProd, price: e.target.value })} /></Field>
           </div>
-          <div style={{ display: 'flex', gap: 8 }}><Btn size="sm" onClick={createProduct}>Сохранить</Btn><Btn size="sm" v="secondary" onClick={() => setShowNewProd(false)}>Отмена</Btn></div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 10 }}>
+            <Field label="Направление">
+              <Select value={newProd.direction_id} onChange={(e) => setNewProd({ ...newProd, direction_id: e.target.value, product_type_id: '', campaign_id: '' })}>
+                <option value="">—</option>{directions.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+              </Select>
+            </Field>
+            <Field label="Тип">
+              <Select value={newProd.product_type_id} onChange={(e) => setNewProd({ ...newProd, product_type_id: e.target.value, campaign_id: '' })}>
+                <option value="">—</option>{productTypes.filter((t) => !newProd.direction_id || t.direction_id == newProd.direction_id).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </Select>
+            </Field>
+            <Field label="Кампания">
+              <Select value={newProd.campaign_id} onChange={(e) => setNewProd({ ...newProd, campaign_id: e.target.value })}>
+                <option value="">—</option>{campaigns.filter((c) => !newProd.product_type_id || c.product_type_id == newProd.product_type_id).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </Select>
+            </Field>
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--tx3)', marginBottom: 10 }}>Цепочку можно оставить пустой — товар попадёт в «Без категории», заполните позже.</div>
+          <div style={{ display: 'flex', gap: 8 }}><Btn size="sm" onClick={createProduct}>Создать и продолжить</Btn><Btn size="sm" v="secondary" onClick={() => setShowNewProd(false)}>Отмена</Btn></div>
+        </div>}
+        {selProd && chainOf(selProd, { directions, productTypes, campaigns }) && <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', padding: '9px 12px', background: 'var(--sur)', border: '1px solid var(--brd)', borderRadius: 10 }}>
+          <span style={{ fontSize: 13.5, fontWeight: 600 }}>{selProd.name}</span>
+          <span style={{ fontSize: 11.5, color: 'var(--tx3)', marginLeft: 4 }}>{chainOf(selProd, { directions, productTypes, campaigns })}</span>
         </div>}
 
         {/* Склад-источник / склад прихода — ОБЯЗАТЕЛЕН */}
@@ -193,7 +217,6 @@ export default function OperationSheet({ type, data, profile, can, onDone }) {
       </div>}
 
       {step === 2 && type === 'in' && <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {directions.length > 0 && <Field label="Направление"><Select value={f.direction_id} onChange={(e) => up('direction_id', e.target.value)}><option value="">— не указано —</option>{directions.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}</Select></Field>}
         <Field label="Примечание"><Input value={f.notes} onChange={(e) => up('notes', e.target.value)} placeholder="Необязательно" /></Field>
         <div style={{ display: 'flex', gap: 8 }}><Btn v="secondary" onClick={() => setStep(1)}>← Назад</Btn><Btn loading={loading} onClick={() => setConfirm(true)} style={{ flex: 1 }}>Сохранить приход</Btn></div>
       </div>}
