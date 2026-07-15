@@ -9,6 +9,8 @@ const TL = { in: 'Приход', out: 'Выдача', return: 'Возврат', 
 export default function Lucy({ data, profile, can, setView, autostart, onAutostart }) {
   const toast = useToast()
   const role = profile?.role || 'employee'
+  const [mode, setMode] = useState('off')
+  const pausedRef = useRef(false)
   const [messages, setMessages] = useState([{ id: 0, from: 'a', text: 'Здравствуйте! Я Люси. Скажите или напишите: «выдай Айгерим 5 футболок», «сколько ручек», «покажи отчёты». Микрофон — кнопка справа. Скажете «Люси, спасибо» — попрощаюсь.' }])
   const [input, setInput] = useState('')
   const [pending, setPending] = useState(null)   // редактируемая карточка подтверждения
@@ -37,7 +39,7 @@ export default function Lucy({ data, profile, can, setView, autostart, onAutosta
     }
     pick(); window.speechSynthesis.onvoiceschanged = pick
   }, [])
-  useEffect(() => () => { hfRef.current = false; try { recRef.current?.stop() } catch (e) {}; try { micRef.current?.getTracks().forEach((t) => t.stop()) } catch (e) {}; window.speechSynthesis?.cancel() }, [])
+  useEffect(() => () => { hfRef.current = false; pausedRef.current = false; try { recRef.current?.stop() } catch (e) {}; try { recRef.current?.abort() } catch (e) {}; try { micRef.current?.getTracks().forEach((t) => t.stop()) } catch (e) {}; window.speechSynthesis?.cancel() }, [])
   useEffect(() => { if (autostart) { setTimeout(() => { try { tapMic() } catch (e) {} }, 350); onAutostart?.() } }, [])
 
   const push = (from, text) => setMessages((m) => [...m, { id: idRef.current++, from, text }])
@@ -153,25 +155,54 @@ export default function Lucy({ data, profile, can, setView, autostart, onAutosta
     const r = new SR(); r.lang = 'ru-RU'; r.continuous = true; r.interimResults = false; r.maxAlternatives = 1
     r.onresult = (e) => { const res = e.results[e.results.length - 1]; if (res?.isFinal) routeVoice(res[0].transcript, res[0].confidence) }
     r.onerror = (e) => { startingRef.current = false; if (e.error === 'not-allowed') { hfRef.current = false; setHf(false); setVstate('off'); push('a', 'Нет доступа к микрофону — разрешите его в браузере.') } }
-    r.onend = () => { startingRef.current = false; if (hfRef.current) setTimeout(() => { if (hfRef.current) startRec() }, 130) }
+    r.onend = () => { startingRef.current = false; if (hfRef.current && !pausedRef.current) setTimeout(() => { if (hfRef.current && !pausedRef.current) startRec() }, 130) }
     recRef.current = r; try { r.start() } catch (e) { startingRef.current = false }
   }
-  const toggleHF = () => {
-    if (hf) { hfRef.current = false; setHf(false); modeRef.current = 'off'; setVstate('off'); try { recRef.current?.stop() } catch (e) {}; window.speechSynthesis?.cancel(); return }
-    if (!SR) { push('a', 'Голос доступен в Chrome/Edge при интернете. Пишите текстом.'); return }
-    hfRef.current = true; setHf(true); primeMic(); startRec(); speak('Готова! Скажите «Эй, Люси» или называйте команду.', false)
+  // Полная остановка: сначала гасим флаги (чтобы onend не перезапустил), потом стопаем железо
+  const fullStop = () => {
+    hfRef.current = false; setHf(false); pausedRef.current = false
+    modeRef.current = 'off'; setVstate('off'); startingRef.current = false
+    try { if (recRef.current) recRef.current.onend = null } catch (e) {}
+    try { recRef.current?.stop() } catch (e) {}
+    try { recRef.current?.abort() } catch (e) {}
+    try { micRef.current?.getTracks().forEach((t) => t.stop()) } catch (e) {}
+    micRef.current = null
+    try { window.speechSynthesis?.cancel() } catch (e) {}
   }
-  const tapMic = () => { if (!SR) { push('a', 'Голос доступен в Chrome/Edge. Наберите команду ниже.'); return } primeMic(); if (!hfRef.current) { hfRef.current = true; setHf(true); startRec() } speak('Слушаю. Что нужно?', true) }
+  // Режимы: 'off' | 'pause' | 'hf'
+  const setLucyMode = (m) => {
+    if (m === 'off') { fullStop(); return }
+    if (m === 'pause') {
+      pausedRef.current = true; setMode('pause'); setVstate('off')
+      try { recRef.current?.stop() } catch (e) {}
+      try { window.speechSynthesis?.cancel() } catch (e) {}
+      return
+    }
+    // hf — руки свободны
+    if (!SR) { push('a', 'Голос доступен в Chrome/Edge при интернете. Пишите текстом.'); return }
+    pausedRef.current = false; hfRef.current = true; setHf(true); setMode('hf')
+    primeMic(); startRec(); speak('Готова! Скажите «Эй, Люси» или называйте команду.', false)
+  }
+  const toggleHF = () => setLucyMode(hf ? 'off' : 'hf')
+  const tapMic = () => {
+    if (!SR) { push('a', 'Голос доступен в Chrome/Edge. Наберите команду ниже.'); return }
+    pausedRef.current = false; setMode('hf'); primeMic(); if (!hfRef.current) { hfRef.current = true; setHf(true) } startRec(); speak('Слушаю. Что нужно?', true)
+  }
 
   const ring = vstate === 'listening' ? 'var(--gr)' : vstate === 'speaking' ? 'var(--pu)' : 'var(--ink)'
-  const label = busy ? 'Думаю…' : vstate === 'listening' ? (modeRef.current === 'wake' ? 'Слушаю команду…' : 'Жду «Эй, Люси»…') : vstate === 'speaking' ? 'Отвечаю…' : (hf ? 'Жду «Эй, Люси»' : 'Нажмите микрофон или скажите «Эй, Люси»')
+  const label = mode === 'off' ? 'Люси выключена — нажмите «Руки свободны» или микрофон' : mode === 'pause' ? 'На паузе — нажмите микрофон, чтобы продолжить' : busy ? 'Думаю…' : vstate === 'listening' ? (modeRef.current === 'wake' ? 'Слушаю команду…' : 'Жду «Эй, Люси»…') : vstate === 'speaking' ? 'Отвечаю…' : (hf ? 'Жду «Эй, Люси»' : 'Нажмите микрофон или скажите «Эй, Люси»')
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <div style={{ padding: '14px 22px', borderBottom: '1px solid var(--brd)', background: 'var(--sur)', display: 'flex', alignItems: 'center', gap: 10 }}>
         <div style={{ width: 34, height: 34, borderRadius: 10, background: 'linear-gradient(150deg,var(--ink),var(--pu))', display: 'grid', placeItems: 'center', color: '#fff', fontWeight: 700 }}>Л</div>
         <div style={{ flex: 1 }}><div className="ff" style={{ fontSize: 18, fontWeight: 600 }}>Люси</div><div style={{ fontSize: 11, color: 'var(--tx3)' }}>операции · аналитика · навигация</div></div>
-        <button className={'chip'} onClick={toggleHF} style={{ height: 34, padding: '0 13px', borderRadius: 9, border: `1px solid ${hf ? 'var(--gr)' : 'var(--brd2)'}`, background: hf ? 'var(--gr-l)' : 'var(--sur)', color: hf ? 'var(--gr-m)' : 'var(--tx2)', fontSize: 12.5, fontWeight: 600 }}>{hf ? '🟢 Руки свободны' : '🎧 Руки свободны'}</button>
+        <div style={{ display: 'inline-flex', background: 'var(--bg)', borderRadius: 10, padding: 3, gap: 2 }}>
+          {[['off', 'Выкл', 'var(--rd-m)'], ['pause', 'Пауза', 'var(--am-m)'], ['hf', 'Руки свободны', 'var(--gr-m)']].map(([m, lbl, col]) => {
+            const on = mode === m
+            return <button key={m} onClick={() => setLucyMode(m)} style={{ height: 30, padding: '0 11px', borderRadius: 8, border: 'none', background: on ? 'var(--sur)' : 'transparent', color: on ? col : 'var(--tx3)', fontSize: 12, fontWeight: on ? 600 : 500 }}>{lbl}</button>
+          })}
+        </div>
       </div>
 
       <div style={{ flex: 1, overflow: 'auto', padding: '20px 22px' }}>
