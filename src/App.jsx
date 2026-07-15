@@ -11,6 +11,7 @@ import Recipients from './screens/Recipients'
 import Reports from './screens/Reports'
 import Acts from './screens/Acts'
 import Settings from './screens/Settings'
+import Requests from './screens/Requests'
 import Lucy from './screens/Lucy'
 import Stub from './screens/Stub'
 
@@ -33,10 +34,10 @@ class ErrorBoundary extends React.Component {
 }
 
 const ROLE_VIEWS = {
-  admin: ['home', 'items', 'movements', 'acts', 'lucy', 'recipients', 'reports', 'settings'],
-  manager: ['home', 'items', 'movements', 'acts', 'lucy', 'recipients'],
-  director: ['home', 'items', 'movements', 'acts', 'lucy', 'recipients', 'reports'],
-  employee: ['home', 'items', 'movements', 'lucy'],
+  admin: ['home', 'items', 'movements', 'requests', 'acts', 'lucy', 'recipients', 'reports', 'settings'],
+  manager: ['home', 'items', 'movements', 'requests', 'acts', 'lucy', 'recipients'],
+  director: ['home', 'items', 'movements', 'requests', 'acts', 'lucy', 'recipients', 'reports'],
+  employee: ['home', 'items', 'movements', 'requests', 'lucy'],
 }
 
 export default function App() {
@@ -83,13 +84,14 @@ export default function App() {
     reports: <Reports data={data} />,
     acts: <Acts data={data} />,
     settings: <Settings data={data} />,
+    requests: <Requests data={data} profile={profile} can={can} />,
     lucy: <Lucy data={data} profile={profile} can={can} setView={setView} autostart={assistAuto} onAutostart={() => setAssistAuto(false)} />,
   }
 
   return (
     <ToastProvider>
       <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
-        <Sidebar view={safeView} setView={setView} profile={profile} onLogout={logout} />
+        <Sidebar view={safeView} setView={setView} profile={profile} onLogout={logout} badges={{ requests: (data.requests || []).filter((r) => r.status === 'new' && (role === 'admin' || r.author_id === profile.id)).length }} />
         <main style={{ flex: 1, overflow: 'auto', position: 'relative' }}>
           {data.loading && <div style={{ position: 'absolute', top: 14, right: 18, zIndex: 5 }}><Spin s={18} /></div>}
           {data.error && <div style={{ padding: '10px 24px', background: 'var(--am-l)', color: 'var(--am-m)', fontSize: 12.5, borderBottom: '1px solid var(--am)' }}>Доступ к данным закрыт: {data.error}. Проверьте, что выполнены RLS-политики.</div>}
