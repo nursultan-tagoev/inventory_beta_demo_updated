@@ -12,15 +12,15 @@ const Ico = ({ k, s = 18 }) => (
   <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">{I[k]}</svg>
 )
 
+// Блок 1: показываем только готовые разделы. Остальные включаются в своих блоках.
 const NAV = [
   { id: 'home', label: 'Главная', roles: ['admin', 'manager', 'employee', 'director'] },
   { id: 'items', label: 'Товары', roles: ['admin', 'manager', 'employee', 'director'] },
   { id: 'movements', label: 'Движения', roles: ['admin', 'manager', 'employee', 'director'] },
-  { id: 'acts', label: 'Акты', roles: ['admin', 'manager', 'director'] },
   { id: 'lucy', label: 'Люси', roles: ['admin', 'manager', 'employee', 'director'] },
-  { id: 'recipients', label: 'Получатели', roles: ['admin', 'manager', 'director'] },
-  { id: 'reports', label: 'Аналитика', roles: ['admin', 'director'] },
   { id: 'settings', label: 'Справочники', roles: ['admin'] },
+  // Блок 2: { id: 'requests', label: 'Заявки' }, { id: 'acts', label: 'Акты' }, { id: 'recipients', label: 'Получатели' }
+  // Блок 3: { id: 'reports', label: 'Аналитика' }, { id: 'inventory', label: 'Инвентаризация' }
 ]
 const ROLE_RU = { admin: 'Администратор', manager: 'Менеджер', employee: 'Сотрудник', director: 'Директор' }
 
