@@ -68,12 +68,12 @@ export default function Home({ data, profile, can }) {
         </div>
       )}
 
-      {/* KPI */}
-      <div className="home-kpi" style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 12, marginBottom: 22 }}>
+      {/* KPI — число складов гибкое */}
+      <div className="home-kpi" style={{ display: 'grid', gridTemplateColumns: `repeat(${3 + warehouses.length}, minmax(0,1fr))`, gap: 12, marginBottom: 22 }}>
         <Stat label="Стоимость" value={fmt(totalVal)} unit="сом" color="var(--ink)" accent />
         <Stat label="Всего на складах" value={fmt(totalUnits)} unit="шт" color="var(--gr)" />
-        {warehouses.slice(0, 2).map((w) => (
-          <Stat key={w.id} label={'Склад ' + w.name} value={fmt(whTotal(w.id))} unit="шт" />
+        {warehouses.map((w) => (
+          <Stat key={w.id} label={w.name} value={fmt(whTotal(w.id))} unit="шт" />
         ))}
         <Stat label="Просрочено" value={overdue.length} color={overdue.length ? 'var(--rd)' : 'var(--gr)'} />
       </div>

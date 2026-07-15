@@ -10,25 +10,71 @@ export default function Items({ data, can }) {
   const [q, setQ] = useState('')
   const [add, setAdd] = useState(false)
   const [sel, setSel] = useState(null)
-  const [nf, setNf] = useState({ name: '', sku: '', category_id: '', price: '', location_id: '', supplier_id: '' })
+  const [nf, setNf] = useState({ name: '', sku: '', category_id: '', price: '', location_id: '', supplier_id: '', campaign_id: '' })
   const [loading, setLoading] = useState(false)
-  const list = products.filter((p) => !p.archived && (!q || p.name.toLowerCase().includes(q.toLowerCase()) || (p.sku || '').toLowerCase().includes(q.toLowerCase())))
+  const [hier, setHier] = useState({ direction_id: '', product_type_id: '', campaign_id: '' })
+  const [whF, setWhF] = useState('')
+
+  const hTypes = hier.direction_id ? productTypes.filter((t) => t.direction_id == hier.direction_id) : productTypes
+  const hCamps = hier.product_type_id ? campaigns.filter((c) => c.product_type_id == hier.product_type_id) : campaigns
+  const inHier = (p) => {
+    if (hier.campaign_id && p.campaign_id != hier.campaign_id) return false
+    if (hier.product_type_id) {
+      const c = campaigns.find((x) => x.id === p.campaign_id)
+      if ((c?.product_type_id || p.product_type_id) != hier.product_type_id) return false
+    }
+    if (hier.direction_id) {
+      const c = campaigns.find((x) => x.id === p.campaign_id)
+      const t = productTypes.find((x) => x.id === (c?.product_type_id || p.product_type_id))
+      if ((t?.direction_id || p.direction_id) != hier.direction_id) return false
+    }
+    return true
+  }
+  const list = products.filter((p) => !p.archived
+    && (!q || p.name.toLowerCase().includes(q.toLowerCase()) || (p.sku || '').toLowerCase().includes(q.toLowerCase()))
+    && inHier(p)
+    && (!whF || ((stockByWh?.[p.id]?.[whF]) || 0) > 0))
+  const hierActive = hier.direction_id || hier.product_type_id || hier.campaign_id || whF
+  const selS = { height: 38, padding: '0 11px', borderRadius: 11, border: '1px solid var(--brd2)', background: 'var(--sur)', fontSize: 12.5, color: 'var(--tx)' }
 
   const save = async () => {
     if (!nf.name.trim()) return toast('Название обязательно', 'error')
     setLoading(true)
-    const { error } = await supabase.from('products').insert({ name: nf.name.trim(), sku: nf.sku || null, category_id: nf.category_id ? Number(nf.category_id) : null, price: Number(nf.price) || 0, location_id: nf.location_id ? Number(nf.location_id) : null, supplier_id: nf.supplier_id ? Number(nf.supplier_id) : null, archived: false })
+    const { error } = await supabase.from('products').insert({ name: nf.name.trim(), sku: nf.sku || null, category_id: nf.category_id ? Number(nf.category_id) : null, price: Number(nf.price) || 0, location_id: nf.location_id ? Number(nf.location_id) : null, supplier_id: nf.supplier_id ? Number(nf.supplier_id) : null, campaign_id: nf.campaign_id ? Number(nf.campaign_id) : null, archived: false })
     setLoading(false)
     if (error) return toast('Ошибка: ' + error.message, 'error')
-    setAdd(false); setNf({ name: '', sku: '', category_id: '', price: '', location_id: '', supplier_id: '' }); toast('Товар добавлен'); reload()
+    setAdd(false); setNf({ name: '', sku: '', category_id: '', price: '', location_id: '', supplier_id: '', campaign_id: '' }); toast('Товар добавлен'); reload()
   }
 
   return (
     <div style={{ maxWidth: 1120, margin: '0 auto', padding: 24, animation: 'fadeUp .3s ease' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18, flexWrap: 'wrap' }}>
-        <span className="ff" style={{ fontSize: 20, fontWeight: 600 }}>Товары</span>
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Поиск…" style={{ marginLeft: 'auto', height: 38, padding: '0 14px', borderRadius: 11, border: '1px solid var(--brd2)', background: 'var(--sur)', fontSize: 14, minWidth: 200 }} />
-        {can('edit') && <Btn onClick={() => setAdd(!add)}>➕ Добавить</Btn>}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
+        <span className="ff" style={{ fontSize: 21, fontWeight: 600 }}>Товары</span>
+        <span style={{ fontSize: 12.5, color: 'var(--tx3)' }}>{list.length} позиций</span>
+        {can('edit') && <Btn size="sm" onClick={() => setAdd(!add)} style={{ marginLeft: 'auto' }}>＋ Товар</Btn>}
+      </div>
+
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Поиск по названию или артикулу…"
+          style={{ ...selS, flex: 1, minWidth: 170, padding: '0 13px' }} />
+        <select value={hier.direction_id} onChange={(e) => setHier({ direction_id: e.target.value, product_type_id: '', campaign_id: '' })} style={selS}>
+          <option value="">Направление</option>
+          {directions.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+        </select>
+        <select value={hier.product_type_id} onChange={(e) => setHier({ ...hier, product_type_id: e.target.value, campaign_id: '' })} style={selS}>
+          <option value="">Тип</option>
+          {hTypes.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+        </select>
+        <select value={hier.campaign_id} onChange={(e) => setHier({ ...hier, campaign_id: e.target.value })} style={selS}>
+          <option value="">Кампания</option>
+          {hCamps.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+        <select value={whF} onChange={(e) => setWhF(e.target.value)} style={selS}>
+          <option value="">Все склады</option>
+          {warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+        </select>
+        {hierActive && <button onClick={() => { setHier({ direction_id: '', product_type_id: '', campaign_id: '' }); setWhF('') }}
+          style={{ fontSize: 12, color: 'var(--ink)', padding: '0 6px' }}>✕ сбросить</button>}
       </div>
 
       {add && <div className="card" style={{ padding: 18, marginBottom: 16, border: '1.5px solid var(--ink)' }}>
@@ -40,6 +86,7 @@ export default function Items({ data, can }) {
           <Field label="Цена"><Input type="number" value={nf.price} onChange={(e) => setNf({ ...nf, price: e.target.value })} /></Field>
           <Field label="Место"><Select value={nf.location_id} onChange={(e) => setNf({ ...nf, location_id: e.target.value })}><option value="">—</option>{locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}</Select></Field>
           <Field label="Поставщик"><Select value={nf.supplier_id} onChange={(e) => setNf({ ...nf, supplier_id: e.target.value })}><option value="">—</option>{suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</Select></Field>
+          <Field label="Кампания"><Select value={nf.campaign_id} onChange={(e) => setNf({ ...nf, campaign_id: e.target.value })}><option value="">— без категории —</option>{campaigns.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</Select></Field>
         </div>
         <div style={{ display: 'flex', gap: 8 }}><Btn onClick={save} loading={loading}>Сохранить</Btn><Btn v="secondary" onClick={() => setAdd(false)}>Отмена</Btn></div>
       </div>}
