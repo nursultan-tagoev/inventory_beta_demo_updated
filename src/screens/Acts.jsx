@@ -3,7 +3,7 @@ import { supabase } from '../supabaseClient'
 import { Badge, Spin } from '../components/ui'
 import { fmt } from '../lib/format'
 
-const ST = { draft: ['Черновик', 'slate'], awaiting_sign: ['Ожидает подписи', 'amber'], signed: ['Подписан (эл.)', 'green'], signed_manual: ['Подписан (скан)', 'green'] }
+const ST = { draft: ['Черновик', 'slate'], awaiting_sign: ['Ожидает подписи', 'amber'], signed: ['Подписан (эл.)', 'green'], signed_manual: ['Подписан (скан)', 'green'], annulled: ['Аннулирован', 'red'] }
 
 export default function Acts({ data }) {
   const [acts, setActs] = useState(null)
@@ -16,7 +16,12 @@ export default function Acts({ data }) {
   const load = () => supabase.from('acts').select('*').order('created_at', { ascending: false }).then(({ data: d }) => setActs(d || []))
   useEffect(() => { load() }, [])
 
-  const list = (acts || []).filter((a) => (f === 'all' || a.type === f) && (!q || (a.number || '').toLowerCase().includes(q.toLowerCase()) || (a.recipient_name || '').toLowerCase().includes(q.toLowerCase())))
+  const list = (acts || []).filter((a) => {
+    if (f === 'annulled') return a.annulled
+    if (f !== 'all' && a.type !== f) return false
+    if (q && !((a.number || '').toLowerCase().includes(q.toLowerCase()) || (a.recipient_name || '').toLowerCase().includes(q.toLowerCase()))) return false
+    return true
+  })
 
   return (
     <div style={{ maxWidth: 1000, margin: '0 auto', padding: 24, animation: 'fadeUp .3s ease' }}>
@@ -25,17 +30,17 @@ export default function Acts({ data }) {
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Поиск по номеру или получателю…" style={{ marginLeft: 'auto', height: 38, padding: '0 14px', borderRadius: 11, border: '1px solid var(--brd2)', background: 'var(--sur)', fontSize: 14, minWidth: 240 }} />
       </div>
       <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>
-        {[['all', 'Все'], ['out', 'Выдача'], ['return', 'Возврат']].map(([t, l]) => <button key={t} onClick={() => setF(t)} style={{ padding: '5px 12px', borderRadius: 999, border: `1px solid ${f === t ? 'var(--ink)' : 'var(--brd)'}`, fontSize: 12, fontWeight: f === t ? 600 : 400, background: f === t ? 'var(--ink-l)' : 'var(--sur)', color: f === t ? 'var(--ink)' : 'var(--tx2)' }}>{l}</button>)}
+        {[['all', 'Все'], ['out', 'Выдача'], ['return', 'Возврат'], ['annulled', 'Аннулированные']].map(([t, l]) => <button key={t} onClick={() => setF(t)} style={{ padding: '5px 12px', borderRadius: 999, border: `1px solid ${f === t ? 'var(--ink)' : 'var(--brd)'}`, fontSize: 12, fontWeight: f === t ? 600 : 400, background: f === t ? 'var(--ink-l)' : 'var(--sur)', color: f === t ? 'var(--ink)' : 'var(--tx2)' }}>{l}</button>)}
       </div>
 
       {acts === null ? <div style={{ padding: 50, textAlign: 'center' }}><Spin /></div> : (
         <div className="card" style={{ overflow: 'hidden' }}>
           {list.length === 0 && <div style={{ padding: 44, textAlign: 'center', color: 'var(--tx3)', fontSize: 13 }}>Актов пока нет. Они появляются здесь после того, как вы сформируете акт при выдаче или возврате.</div>}
           {list.map((a, i) => (
-            <div key={a.id} onClick={() => setOpen(a)} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '13px 18px', borderBottom: i < list.length - 1 ? '1px solid var(--brd)' : 'none', cursor: 'pointer' }}>
+            <div key={a.id} onClick={() => setOpen(a)} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '13px 18px', borderBottom: i < list.length - 1 ? '1px solid var(--brd)' : 'none', cursor: 'pointer', opacity: a.annulled ? 0.55 : 1 }}>
               <div style={{ width: 40, textAlign: 'center', fontSize: 20 }}>🧾</div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><span className="mono" style={{ fontWeight: 600, fontSize: 13.5 }}>{a.number}</span><Badge color={a.type === 'return' ? 'purple' : 'ink'}>{a.type === 'return' ? 'Возврат' : 'Выдача'}</Badge></div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><span className="mono" style={{ fontWeight: 600, fontSize: 13.5, textDecoration: a.annulled ? 'line-through' : 'none' }}>{a.number}</span><Badge color={a.type === 'return' ? 'purple' : 'ink'}>{a.type === 'return' ? 'Возврат' : 'Выдача'}</Badge></div>
                 <div style={{ fontSize: 12, color: 'var(--tx3)', marginTop: 2 }}>{rName(a.recipient_id, a.recipient_name)} · {a.act_date}</div>
               </div>
               <div style={{ textAlign: 'right' }}>
@@ -47,23 +52,52 @@ export default function Acts({ data }) {
         </div>
       )}
 
-      {open && <ActView act={open} data={data} onClose={() => setOpen(null)} />}
+      {open && <ActView act={open} data={data} onClose={() => setOpen(null)} onChanged={() => { load(); setOpen(null) }} />}
     </div>
   )
 }
 
-function ActView({ act, data, onClose }) {
+function ActView({ act, data, onClose, onChanged }) {
   const [items, setItems] = useState(null)
+  const [annulling, setAnnulling] = useState(false)
+  const [reason, setReason] = useState('')
+  const [busy, setBusy] = useState(false)
   useEffect(() => { supabase.from('act_items').select('*').eq('act_id', act.id).then(({ data: d }) => setItems(d || [])) }, [act.id])
   const today = new Date(act.act_date).toLocaleDateString('ru-RU', { day: '2-digit', month: 'long', year: 'numeric' })
   const isRet = act.type === 'return'
+
+  const doAnnul = async () => {
+    if (!reason.trim()) return
+    setBusy(true)
+    const { error } = await supabase.rpc('annul_act', { p_act_id: act.id, p_reason: reason.trim() })
+    setBusy(false)
+    if (error) { alert('Ошибка: ' + error.message); return }
+    onChanged && onChanged()
+  }
   return (
     <div className="no-print" onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 1200, background: 'rgba(8,10,14,.5)', backdropFilter: 'blur(3px)', overflow: 'auto', padding: '24px 12px' }}>
       <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: 780, margin: '0 auto' }}>
         <div className="no-print" style={{ display: 'flex', gap: 8, marginBottom: 12, justifyContent: 'flex-end' }}>
+          {!act.annulled && <button onClick={() => setAnnulling(!annulling)} style={{ height: 34, padding: '0 14px', borderRadius: 9, border: '1px solid var(--rd)', background: 'var(--rd-l)', color: 'var(--rd-m)', fontSize: 12.5, fontWeight: 600 }}>Аннулировать</button>}
           <button onClick={() => window.print()} style={{ height: 34, padding: '0 14px', borderRadius: 9, border: '1px solid var(--brd2)', background: 'var(--sur)', fontSize: 12.5, fontWeight: 600 }}>🖨 Печать / PDF</button>
           <button onClick={onClose} style={{ height: 34, padding: '0 14px', borderRadius: 9, border: '1px solid var(--brd2)', background: 'var(--sur)', fontSize: 12.5, fontWeight: 600 }}>Закрыть</button>
         </div>
+        {annulling && !act.annulled && (
+          <div className="no-print" style={{ background: 'var(--sur)', border: '1.5px solid var(--rd)', borderRadius: 12, padding: 18, marginBottom: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <span style={{ fontSize: 18 }}>⚠️</span>
+              <span className="ff" style={{ fontSize: 15, fontWeight: 600, color: 'var(--rd-m)' }}>Аннулировать {act.number}?</span>
+            </div>
+            <div style={{ fontSize: 12.5, color: 'var(--tx2)', lineHeight: 1.6, marginBottom: 12 }}>Акт будет помечен недействительным (номер сохранится). Связанная операция откатится — товар вернётся на склад.</div>
+            <textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Причина аннулирования (обязательно)…" autoFocus
+              style={{ width: '100%', minHeight: 60, padding: '10px 12px', borderRadius: 10, border: '1px solid var(--brd2)', background: 'var(--bg)', fontSize: 13, resize: 'vertical', fontFamily: 'inherit', marginBottom: 12 }} />
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={doAnnul} disabled={busy || !reason.trim()} style={{ flex: 1, height: 40, borderRadius: 9, border: 'none', background: 'var(--rd)', color: '#fff', fontSize: 13, fontWeight: 600, opacity: busy || !reason.trim() ? 0.6 : 1 }}>{busy ? 'Аннулирую…' : 'Аннулировать и вернуть остаток'}</button>
+              <button onClick={() => setAnnulling(false)} style={{ height: 40, padding: '0 16px', borderRadius: 9, border: '1px solid var(--brd2)', background: 'var(--sur)', fontSize: 13 }}>Отмена</button>
+            </div>
+          </div>
+        )}
+        {act.annulled && <div className="no-print" style={{ background: 'var(--rd-l)', border: '1px solid var(--rd)', borderRadius: 10, padding: '11px 14px', marginBottom: 12, fontSize: 12.5, color: 'var(--rd-m)' }}>Акт аннулирован{act.annul_reason ? `: ${act.annul_reason}` : ''}. Остаток возвращён.</div>}
         <div id="act-print" style={{ background: '#fff', color: '#14171D', borderRadius: 8, padding: '46px 54px', boxShadow: 'var(--sh3)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
             <div style={{ fontSize: 12, color: '#5A6472' }}>«Наименование банка» · Отдел маркетинга</div>
