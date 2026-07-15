@@ -5,7 +5,7 @@ export function useAppData(profile) {
   const [state, setState] = useState({
     products: [], movements: [], recipients: [], branches: [], suppliers: [],
     categories: [], directions: [], productTypes: [], locations: [],
-    warehouses: [], campaigns: [],
+    warehouses: [], campaigns: [], requests: [],
     stock: {}, stockByWh: {}, flows: {}, checkouts: [], loading: true, error: null,
   })
 
@@ -13,13 +13,15 @@ export function useAppData(profile) {
     setState((s) => ({ ...s, loading: true }))
     try {
       const q = (t, order = 'id') => supabase.from(t).select('*').order(order)
-      const [products, movements, recipients, branches, suppliers, categories, directions, productTypes, locations, warehouses, campaigns, stockRows] = await Promise.all([
+      const [products, movements, recipients, branches, suppliers, categories, directions, productTypes, locations, warehouses, campaigns, stockRows, requestsRes, reqItemsRes] = await Promise.all([
         supabase.from('products').select('*').order('name'),
         supabase.from('movements').select('*').order('created_at', { ascending: false }).limit(5000),
         supabase.from('recipients').select('*').order('name'),
         q('branches'), q('suppliers'), q('categories'), q('directions'), q('product_types'), q('locations'),
         q('warehouses'), q('campaigns'),
         supabase.from('stock_by_warehouse').select('*'),
+        supabase.from('requests').select('*').order('created_at', { ascending: false }).limit(1000),
+        supabase.from('request_items').select('*'),
       ])
       const err = [products, movements, recipients, branches, suppliers, categories, directions, productTypes, locations, warehouses, campaigns, stockRows].find((r) => r.error)?.error
       const mv = movements.data || []
@@ -56,6 +58,7 @@ export function useAppData(profile) {
         branches: branches.data || [], suppliers: suppliers.data || [], categories: categories.data || [],
         directions: directions.data || [], productTypes: productTypes.data || [], locations: locations.data || [],
         warehouses: warehouses.data || [], campaigns: campaigns.data || [],
+        requests: buildRequests(requestsRes?.data, reqItemsRes?.data),
         stock, stockByWh, flows, checkouts, loading: false, error: err ? err.message : null,
       })
     } catch (e) {
@@ -64,7 +67,24 @@ export function useAppData(profile) {
   }, [])
 
   useEffect(() => { if (profile) load() }, [profile, load])
+
+  // Realtime: заявки обновляются у всех сразу
+  useEffect(() => {
+    if (!profile) return
+    const ch = supabase.channel('requests-live')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'requests' }, () => load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'request_items' }, () => load())
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [profile, load])
+
   return { ...state, reload: load }
+}
+
+function buildRequests(reqs, items) {
+  const byReq = {}
+  for (const it of items || []) (byReq[it.request_id] || (byReq[it.request_id] = [])).push(it)
+  return (reqs || []).map((r) => ({ ...r, items: byReq[r.id] || [] }))
 }
 
 /* Иерархия: Направление → Тип → Кампания → Продукт */
