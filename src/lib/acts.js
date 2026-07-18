@@ -23,11 +23,17 @@ async function upload(path, fileOrBlob) {
 export async function createAct({ act, items, sigGiver, sigRecipient, scanFile }) {
   const prefix = act.type === 'return' ? 'АЗ' : 'АВ'
   const number = await nextActNumber(prefix)
-  const base = number.replace(/[\/\\]/g, '-')
+  // Путь в Storage — только латиница (кириллица в ключах недопустима)
+  const base = number
+    .replace(/А/g, 'A').replace(/В/g, 'V').replace(/З/g, 'Z')
+    .replace(/[^A-Za-z0-9._-]/g, '-')
   let sig_giver_path = null, sig_recipient_path = null, scan_path = null
   if (sigGiver) sig_giver_path = await upload(`${base}/giver.png`, dataURLtoBlob(sigGiver))
   if (sigRecipient) sig_recipient_path = await upload(`${base}/recipient.png`, dataURLtoBlob(sigRecipient))
-  if (scanFile) scan_path = await upload(`${base}/scan_${scanFile.name.replace(/\s+/g, '_')}`, scanFile)
+  if (scanFile) {
+    const ext = (scanFile.name.split('.').pop() || 'bin').replace(/[^A-Za-z0-9]/g, '')
+    scan_path = await upload(`${base}/scan.${ext}`, scanFile)
+  }
 
   const status = act.sign_mode === 'electronic' ? (sigRecipient ? 'signed' : 'awaiting_sign') : (scan_path ? 'signed_manual' : 'awaiting_sign')
   const { data: a, error } = await supabase.from('acts').insert({ ...act, number, sig_giver_path, sig_recipient_path, scan_path, status }).select().single()
