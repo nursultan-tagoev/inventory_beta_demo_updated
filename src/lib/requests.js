@@ -110,27 +110,14 @@ export async function closePartial(id) {
   return { error: error ? error.message : null }
 }
 
-/* ── Одобрение: создаёт акт с цепочкой подписей (операции ещё нет!) ── */
-// approvedQty: { [request_item_id]: qty }
-export async function approveRequest(req, warehouseId, approvedQty, freeByWh, profile, chain) {
+/* ── Исполнение складом: выдача + акт (после всех согласований) ── */
+// approvedQty: { [request_item_id]: qty } — админ может дать меньше
+export async function issueRequest(req, warehouseId, approvedQty, freeByWh, profile) {
   if (!warehouseId) return { error: 'Выберите склад-источник' }
   const wid = Number(warehouseId)
 
   const lines = req.items.map((it) => ({ ...it, give: Number(approvedQty?.[it.id] ?? it.qty) })).filter((it) => it.give > 0)
   if (!lines.length) return { error: 'Нечего выдавать — укажите количество' }
-
-  for (const it of lines) {
-    const free = (freeByWh?.[it.product_id]?.[wid]) ?? 0
-    const ownReserve = 0 // собственный резерв уже учтён как занятый — допускаем выдачу под него
-    if (it.give > free + (it.qty || 0)) {
-      return { error: `Недостаточно на складе: нужно ${it.give}, свободно ${free}` }
-    }
-  }
-
-  // Сохраняем одобренные количества
-  for (const it of lines) {
-    await supabase.from('request_items').update({ approved_qty: it.give }).eq('id', it.id)
-  }
 
   // Номер акта
   const { data: number, error: numErr } = await supabase.rpc('next_act_number', { p_prefix: 'АВ' })
@@ -141,29 +128,31 @@ export async function approveRequest(req, warehouseId, approvedQty, freeByWh, pr
     number, type: 'out', act_date: new Date().toISOString().slice(0, 10),
     request_id: req.id, branch_id: req.branch_id, recipient_id: req.recipient_id,
     basis: req.basis_type === 'sz' ? `${req.sz_number || ''} от ${req.sz_date || ''}` : (req.no_sz_reason || ''),
-    status: 'awaiting_sign', total_sum: total, created_by: profile.id,
+    status: 'awaiting_sign', total_sum: total, created_by: profile.id, issued: true, issued_at: new Date().toISOString(),
   }).select().single()
   if (actErr) return { error: 'Акт: ' + actErr.message }
 
-  // Позиции акта
-  const items = lines.map((it) => ({
-    act_id: act.id, product_id: it.product_id, warehouse_id: wid,
-    name: it.name || '', sku: it.sku || null, unit: 'шт',
-    qty: it.give, price: it.price || 0, sum: it.give * (it.price || 0),
-  }))
-  await supabase.from('act_items').insert(items)
+  // Позиции акта + движения (товар списывается)
+  for (const it of lines) {
+    await supabase.from('request_items').update({ approved_qty: it.give }).eq('id', it.id)
+    await supabase.from('act_items').insert({
+      act_id: act.id, product_id: it.product_id, warehouse_id: wid,
+      name: it.name || '', sku: it.sku || null, unit: 'шт',
+      qty: it.give, price: it.price || 0, sum: it.give * (it.price || 0),
+    })
+    const { error: mErr } = await supabase.from('movements').insert({
+      type: 'out', product_id: it.product_id, qty: it.give, warehouse_id: wid,
+      branch_id: req.branch_id, recipient_id: req.recipient_id,
+      issuer_id: profile.id, purpose: req.purpose, sz: req.sz_number, notes: 'По акту ' + number,
+    })
+    if (mErr) return { error: 'Движение: ' + mErr.message }
+  }
 
-  // Цепочка подписей
-  const signers = (chain || []).map((c, i) => ({
-    act_id: act.id, order_no: i + 1, user_id: c.user_id || null, signer_name: c.name || null,
-    signer_role: c.role || null, in_system: !!c.user_id, status: 'waiting',
-  }))
-  if (signers.length) await supabase.from('act_signers').insert(signers)
-
-  // Статус заявки
   const partial = lines.some((it) => it.give < it.qty)
-  await supabase.from('requests').update({ status: partial ? 'partial' : 'approved', warehouse_id: wid }).eq('id', req.id)
-  await supabase.rpc('touch_reservation', { p_request_id: req.id })
+  await supabase.from('requests').update({
+    status: partial ? 'partial' : 'issued', warehouse_id: wid, act_id: act.id, issued_at: new Date().toISOString(),
+  }).eq('id', req.id)
+  await supabase.rpc('release_reservation', { p_request_id: req.id })
 
   return { data: act }
 }

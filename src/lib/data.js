@@ -5,7 +5,7 @@ export function useAppData(profile) {
   const [state, setState] = useState({
     products: [], movements: [], recipients: [], branches: [], suppliers: [],
     categories: [], directions: [], productTypes: [], locations: [],
-    warehouses: [], campaigns: [], requests: [], reservations: [], profiles: [], acts: [], actSigners: [], externals: [],
+    warehouses: [], campaigns: [], requests: [], reservations: [], profiles: [], acts: [], actSigners: [], externals: [], reqApprovers: [],
     stock: {}, stockByWh: {}, freeByWh: {}, resvByWh: {}, flows: {}, checkouts: [], loading: true, error: null,
   })
 
@@ -13,7 +13,7 @@ export function useAppData(profile) {
     setState((s) => ({ ...s, loading: true }))
     try {
       const q = (t, order = 'id') => supabase.from(t).select('*').order(order)
-      const [products, movements, recipients, branches, suppliers, categories, directions, productTypes, locations, warehouses, campaigns, stockRows, requestsRes, reqItemsRes, freeRes, resvRes, profilesRes, actsRes, signersRes, extRes] = await Promise.all([
+      const [products, movements, recipients, branches, suppliers, categories, directions, productTypes, locations, warehouses, campaigns, stockRows, requestsRes, reqItemsRes, freeRes, resvRes, profilesRes, actsRes, signersRes, extRes, reqApprRes] = await Promise.all([
         supabase.from('products').select('*').order('name'),
         supabase.from('movements').select('*').order('created_at', { ascending: false }).limit(5000),
         supabase.from('recipients').select('*').order('name'),
@@ -28,6 +28,7 @@ export function useAppData(profile) {
         supabase.from('acts').select('*').order('created_at', { ascending: false }).limit(1000),
         supabase.from('act_signers').select('*').order('order_no'),
         supabase.from('external_approvers').select('*').order('level'),
+        supabase.from('request_approvers').select('*').order('order_no'),
       ])
       const err = [products, movements, recipients, branches, suppliers, categories, directions, productTypes, locations, warehouses, campaigns, stockRows].find((r) => r.error)?.error
       const mv = movements.data || []
@@ -74,7 +75,7 @@ export function useAppData(profile) {
         warehouses: warehouses.data || [], campaigns: campaigns.data || [],
         requests: buildRequests(requestsRes?.data, reqItemsRes?.data),
         reservations: resvRes?.data || [], profiles: profilesRes?.data || [],
-        acts: actsRes?.data || [], actSigners: signersRes?.data || [], externals: extRes?.data || [],
+        acts: actsRes?.data || [], actSigners: signersRes?.data || [], externals: extRes?.data || [], reqApprovers: reqApprRes?.data || [],
         stock, stockByWh, freeByWh, resvByWh, flows, checkouts, loading: false, error: err ? err.message : null,
       })
     } catch (e) {
@@ -93,6 +94,7 @@ export function useAppData(profile) {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'acts' }, () => load())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'act_signers' }, () => load())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'reservations' }, () => load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'request_approvers' }, () => load())
       .subscribe()
     return () => { supabase.removeChannel(ch) }
   }, [profile, load])
