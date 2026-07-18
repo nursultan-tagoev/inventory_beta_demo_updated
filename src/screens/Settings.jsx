@@ -9,6 +9,7 @@ const NAV = [
   { id: 'branches', l: 'Филиалы-адресаты', ico: '🗺' },
   { id: 'categories', l: 'Категории', ico: '🏷' },
   { id: 'suppliers', l: 'Поставщики', ico: '🚚' },
+  { id: 'people', l: 'Пользователи', ico: '👤' },
 ]
 
 export default function Settings({ data }) {
@@ -55,6 +56,7 @@ export default function Settings({ data }) {
           {tab === 'locations' && <Places {...{ locations, warehouses, ins, del }} />}
           {tab === 'branches' && <Simple title="Филиалы-адресаты" hint="Куда выдаём товар. Город — для группировки в аналитике." table="branches" rows={branches} cols={[['name', 'Название'], ['city', 'Город']]} ins={ins} del={del} upd={upd} />}
           {tab === 'categories' && <Simple title="Категории" table="categories" rows={categories} cols={[['name', 'Название']]} ins={ins} del={del} upd={upd} />}
+          {tab === 'people' && <People data={data} toast={toast} />}
           {tab === 'suppliers' && <Simple title="Поставщики" table="suppliers" rows={suppliers} cols={[['name', 'Название']]} ins={ins} del={del} upd={upd} />}
         </div>
       </div>
@@ -155,6 +157,67 @@ function Places({ locations, warehouses, ins, del }) {
             <span style={{ flex: 1, fontWeight: 500 }}>{l.name}</span>
             <span style={{ fontSize: 11.5, color: 'var(--tx3)' }}>склад {whName(l.warehouse_id)}</span>
             <button onClick={() => del('locations', l.id)} style={{ fontSize: 11, color: 'var(--tx3)' }}>×</button>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/* ── Пользователи и их руководители (для цепочки подписей) ── */
+function People({ data, toast }) {
+  const { profiles, branches, reload } = data
+  const [edit, setEdit] = useState(null)
+  const bName = (id) => branches.find((b) => b.id === id)?.name || '—'
+  const ROLE = { admin: 'Администратор', director: 'Директор', manager: 'Менеджер', employee: 'Сотрудник' }
+
+  const save = async () => {
+    const { error } = await supabase.from('profiles').update({
+      position: edit.position || null,
+      manager_id: edit.manager_id || null,
+      manager_name: edit.manager_id ? null : (edit.manager_name || null),
+      manager_position: edit.manager_id ? null : (edit.manager_position || null),
+    }).eq('id', edit.id)
+    if (error) return toast('Ошибка: ' + error.message, 'error')
+    toast('Сохранено'); setEdit(null); reload()
+  }
+
+  return (
+    <div>
+      <div className="card" style={{ padding: 16, marginBottom: 12 }}>
+        <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 3 }}>Пользователи и руководители</div>
+        <div style={{ fontSize: 12, color: 'var(--tx3)' }}>По полю «руководитель» система строит цепочку подписей. Если руководителя нет в системе — впишите ФИО, за него подпись приложит склад сканом.</div>
+      </div>
+      <div className="card" style={{ overflow: 'hidden' }}>
+        {(profiles || []).map((p, i, arr) => (
+          <div key={p.id} style={{ padding: '11px 16px', borderBottom: i < arr.length - 1 ? '1px solid var(--brd)' : 'none' }}>
+            {edit?.id === p.id ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>{p.full_name || p.email}</div>
+                <Input value={edit.position || ''} onChange={(e) => setEdit({ ...edit, position: e.target.value })} placeholder="Должность" />
+                <Select value={edit.manager_id || ''} onChange={(e) => setEdit({ ...edit, manager_id: e.target.value })}>
+                  <option value="">— руководителя нет в системе —</option>
+                  {(profiles || []).filter((x) => x.id !== p.id).map((x) => <option key={x.id} value={x.id}>{x.full_name || x.email}</option>)}
+                </Select>
+                {!edit.manager_id && <>
+                  <Input value={edit.manager_name || ''} onChange={(e) => setEdit({ ...edit, manager_name: e.target.value })} placeholder="ФИО руководителя (вне системы)" />
+                  <Input value={edit.manager_position || ''} onChange={(e) => setEdit({ ...edit, manager_position: e.target.value })} placeholder="Должность руководителя" />
+                </>}
+                <div style={{ display: 'flex', gap: 8 }}><Btn size="sm" onClick={save}>Сохранить</Btn><Btn size="sm" v="secondary" onClick={() => setEdit(null)}>Отмена</Btn></div>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 500 }}>{p.full_name || p.email}</div>
+                  <div style={{ fontSize: 11, color: 'var(--tx3)' }}>
+                    {ROLE[p.role] || p.role}{p.branch_id ? ' · ' + bName(p.branch_id) : ''}
+                    {p.manager_id ? ' · рук.: ' + ((profiles.find((x) => x.id === p.manager_id) || {}).full_name || '—') : p.manager_name ? ' · рук.: ' + p.manager_name + ' (вне системы)' : ' · руководитель не указан'}
+                  </div>
+                </div>
+                <button onClick={() => setEdit({ id: p.id, position: p.position, manager_id: p.manager_id, manager_name: p.manager_name, manager_position: p.manager_position })}
+                  style={{ fontSize: 13, color: 'var(--ink)', padding: '0 6px', minHeight: 40 }}>✎</button>
+              </div>
+            )}
           </div>
         ))}
       </div>

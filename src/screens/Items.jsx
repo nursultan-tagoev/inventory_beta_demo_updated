@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabaseClient'
-import { chainOf } from '../lib/data'
+import { chainOf, freeAll, reservedAll } from '../lib/data'
 import { Btn, Field, Input, Select, Badge, Confirm, useToast } from '../components/ui'
 import { fmt, som, TL } from '../lib/format'
 
 export default function Items({ data, can }) {
   const toast = useToast()
-  const { products, categories, suppliers, locations, stock, stockByWh, warehouses, campaigns, directions, productTypes, flows, checkouts, recipients, reload } = data
+  const { products, categories, suppliers, locations, stock, stockByWh, freeByWh, resvByWh, warehouses, campaigns, directions, productTypes, flows, checkouts, recipients, reload } = data
   const [q, setQ] = useState('')
   const [add, setAdd] = useState(false)
   const [sel, setSel] = useState(null)
@@ -109,6 +109,15 @@ export default function Items({ data, can }) {
               <div style={{ padding: '12px 14px' }}>
                 <div style={{ fontSize: 13.5, fontWeight: 600, lineHeight: 1.3 }}>{p.name}</div>
                 {chainOf(p, { directions, productTypes, campaigns }) && <div style={{ fontSize: 10.5, color: 'var(--tx3)', marginTop: 3 }}>{chainOf(p, { directions, productTypes, campaigns })}</div>}
+                {(() => { const rsv = reservedAll(resvByWh, p.id); const tot = stock[p.id] || 0
+                  if (!rsv) return null
+                  return <div style={{ marginTop: 7 }}>
+                    <div style={{ height: 6, borderRadius: 3, overflow: 'hidden', display: 'flex', background: 'var(--sur2)' }}>
+                      <div style={{ width: `${Math.max(0, (tot - rsv) / (tot || 1) * 100)}%`, background: 'var(--gr)' }} />
+                      <div style={{ width: `${rsv / (tot || 1) * 100}%`, background: 'var(--am)' }} />
+                    </div>
+                    <div style={{ fontSize: 10, color: 'var(--am-m)', marginTop: 3 }}>свободно {tot - rsv} · резерв {rsv}</div>
+                  </div> })()}
                 <div style={{ display: 'flex', gap: 10, marginTop: 7, paddingTop: 7, borderTop: '1px solid var(--brd)' }}>
                   {warehouses.map((w) => (
                     <span key={w.id} style={{ fontSize: 10.5, color: 'var(--tx3)' }}>{w.name} <b className="mono" style={{ color: 'var(--tx2)' }}>{(stockByWh?.[p.id]?.[w.id]) || 0}</b></span>

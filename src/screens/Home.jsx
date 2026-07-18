@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { Stat, Btn, Badge, Sheet } from '../components/ui'
+import { signersOf, currentSigner } from '../lib/signing'
 import { fmt, som, TL } from '../lib/format'
 import OperationSheet from '../components/OperationSheet'
 
-export default function Home({ data, profile, can }) {
-  const { products, movements, stock, stockByWh, warehouses, checkouts, recipients, branches } = data
+export default function Home({ data, profile, can, setView }) {
+  const { products, movements, stock, stockByWh, warehouses, checkouts, recipients, branches, requests, acts, actSigners } = data
   const [sheet, setSheet] = useState(null)
   const role = profile?.role || 'employee'
 
@@ -52,6 +53,29 @@ export default function Home({ data, profile, can }) {
         </div>
         {role === 'director' && <Badge>👁 Обзор · только просмотр</Badge>}
       </div>
+
+      {/* Счётчики документооборота */}
+      {(() => {
+        const newReq = (requests || []).filter((r) => r.status === 'new' && (role === 'admin' || r.author_id === profile.id))
+        const waitActs = (acts || []).filter((a) => !a.issued && !a.annulled && !a.declined && signersOf(actSigners, a.id).some((s) => s.status === 'waiting'))
+        const mySign = waitActs.filter((a) => { const c = currentSigner(signersOf(actSigners, a.id)); return c && ((c.in_system && c.user_id === profile.id) || (!c.in_system && role === 'admin')) })
+        const cards = []
+        if (role === 'admin' && newReq.length) cards.push({ ico: '📥', l: 'Новые заявки', n: newReq.length, c: 'var(--ink)', bg: 'var(--ink-l)', to: 'requests' })
+        if (mySign.length) cards.push({ ico: '✍️', l: 'Мне на подпись', n: mySign.length, c: 'var(--ink)', bg: 'var(--ink-l)', to: 'acts' })
+        if (role === 'admin' && waitActs.length) cards.push({ ico: '📄', l: 'Ждут подписи', n: waitActs.length, c: 'var(--am-m)', bg: 'var(--am-l)', to: 'acts' })
+        if (!cards.length) return null
+        return <div className="home-actions" style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(cards.length, 3)},1fr)`, gap: 12, marginBottom: 18 }}>
+          {cards.map((c) => (
+            <button key={c.l} onClick={() => setView && setView(c.to)} className="card" style={{ padding: 15, textAlign: 'left', border: `1.5px solid ${c.c}`, cursor: 'pointer' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                <span style={{ fontSize: 18 }}>{c.ico}</span>
+                <span style={{ fontSize: 12.5, fontWeight: 600 }}>{c.l}</span>
+                <span className="mono" style={{ marginLeft: 'auto', fontSize: 20, fontWeight: 700, color: c.c }}>{c.n}</span>
+              </div>
+            </button>
+          ))}
+        </div>
+      })()}
 
       {/* Карточки-действия */}
       {showActions && (

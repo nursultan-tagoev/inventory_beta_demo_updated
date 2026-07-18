@@ -1,15 +1,18 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabaseClient'
+import SignSheet from '../components/SignSheet'
+import { signersOf, currentSigner } from '../lib/signing'
 import { Badge, Spin } from '../components/ui'
 import { fmt } from '../lib/format'
 
 const ST = { draft: ['Черновик', 'slate'], awaiting_sign: ['Ожидает подписи', 'amber'], signed: ['Подписан (эл.)', 'green'], signed_manual: ['Подписан (скан)', 'green'], annulled: ['Аннулирован', 'red'] }
 
-export default function Acts({ data }) {
+export default function Acts({ data, profile }) {
   const [acts, setActs] = useState(null)
   const [f, setF] = useState('all')
   const [q, setQ] = useState('')
   const [open, setOpen] = useState(null)
+  const [signAct, setSignAct] = useState(null)
   const { recipients } = data
   const rName = (id, snap) => snap || recipients.find((r) => r.id === id)?.name || '—'
 
@@ -43,7 +46,10 @@ export default function Acts({ data }) {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><span className="mono" style={{ fontWeight: 600, fontSize: 13.5, textDecoration: a.annulled ? 'line-through' : 'none' }}>{a.number}</span><Badge color={a.type === 'return' ? 'purple' : 'ink'}>{a.type === 'return' ? 'Возврат' : 'Выдача'}</Badge></div>
                 <div style={{ fontSize: 12, color: 'var(--tx3)', marginTop: 2 }}>{rName(a.recipient_id, a.recipient_name)} · {a.act_date}</div>
               </div>
-              <div style={{ textAlign: 'right' }}>
+              <div style={{ textAlign: 'right' }} onClick={(e) => e.stopPropagation()}>
+                {(() => { const ch = signersOf(data.actSigners, a.id); const cur = currentSigner(ch);
+                  const mine = cur && ((cur.in_system && cur.user_id === profile?.id) || (!cur.in_system && profile?.role === 'admin'))
+                  return mine ? <button onClick={() => setSignAct(a)} style={{ minHeight: 34, padding: '0 12px', borderRadius: 8, border: 'none', background: 'var(--ink)', color: '#fff', fontSize: 11.5, fontWeight: 600, marginBottom: 4 }}>Подписать</button> : null })()}
                 <div className="mono" style={{ fontWeight: 600, fontSize: 13.5 }}>{fmt(a.total_sum)} сом</div>
                 <div style={{ marginTop: 3 }}><Badge color={ST[a.status]?.[1] || 'slate'}>{ST[a.status]?.[0] || a.status}</Badge></div>
               </div>
@@ -52,7 +58,29 @@ export default function Acts({ data }) {
         </div>
       )}
 
+      {signAct && <SignSheet act={signAct} data={data} profile={profile} onClose={() => setSignAct(null)} onDone={() => { setSignAct(null); load() }} />}
       {open && <ActView act={open} data={data} onClose={() => setOpen(null)} onChanged={() => { load(); setOpen(null) }} />}
+    </div>
+  )
+}
+
+function SigProgress({ act, data }) {
+  const chain = signersOf(data.actSigners, act.id)
+  if (!chain.length) return null
+  const cur = currentSigner(chain)
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 0, margin: '4px 0 3px' }}>
+      {chain.map((s, i) => (
+        <span key={s.id} style={{ display: 'flex', alignItems: 'center' }} title={`${s.signer_name || ''} · ${s.signer_role || ''}`}>
+          <span style={{ width: 15, height: 15, borderRadius: '50%', display: 'grid', placeItems: 'center', fontSize: 9, color: '#fff',
+            background: s.status === 'signed' ? 'var(--gr)' : s.status === 'declined' ? 'var(--rd)' : (cur && s.id === cur.id) ? 'var(--ink)' : 'var(--sur2)',
+            border: s.status === 'waiting' && (!cur || s.id !== cur.id) ? '1px solid var(--brd2)' : 'none' }}>{s.status === 'signed' ? '✓' : s.status === 'declined' ? '×' : ''}</span>
+          {i < chain.length - 1 && <span style={{ width: 9, height: 2, background: s.status === 'signed' ? 'var(--gr)' : 'var(--brd)' }} />}
+        </span>
+      ))}
+      <span style={{ marginLeft: 8, fontSize: 10.5, color: 'var(--tx3)' }}>
+        {cur ? `ждём: ${cur.signer_name || '—'}` : 'все подписали'}
+      </span>
     </div>
   )
 }
@@ -75,7 +103,7 @@ function ActView({ act, data, onClose, onChanged }) {
     onChanged && onChanged()
   }
   return (
-    <div className="no-print" onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 1200, background: 'rgba(8,10,14,.5)', backdropFilter: 'blur(3px)', overflow: 'auto', padding: '24px 12px' }}>
+    <div className="act-overlay" onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 1200, background: 'rgba(8,10,14,.5)', backdropFilter: 'blur(3px)', overflow: 'auto', padding: '24px 12px' }}>
       <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: 780, margin: '0 auto' }}>
         <div className="no-print" style={{ display: 'flex', gap: 8, marginBottom: 12, justifyContent: 'flex-end' }}>
           {!act.annulled && <button onClick={() => setAnnulling(!annulling)} style={{ height: 34, padding: '0 14px', borderRadius: 9, border: '1px solid var(--rd)', background: 'var(--rd-l)', color: 'var(--rd-m)', fontSize: 12.5, fontWeight: 600 }}>Аннулировать</button>}
