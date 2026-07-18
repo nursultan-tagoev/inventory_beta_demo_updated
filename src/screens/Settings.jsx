@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { supabase } from '../supabaseClient'
-import { Btn, Input, Select, useToast, Confirm } from '../components/ui'
+import { Btn, Input, Select, Field, Badge, useToast, Confirm } from '../components/ui'
 
 const NAV = [
   { id: 'hier', l: 'Иерархия', ico: '🗂' },
@@ -9,7 +9,7 @@ const NAV = [
   { id: 'branches', l: 'Филиалы-адресаты', ico: '🗺' },
   { id: 'categories', l: 'Категории', ico: '🏷' },
   { id: 'suppliers', l: 'Поставщики', ico: '🚚' },
-  { id: 'people', l: 'Пользователи', ico: '👤' },
+  { id: 'appr', l: 'Согласование', ico: '🧭' },
 ]
 
 export default function Settings({ data }) {
@@ -56,7 +56,7 @@ export default function Settings({ data }) {
           {tab === 'locations' && <Places {...{ locations, warehouses, ins, del }} />}
           {tab === 'branches' && <Simple title="Филиалы-адресаты" hint="Куда выдаём товар. Город — для группировки в аналитике." table="branches" rows={branches} cols={[['name', 'Название'], ['city', 'Город']]} ins={ins} del={del} upd={upd} />}
           {tab === 'categories' && <Simple title="Категории" table="categories" rows={categories} cols={[['name', 'Название']]} ins={ins} del={del} upd={upd} />}
-          {tab === 'people' && <People data={data} toast={toast} />}
+          {tab === 'appr' && <Approvals data={data} toast={toast} ins={ins} del={del} />}
           {tab === 'suppliers' && <Simple title="Поставщики" table="suppliers" rows={suppliers} cols={[['name', 'Название']]} ins={ins} del={del} upd={upd} />}
         </div>
       </div>
@@ -164,63 +164,201 @@ function Places({ locations, warehouses, ins, del }) {
   )
 }
 
-/* ── Пользователи и их руководители (для цепочки подписей) ── */
-function People({ data, toast }) {
-  const { profiles, branches, reload } = data
+/* ── Согласование: уровни, люди по филиалам, внешние ── */
+function Approvals({ data, toast, ins, del }) {
+  const { profiles, branches, externals, reload } = data
+  const [tab, setTab] = useState('levels')
+  const [open, setOpen] = useState({})
+  const [q, setQ] = useState('')
   const [edit, setEdit] = useState(null)
-  const bName = (id) => branches.find((b) => b.id === id)?.name || '—'
-  const ROLE = { admin: 'Администратор', director: 'Директор', manager: 'Менеджер', employee: 'Сотрудник' }
+  const [ext, setExt] = useState({ full_name: '', position: '' })
 
-  const save = async () => {
-    const { error } = await supabase.from('profiles').update({
-      position: edit.position || null,
-      manager_id: edit.manager_id || null,
-      manager_name: edit.manager_id ? null : (edit.manager_name || null),
-      manager_position: edit.manager_id ? null : (edit.manager_position || null),
-    }).eq('id', edit.id)
+  const LV = [
+    ['1', 'Специалист', 'создаёт заявку, подписывает первым', 'var(--ink-l)', 'var(--ink)'],
+    ['2', 'Руководитель филиала', 'подписывает за свой филиал', 'var(--gr-l)', 'var(--gr-m)'],
+    ['3', 'Согласующие вне системы', 'зампред — склад приложит скан подписи', 'var(--am-l)', 'var(--am-m)'],
+    ['4', 'Склад · МОЛ', 'подписывает последним — это выдача', 'var(--sur2)', 'var(--tx2)'],
+  ]
+  const ROLE = { admin: 'Склад · администратор', director: 'Директор', manager: 'Руководитель филиала', employee: 'Специалист' }
+
+  // группировка по филиалам
+  const byBranch = (branches || []).map((b) => ({
+    ...b,
+    head: (profiles || []).find((p) => p.role === 'manager' && p.branch_id === b.id),
+    specs: (profiles || []).filter((p) => p.role === 'employee' && p.branch_id === b.id),
+  }))
+  const noBranch = (profiles || []).filter((p) => !p.branch_id && ['manager', 'employee'].includes(p.role))
+  const problems = byBranch.filter((b) => !b.head)
+  const filtered = q ? byBranch.filter((b) => (b.name + ' ' + (b.head?.full_name || '') + ' ' + b.specs.map((s) => s.full_name).join(' ')).toLowerCase().includes(q.toLowerCase())) : byBranch
+
+  const saveProfile = async () => {
+    const { error } = await supabase.from('profiles').update({ role: edit.role, branch_id: edit.branch_id ? Number(edit.branch_id) : null, position: edit.position || null }).eq('id', edit.id)
     if (error) return toast('Ошибка: ' + error.message, 'error')
     toast('Сохранено'); setEdit(null); reload()
   }
+  const addExt = async () => {
+    if (!ext.full_name.trim()) return toast('Введите ФИО', 'error')
+    const { error } = await supabase.from('external_approvers').insert({ full_name: ext.full_name.trim(), position: ext.position || null, level: 3 })
+    if (error) return toast('Ошибка: ' + error.message, 'error')
+    toast('Добавлен'); setExt({ full_name: '', position: '' }); reload()
+  }
+  const delExt = async (id) => {
+    const { error } = await supabase.from('external_approvers').delete().eq('id', id)
+    if (error) return toast('Ошибка: ' + error.message, 'error')
+    toast('Удалён'); reload()
+  }
+
+  const person = (p, isHead) => (
+    <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 13px 9px 38px', borderTop: '1px solid var(--brd)' }}>
+      <div style={{ width: 28, height: 28, borderRadius: '50%', background: isHead ? 'var(--gr-l)' : 'var(--ink-l)', color: isHead ? 'var(--gr-m)' : 'var(--ink)', display: 'grid', placeItems: 'center', fontSize: 10.5, fontWeight: 600, flexShrink: 0 }}>
+        {(p.full_name || p.email || '?').slice(0, 2).toUpperCase()}
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 12, fontWeight: 500 }}>{p.full_name || p.email}</div>
+        <div style={{ fontSize: 10, color: 'var(--tx3)' }}>{ROLE[p.role]}{p.email ? ' · ' + p.email : ''}</div>
+      </div>
+      <button onClick={() => setEdit({ id: p.id, role: p.role, branch_id: p.branch_id || '', position: p.position || '' })}
+        style={{ color: 'var(--ink)', fontSize: 13, padding: 5, minHeight: 38 }}>✎</button>
+    </div>
+  )
 
   return (
     <div>
-      <div className="card" style={{ padding: 16, marginBottom: 12 }}>
-        <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 3 }}>Пользователи и руководители</div>
-        <div style={{ fontSize: 12, color: 'var(--tx3)' }}>По полю «руководитель» система строит цепочку подписей. Если руководителя нет в системе — впишите ФИО, за него подпись приложит склад сканом.</div>
-      </div>
-      <div className="card" style={{ overflow: 'hidden' }}>
-        {(profiles || []).map((p, i, arr) => (
-          <div key={p.id} style={{ padding: '11px 16px', borderBottom: i < arr.length - 1 ? '1px solid var(--brd)' : 'none' }}>
-            {edit?.id === p.id ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
-                <div style={{ fontSize: 13, fontWeight: 600 }}>{p.full_name || p.email}</div>
-                <Input value={edit.position || ''} onChange={(e) => setEdit({ ...edit, position: e.target.value })} placeholder="Должность" />
-                <Select value={edit.manager_id || ''} onChange={(e) => setEdit({ ...edit, manager_id: e.target.value })}>
-                  <option value="">— руководителя нет в системе —</option>
-                  {(profiles || []).filter((x) => x.id !== p.id).map((x) => <option key={x.id} value={x.id}>{x.full_name || x.email}</option>)}
-                </Select>
-                {!edit.manager_id && <>
-                  <Input value={edit.manager_name || ''} onChange={(e) => setEdit({ ...edit, manager_name: e.target.value })} placeholder="ФИО руководителя (вне системы)" />
-                  <Input value={edit.manager_position || ''} onChange={(e) => setEdit({ ...edit, manager_position: e.target.value })} placeholder="Должность руководителя" />
-                </>}
-                <div style={{ display: 'flex', gap: 8 }}><Btn size="sm" onClick={save}>Сохранить</Btn><Btn size="sm" v="secondary" onClick={() => setEdit(null)}>Отмена</Btn></div>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 500 }}>{p.full_name || p.email}</div>
-                  <div style={{ fontSize: 11, color: 'var(--tx3)' }}>
-                    {ROLE[p.role] || p.role}{p.branch_id ? ' · ' + bName(p.branch_id) : ''}
-                    {p.manager_id ? ' · рук.: ' + ((profiles.find((x) => x.id === p.manager_id) || {}).full_name || '—') : p.manager_name ? ' · рук.: ' + p.manager_name + ' (вне системы)' : ' · руководитель не указан'}
-                  </div>
-                </div>
-                <button onClick={() => setEdit({ id: p.id, position: p.position, manager_id: p.manager_id, manager_name: p.manager_name, manager_position: p.manager_position })}
-                  style={{ fontSize: 13, color: 'var(--ink)', padding: '0 6px', minHeight: 40 }}>✎</button>
-              </div>
-            )}
-          </div>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
+        {[['levels', 'Уровни и люди'], ['ext', 'Вне системы'], ['routes', 'Маршруты']].map(([t, l]) => (
+          <button key={t} onClick={() => setTab(t)} style={{ fontSize: 12, padding: '8px 13px', minHeight: 38, borderRadius: 8, border: 'none', background: tab === t ? 'var(--ink-l)' : 'var(--sur)', color: tab === t ? 'var(--ink)' : 'var(--tx2)', fontWeight: tab === t ? 600 : 400 }}>{l}</button>
         ))}
       </div>
+
+      {tab === 'levels' && <>
+        <div className="card" style={{ padding: 15, marginBottom: 11 }}>
+          <div style={{ fontWeight: 600, fontSize: 13.5 }}>Уровни согласования</div>
+          <div style={{ fontSize: 11.5, color: 'var(--tx3)', marginTop: 2, marginBottom: 12 }}>Маршрут строится сам — от заявителя вверх до склада. Настраивать по филиалам ничего не нужно.</div>
+          {LV.map((r, i) => (
+            <div key={r[0]} style={{ display: 'flex', gap: 11 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                <div style={{ width: 26, height: 26, borderRadius: 8, background: r[3], color: r[4], display: 'grid', placeItems: 'center', fontWeight: 700, fontSize: 11.5 }} className="mono">{r[0]}</div>
+                {i < LV.length - 1 && <div style={{ width: 2, flex: 1, minHeight: 14, background: 'var(--brd)' }} />}
+              </div>
+              <div style={{ flex: 1, paddingBottom: i < LV.length - 1 ? 9 : 0 }}>
+                <div style={{ fontSize: 12.5, fontWeight: 600 }}>{r[1]}</div>
+                <div style={{ fontSize: 11, color: 'var(--tx3)' }}>{r[2]}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Поиск: филиал или ФИО" style={{ marginBottom: 10 }} />
+
+        {problems.length > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '11px 13px', background: 'var(--am-l)', borderRadius: 10, fontSize: 11.5, color: 'var(--am-m)', marginBottom: 11 }}>
+            ⚠️ <span><b>{problems.length}</b> {problems.length === 1 ? 'филиал' : 'филиала'} без руководителя — цепочка там короче</span>
+          </div>
+        )}
+
+        <div className="card" style={{ overflow: 'hidden' }}>
+          {filtered.map((b, i) => (
+            <div key={b.id} style={{ borderBottom: i < filtered.length - 1 ? '1px solid var(--brd)' : 'none' }}>
+              <div onClick={() => setOpen({ ...open, [b.id]: !open[b.id] })}
+                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', cursor: 'pointer', background: open[b.id] ? 'var(--bg)' : 'transparent', minHeight: 48 }}>
+                <span style={{ fontSize: 13, color: 'var(--tx3)' }}>{open[b.id] ? '▾' : '▸'}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>{b.name}</div>
+                  <div style={{ fontSize: 10.5, color: 'var(--tx3)' }}>{b.head ? b.head.full_name || b.head.email : 'руководитель не назначен'}</div>
+                </div>
+                <Badge color={b.head ? 'slate' : 'amber'}>{b.head ? `${1 + b.specs.length} чел.` : 'нет рук.'}</Badge>
+              </div>
+              {open[b.id] && <>
+                {b.head ? person(b.head, true) : <div style={{ padding: '10px 13px 10px 38px', borderTop: '1px solid var(--brd)', fontSize: 11.5, color: 'var(--am-m)' }}>Руководитель не назначен</div>}
+                {b.specs.map((sp) => person(sp, false))}
+              </>}
+            </div>
+          ))}
+        </div>
+
+        {noBranch.length > 0 && <div className="card" style={{ marginTop: 11, overflow: 'hidden' }}>
+          <div style={{ padding: '11px 14px', borderBottom: '1px solid var(--brd)', fontSize: 12.5, fontWeight: 600, color: 'var(--am-m)' }}>Без филиала — {noBranch.length}</div>
+          {noBranch.map((p) => person(p, false))}
+        </div>}
+
+        {edit && <div onClick={() => setEdit(null)} style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'grid', placeItems: 'center', padding: 16, background: 'rgba(8,10,14,.5)' }}>
+          <div onClick={(e) => e.stopPropagation()} className="card" style={{ width: '100%', maxWidth: 400, padding: 20 }}>
+            <div className="ff" style={{ fontSize: 16, fontWeight: 600, marginBottom: 14 }}>Уровень и филиал</div>
+            <Field label="Уровень"><Select value={edit.role} onChange={(e) => setEdit({ ...edit, role: e.target.value })}>
+              <option value="employee">Специалист</option>
+              <option value="manager">Руководитель филиала</option>
+              <option value="admin">Склад · администратор</option>
+              <option value="director">Директор</option>
+            </Select></Field>
+            <div style={{ height: 11 }} />
+            <Field label="Филиал"><Select value={edit.branch_id} onChange={(e) => setEdit({ ...edit, branch_id: e.target.value })}>
+              <option value="">— без филиала —</option>
+              {(branches || []).map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+            </Select></Field>
+            <div style={{ height: 11 }} />
+            <Field label="Должность"><Input value={edit.position} onChange={(e) => setEdit({ ...edit, position: e.target.value })} placeholder="Необязательно" /></Field>
+            <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+              <Btn onClick={saveProfile} style={{ flex: 1, minHeight: 46 }}>Сохранить</Btn>
+              <Btn v="secondary" onClick={() => setEdit(null)} style={{ minHeight: 46 }}>Отмена</Btn>
+            </div>
+          </div>
+        </div>}
+      </>}
+
+      {tab === 'ext' && <>
+        <div className="card" style={{ padding: 15, marginBottom: 11 }}>
+          <div style={{ fontWeight: 600, fontSize: 13.5 }}>Согласующие вне системы</div>
+          <div style={{ fontSize: 11.5, color: 'var(--tx3)', marginTop: 2, marginBottom: 12 }}>Те, кто в приложение не заходит. Склад печатает акт, получает подпись живьём и прикладывает скан.</div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <Input value={ext.full_name} onChange={(e) => setExt({ ...ext, full_name: e.target.value })} placeholder="ФИО" style={{ flex: 1, minWidth: 140 }} />
+            <Input value={ext.position} onChange={(e) => setExt({ ...ext, position: e.target.value })} placeholder="Должность" style={{ flex: 1, minWidth: 140 }} />
+            <Btn onClick={addExt} style={{ minHeight: 44 }}>＋ Добавить</Btn>
+          </div>
+        </div>
+        <div className="card" style={{ overflow: 'hidden' }}>
+          {(externals || []).length === 0 && <div style={{ padding: 30, textAlign: 'center', color: 'var(--tx3)', fontSize: 13 }}>Пока никого</div>}
+          {(externals || []).map((e, i, arr) => (
+            <div key={e.id} style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '12px 14px', borderBottom: i < arr.length - 1 ? '1px solid var(--brd)' : 'none' }}>
+              <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--am-l)', color: 'var(--am-m)', display: 'grid', placeItems: 'center', fontSize: 11.5, fontWeight: 600 }}>
+                {(e.full_name || '?').slice(0, 2).toUpperCase()}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 12.5, fontWeight: 500 }}>{e.full_name}</div>
+                <div style={{ fontSize: 10.5, color: 'var(--tx3)' }}>{e.position || '—'}</div>
+              </div>
+              <button onClick={() => delExt(e.id)} style={{ color: 'var(--tx3)', fontSize: 13, padding: 5, minHeight: 38 }}>×</button>
+            </div>
+          ))}
+        </div>
+        <div style={{ fontSize: 11, color: 'var(--tx3)', marginTop: 10 }}>Имя попадает в акт снимком на момент подписи — если человек сменится, старые акты сохранят прежнее ФИО.</div>
+      </>}
+
+      {tab === 'routes' && <>
+        <div className="card" style={{ padding: 15, marginBottom: 11 }}>
+          <div style={{ fontWeight: 600, fontSize: 13.5 }}>Как пойдут заявки</div>
+          <div style={{ fontSize: 11.5, color: 'var(--tx3)', marginTop: 2 }}>Проверка настройки — маршруты собраны по уровням.</div>
+        </div>
+        {[
+          ['От специалиста', ['Специалист', 'Рук. филиала', ...(externals || []).map((e) => e.full_name.split(' ')[0]), 'Склад']],
+          ['От руководителя филиала', ['Рук. филиала', ...(externals || []).map((e) => e.full_name.split(' ')[0]), 'Склад']],
+          ['Мелкая заявка без СЗ', ['Заявитель', 'Склад']],
+        ].map(([title, route]) => (
+          <div key={title} className="card" style={{ padding: '13px 15px', marginBottom: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <span style={{ fontSize: 12.5, fontWeight: 600 }}>{title}</span>
+              <Badge>{route.length} {route.length < 5 ? 'звена' : 'звеньев'}</Badge>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 5, fontSize: 11.5 }}>
+              {route.map((n, i) => (
+                <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <span style={{ padding: '3px 9px', borderRadius: 20, background: 'var(--bg)', border: '1px solid var(--brd)' }}>{n}</span>
+                  {i < route.length - 1 && <span style={{ color: 'var(--tx3)' }}>→</span>}
+                </span>
+              ))}
+            </div>
+          </div>
+        ))}
+      </>}
     </div>
   )
 }

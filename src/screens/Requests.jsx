@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import { Btn, Field, Input, Select, Badge, Sheet, useToast } from '../components/ui'
 import { chainOf, freeAll, freeAt } from '../lib/data'
 import { createRequest, updateRequest, setStatus, cancelRequest, closePartial, approveRequest, fileUrl } from '../lib/requests'
-import { buildChain } from '../lib/signing'
+import { buildChain, signersOf, currentSigner } from '../lib/signing'
 
 const ST = {
   new: ['Новая', 'amber'], approved: ['Одобрена', 'green'], partial: ['Одобрена частично', 'amber'],
@@ -53,7 +53,7 @@ export default function Requests({ data, profile, can }) {
       </div>}
 
       {list.map((r) => (
-        <Card key={r.id} r={r} isAdmin={isAdmin} me={profile?.id} pName={pName} rName={rName} bName={bName}
+        <Card key={r.id} r={r} data={data} isAdmin={isAdmin} me={profile?.id} pName={pName} rName={rName} bName={bName}
           onApprove={() => setApprove(r)} onReject={() => setReject({ req: r, mode: 'reject' })}
           onRevision={() => setReject({ req: r, mode: 'revision' })}
           onEdit={() => { setEditReq(r); setForm(true) }}
@@ -72,7 +72,7 @@ export default function Requests({ data, profile, can }) {
   )
 }
 
-function Card({ r, isAdmin, me, pName, rName, bName, onApprove, onReject, onRevision, onEdit, onCancel, onReceived, onClosePartial }) {
+function Card({ r, data, isAdmin, me, pName, rName, bName, onApprove, onReject, onRevision, onEdit, onCancel, onReceived, onClosePartial }) {
   const st = ST[r.status] || ST.new
   const mineOwn = r.author_id === me
   const canEdit = !isAdmin && mineOwn && ['new', 'revision'].includes(r.status)
@@ -130,6 +130,38 @@ function Card({ r, isAdmin, me, pName, rName, bName, onApprove, onReject, onRevi
           <b>{r.status === 'rejected' ? 'Причина: ' : 'Комментарий: '}</b>{r.admin_comment}
         </div>
       )}
+
+      {/* Состояние акта — куда ушла заявка */}
+      {(() => {
+        const act = (data.acts || []).find((a) => a.request_id === r.id)
+        if (!act) return null
+        const chain = signersOf(data.actSigners, act.id)
+        const cur = currentSigner(chain)
+        const signed = chain.filter((s) => s.status === 'signed').length
+        return (
+          <div style={{ marginTop: 10, padding: '10px 12px', background: 'var(--bg)', borderRadius: 9 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 7, flexWrap: 'wrap' }}>
+              <span className="mono" style={{ fontSize: 11.5, fontWeight: 600 }}>{act.number}</span>
+              <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 20, background: act.issued ? 'var(--gr-l)' : act.declined ? 'var(--rd-l)' : 'var(--am-l)', color: act.issued ? 'var(--gr-m)' : act.declined ? 'var(--rd-m)' : 'var(--am-m)' }}>
+                {act.declined ? 'Отказ' : act.issued ? 'Выдано' : `Подписей ${signed} из ${chain.length}`}
+              </span>
+            </div>
+            {chain.length > 0 && <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
+              {chain.map((s, i) => (
+                <span key={s.id} style={{ display: 'flex', alignItems: 'center' }} title={`${s.signer_name || ''} · ${s.signer_role || ''}`}>
+                  <span style={{ width: 15, height: 15, borderRadius: '50%', display: 'grid', placeItems: 'center', fontSize: 9, color: '#fff',
+                    background: s.status === 'signed' ? 'var(--gr)' : s.status === 'declined' ? 'var(--rd)' : (cur && s.id === cur.id) ? 'var(--ink)' : 'var(--sur2)',
+                    border: s.status === 'waiting' && (!cur || s.id !== cur.id) ? '1px solid var(--brd2)' : 'none' }}>{s.status === 'signed' ? '✓' : s.status === 'declined' ? '×' : ''}</span>
+                  {i < chain.length - 1 && <span style={{ width: 9, height: 2, background: s.status === 'signed' ? 'var(--gr)' : 'var(--brd)' }} />}
+                </span>
+              ))}
+              <span style={{ marginLeft: 8, fontSize: 10.5, color: 'var(--tx3)' }}>
+                {act.issued ? 'товар выдан' : cur ? `сейчас: ${cur.signer_name || '—'}` : 'все подписали'}
+              </span>
+            </div>}
+          </div>
+        )
+      })()}
 
       {isAdmin && isNew && (
         <div style={{ display: 'flex', gap: 7, marginTop: 12, flexWrap: 'wrap' }}>
@@ -264,6 +296,32 @@ function RequestForm({ data, profile, editReq, onDone }) {
 
       <Field label="Цель / примечание"><Input value={f.purpose} onChange={(e) => up('purpose', e.target.value)} placeholder="Конференция, акция…" /></Field>
 
+      {/* Предпросмотр маршрута */}
+      {(() => {
+        const author = (data.profiles || []).find((p) => p.id === profile.id) || profile
+        const admin = (data.profiles || []).find((p) => p.role === 'admin')
+        const route = buildChain({ author, profiles: data.profiles, adminProfile: admin, externals: data.externals,
+          branchId: f.branch_id, basisType: basis })
+        if (!route.length) return null
+        return (
+          <div style={{ padding: '11px 13px', background: 'var(--ink-l)', borderRadius: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8 }}>
+              <span style={{ fontSize: 14 }}>🧭</span>
+              <span style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--ink)' }}>Пойдёт на подпись</span>
+              <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--tx3)' }}>{route.length} {route.length === 1 ? 'звено' : route.length < 5 ? 'звена' : 'звеньев'}</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 5, fontSize: 11.5 }}>
+              {route.map((r, i) => (
+                <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <span title={r.role} style={{ padding: '3px 9px', borderRadius: 20, background: 'var(--sur)', border: '1px solid var(--brd)' }}>{(r.name || '').split(' ')[0]}</span>
+                  {i < route.length - 1 && <span style={{ color: 'var(--tx3)' }}>→</span>}
+                </span>
+              ))}
+            </div>
+          </div>
+        )
+      })()}
+
       <Btn onClick={submit} loading={loading} disabled={shortage.length > 0} size="lg" style={{ minHeight: 48 }}>{editReq ? 'Сохранить и отправить' : 'Отправить заявку'}</Btn>
     </div>
   )
@@ -281,11 +339,10 @@ function ApproveModal({ req, data, profile, onClose, onDone }) {
     setLoading(true)
     // Собираем цепочку подписей
     const recipient = recipients.find((r) => r.id === req.recipient_id)
-    const recipientProfile = profiles.find((p) => p.full_name && recipient && p.full_name === recipient.name)
-    const authorProfile = profiles.find((p) => p.id === req.author_id)
+    const author = profiles.find((p) => p.id === req.author_id)
     const adminProfile = profiles.find((p) => p.id === profile.id) || profile
-    const branchManager = profiles.find((p) => p.role === 'manager' && p.branch_id === req.branch_id)
-    const chain = buildChain({ recipientProfile, recipientName: recipient?.name, authorProfile, profiles, adminProfile, kind: req.kind, branchManager })
+    const chain = buildChain({ author, profiles, adminProfile, externals: data.externals,
+      branchId: req.branch_id, basisType: req.basis_type, recipientName: recipient?.name })
 
     // Подмешиваем название и цену в позиции
     const itemsWithInfo = req.items.map((it) => {
