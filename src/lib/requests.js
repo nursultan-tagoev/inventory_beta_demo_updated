@@ -10,6 +10,23 @@ export async function uploadFile(folder, name, fileOrBlob) {
   if (error) throw new Error('Файл: ' + error.message)
   return path
 }
+// Временная ссылка на файл (bucket приватный — документы не должны быть в открытом доступе)
+export async function signedUrl(path, seconds = 3600) {
+  if (!path) return null
+  const { data, error } = await supabase.storage.from(bucket).createSignedUrl(path, seconds)
+  if (error) return null
+  return data?.signedUrl || null
+}
+
+// Открыть документ в новой вкладке
+export async function openFile(path) {
+  if (!path) return { error: 'Файл не приложен' }
+  const url = await signedUrl(path)
+  if (!url) return { error: 'Не удалось открыть файл' }
+  window.open(url, '_blank', 'noopener')
+  return { error: null }
+}
+
 export const fileUrl = (path) => path ? supabase.storage.from(bucket).getPublicUrl(path).data.publicUrl : null
 
 /* ── Создание заявки ── */
