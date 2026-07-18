@@ -78,7 +78,7 @@ export default function App() {
 
   const SCREENS = {
     home: <Home data={data} profile={profile} can={can} setView={setView} />,
-    items: <Items data={data} can={can} />,
+    items: <Items data={data} can={can} profile={profile} />,
     movements: <Movements data={data} profile={profile} can={can} />,
     recipients: <Recipients data={data} can={can} />,
     reports: <Reports data={data} />,
