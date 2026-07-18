@@ -16,6 +16,7 @@ const CLR = { in: 'var(--gr-m)', out: 'var(--ink)', return: 'var(--pu)', writeof
 const BG = { in: 'var(--gr-l)', out: 'var(--ink-l)', return: 'var(--pu-l)', writeoff: 'var(--rd-l)', transfer: 'var(--am-l)' }
 
 export default function Movements({ data, profile, can }) {
+  const role = profile?.role
   const { movements, products, recipients, warehouses, branches, campaigns, productTypes, directions } = data
   const [f, setF] = useState('all')
   const [q, setQ] = useState('')
@@ -47,7 +48,13 @@ export default function Movements({ data, profile, can }) {
     return true
   }
 
-  const list = movements.filter((m) => {
+  const visible = movements.filter((m) => {
+    if (['admin', 'director'].includes(role)) return true
+    if (role === 'manager') return m.branch_id === profile?.branch_id
+    const rec = recipients.find((r) => r.id === m.recipient_id)
+    return rec && rec.name === profile?.full_name
+  })
+  const list = visible.filter((m) => {
     if (f !== 'all' && m.type !== f) return false
     if (wh && m.warehouse_id != wh && m.warehouse_to_id != wh) return false
     if (q) {
@@ -111,10 +118,10 @@ export default function Movements({ data, profile, can }) {
       <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Товар или получатель…"
           style={{ ...selStyle, flex: 1, minWidth: 160, padding: '0 12px' }} />
-        <select value={wh} onChange={(e) => setWh(e.target.value)} style={selStyle}>
+        {['admin', 'director'].includes(role) && <select value={wh} onChange={(e) => setWh(e.target.value)} style={selStyle}>
           <option value="">Все склады</option>
           {warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
-        </select>
+        </select>}
       </div>
 
       {/* Иерархия */}

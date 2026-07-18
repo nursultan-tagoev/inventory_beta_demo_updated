@@ -17,13 +17,30 @@ export default function Home({ data, profile, can, setView }) {
   const overdue = checkouts.filter((c) => c.due_date && c.due_date < today)
   const low = active.filter((p) => (stock[p.id] || 0) < 5)
   const whTotal = (wid) => !wid ? 0 : active.reduce((a, p) => a + ((stockByWh?.[p.id]?.[wid]) || 0), 0)
+  // Для спеца — его выдачи; для рук. филиала — его филиал
+  const myCheckouts = checkouts.filter((c) => {
+    if (role === 'manager') return c.branch_id === profile?.branch_id
+    if (role === 'employee') {
+      const rec = recipients.find((r) => r.id === c.recipient_id)
+      return rec && (rec.name === profile?.full_name || c.branch_id === profile?.branch_id)
+    }
+    return true
+  })
+  const myHands = myCheckouts.reduce((a, c) => a + c.remaining, 0)
+  const myOverdue = myCheckouts.filter((c) => c.due_date && c.due_date < today).length
 
   const hr = new Date().getHours()
   const hi = hr < 12 ? 'Доброе утро' : hr < 18 ? 'Добрый день' : 'Добрый вечер'
   const name = (profile?.full_name || profile?.email || '').split(/[ @]/)[0] || 'коллега'
   const roleLabel = { admin: 'администратор', manager: 'менеджер', director: 'директор', employee: 'сотрудник' }[role]
 
-  const recent = movements.slice(0, 6)
+  const visibleMoves = movements.filter((m) => {
+    if (['admin', 'director'].includes(role)) return true
+    if (role === 'manager') return m.branch_id === profile?.branch_id
+    const rec = recipients.find((r) => r.id === m.recipient_id)
+    return rec && rec.name === profile?.full_name
+  })
+  const recent = visibleMoves.slice(0, 6)
   const pName = (id) => products.find((p) => p.id === id)?.name || '—'
   const rName = (id) => recipients.find((r) => r.id === id)?.name || ''
   const whName = (id) => warehouses.find((w) => w.id === id)?.name || ''
@@ -92,20 +109,25 @@ export default function Home({ data, profile, can, setView }) {
         </div>
       )}
 
-      {/* KPI — число складов гибкое */}
-      <div className="home-kpi" style={{ display: 'grid', gridTemplateColumns: `repeat(${3 + warehouses.length}, minmax(0,1fr))`, gap: 12, marginBottom: 22 }}>
-        <Stat label="Стоимость" value={fmt(totalVal)} unit="сом" color="var(--ink)" accent />
-        <Stat label="Всего на складах" value={fmt(totalUnits)} unit="шт" color="var(--gr)" />
-        {warehouses.map((w) => (
-          <Stat key={w.id} label={w.name} value={fmt(whTotal(w.id))} unit="шт" />
-        ))}
-        <Stat label="Просрочено" value={overdue.length} color={overdue.length ? 'var(--rd)' : 'var(--gr)'} />
-      </div>
+      {/* KPI: склады видят только админ и директор */}
+      {['admin', 'director'].includes(role) ? (
+        <div className="home-kpi" style={{ display: 'grid', gridTemplateColumns: `repeat(${3 + warehouses.length}, minmax(0,1fr))`, gap: 12, marginBottom: 22 }}>
+          <Stat label="Стоимость" value={fmt(totalVal)} unit="сом" color="var(--ink)" accent />
+          <Stat label="Всего на складах" value={fmt(totalUnits)} unit="шт" color="var(--gr)" />
+          {warehouses.map((w) => (<Stat key={w.id} label={w.name} value={fmt(whTotal(w.id))} unit="шт" />))}
+          <Stat label="Просрочено" value={overdue.length} color={overdue.length ? 'var(--rd)' : 'var(--gr)'} />
+        </div>
+      ) : (
+        <div className="home-kpi" style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 12, marginBottom: 22 }}>
+          <Stat label="На руках" value={fmt(myHands)} unit="шт" color="var(--ink)" accent />
+          <Stat label="Просрочено" value={myOverdue} color={myOverdue ? 'var(--rd)' : 'var(--gr)'} />
+        </div>
+      )}
 
       {/* Панели */}
       <div className="home-panels" style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 16 }}>
         <div className="card" style={{ overflow: 'hidden' }}>
-          <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--brd)', fontWeight: 600, fontSize: 14.5 }}>Последние движения</div>
+          <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--brd)', fontWeight: 600, fontSize: 14.5 }}>{['admin','director'].includes(role) ? 'Последние движения' : role === 'manager' ? 'Движения моего филиала' : 'Что я получал'}</div>
           {recent.length === 0 && <div style={{ padding: 34, textAlign: 'center', color: 'var(--tx3)', fontSize: 13 }}>Пока пусто.</div>}
           {recent.map((m, i) => (
             <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 18px', borderBottom: i < recent.length - 1 ? '1px solid var(--brd)' : 'none' }}>
@@ -121,7 +143,7 @@ export default function Home({ data, profile, can, setView }) {
           ))}
         </div>
 
-        <div className="card" style={{ overflow: 'hidden' }}>
+        {['admin', 'director'].includes(role) && <div className="card" style={{ overflow: 'hidden' }}>
           <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--brd)', fontWeight: 600, fontSize: 14.5, color: 'var(--am-m)' }}>Заканчивается</div>
           {low.length === 0 && <div style={{ padding: 34, textAlign: 'center', color: 'var(--tx3)', fontSize: 13 }}>Всё в достатке.</div>}
           {low.slice(0, 6).map((p, i, arr) => (
@@ -130,7 +152,7 @@ export default function Home({ data, profile, can, setView }) {
               <Badge color={(stock[p.id] || 0) === 0 ? 'red' : 'amber'}>{stock[p.id] || 0} шт</Badge>
             </div>
           ))}
-        </div>
+        </div>}
       </div>
 
       <Sheet open={!!sheet} onClose={() => setSheet(null)} title={sheet ? TL[sheet] : ''}>

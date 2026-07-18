@@ -4,8 +4,9 @@ import { chainOf, freeAll, reservedAll } from '../lib/data'
 import { Btn, Field, Input, Select, Badge, Confirm, useToast } from '../components/ui'
 import { fmt, som, TL } from '../lib/format'
 
-export default function Items({ data, can }) {
+export default function Items({ data, can, profile }) {
   const toast = useToast()
+  const seeStock = ['admin', 'director'].includes(profile?.role)
   const { products, categories, suppliers, locations, stock, stockByWh, freeByWh, resvByWh, warehouses, campaigns, directions, productTypes, flows, checkouts, recipients, reload } = data
   const [q, setQ] = useState('')
   const [add, setAdd] = useState(false)
@@ -98,18 +99,18 @@ export default function Items({ data, can }) {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(184px,1fr))', gap: 14 }}>
         {list.map((p) => {
-          const s = stock[p.id] || 0
+          const s = seeStock ? (stock[p.id] || 0) : null
           const c = s === 0 ? 'var(--tx3)' : s < 5 ? 'var(--am)' : 'var(--gr)'
           const cat = categories.find((x) => x.id === p.category_id)
           return (
             <div key={p.id} onClick={() => setSel(p)} className="card" style={{ padding: 0, overflow: 'hidden', cursor: 'pointer' }}>
-              <div style={{ height: 60, background: 'var(--sur2)', display: 'flex', alignItems: 'flex-end', padding: '10px 14px' }}>
+              {seeStock && <div style={{ height: 60, background: 'var(--sur2)', display: 'flex', alignItems: 'flex-end', padding: '10px 14px' }}>
                 <span className="mono" style={{ fontSize: 23, fontWeight: 600, color: c }}>{s}<span style={{ fontFamily: 'var(--f)', fontSize: 11, color: 'var(--tx3)' }}> шт</span></span>
-              </div>
+              </div>}
               <div style={{ padding: '12px 14px' }}>
                 <div style={{ fontSize: 13.5, fontWeight: 600, lineHeight: 1.3 }}>{p.name}</div>
                 {chainOf(p, { directions, productTypes, campaigns }) && <div style={{ fontSize: 10.5, color: 'var(--tx3)', marginTop: 3 }}>{chainOf(p, { directions, productTypes, campaigns })}</div>}
-                {(() => { const rsv = reservedAll(resvByWh, p.id); const tot = stock[p.id] || 0
+                {seeStock && (() => { const rsv = reservedAll(resvByWh, p.id); const tot = stock[p.id] || 0
                   if (!rsv) return null
                   return <div style={{ marginTop: 7 }}>
                     <div style={{ height: 6, borderRadius: 3, overflow: 'hidden', display: 'flex', background: 'var(--sur2)' }}>
@@ -118,11 +119,11 @@ export default function Items({ data, can }) {
                     </div>
                     <div style={{ fontSize: 10, color: 'var(--am-m)', marginTop: 3 }}>свободно {tot - rsv} · резерв {rsv}</div>
                   </div> })()}
-                <div style={{ display: 'flex', gap: 10, marginTop: 7, paddingTop: 7, borderTop: '1px solid var(--brd)' }}>
+                {seeStock && <div style={{ display: 'flex', gap: 10, marginTop: 7, paddingTop: 7, borderTop: '1px solid var(--brd)', flexWrap: 'wrap' }}>
                   {warehouses.map((w) => (
                     <span key={w.id} style={{ fontSize: 10.5, color: 'var(--tx3)' }}>{w.name} <b className="mono" style={{ color: 'var(--tx2)' }}>{(stockByWh?.[p.id]?.[w.id]) || 0}</b></span>
                   ))}
-                </div>
+                </div>}
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}><span className="mono" style={{ fontSize: 12, color: 'var(--tx2)' }}>{fmt(p.price)} сом</span>{cat && <Badge>{cat.name}</Badge>}</div>
               </div>
             </div>

@@ -1,11 +1,13 @@
 import { useState, useMemo } from 'react'
 import { Btn, Field, Input, Select, Badge, Sheet, useToast } from '../components/ui'
 import { chainOf, freeAll, freeAt } from '../lib/data'
-import { createRequest, updateRequest, setStatus, cancelRequest, closePartial, approveRequest, fileUrl } from '../lib/requests'
-import { buildChain, signersOf, currentSigner } from '../lib/signing'
+import { createRequest, updateRequest, setStatus, cancelRequest, closePartial, issueRequest, fileUrl } from '../lib/requests'
+import { buildApprovalChain, approversOf, currentApprover, createApprovalChain } from '../lib/approval'
+import ApprovalSheet from '../components/ApprovalSheet'
 
 const ST = {
-  new: ['Новая', 'amber'], approved: ['Одобрена', 'green'], partial: ['Одобрена частично', 'amber'],
+  new: ['На согласовании', 'amber'], approved: ['Согласована — к выдаче', 'green'],
+  issued: ['Выдано', 'ink'], partial: ['Выдано частично', 'amber'],
   rejected: ['Отклонена', 'red'], revision: ['На переделке', 'amber'], received: ['Получено', 'ink'],
 }
 const KIND = { receive: 'на получение', issue: 'на выдачу' }
@@ -15,10 +17,11 @@ export default function Requests({ data, profile, can }) {
   const toast = useToast()
   const { requests, products, recipients, branches, warehouses, profiles, freeByWh, stockByWh, reload } = data
   const isAdmin = profile?.role === 'admin'
-  const [tab, setTab] = useState(isAdmin ? 'incoming' : 'mine')
+  const [tab, setTab] = useState(isAdmin ? 'toissue' : 'mine')
   const [form, setForm] = useState(false)
   const [editReq, setEditReq] = useState(null)
-  const [approve, setApprove] = useState(null)
+  const [issue, setIssue] = useState(null)
+  const [apprSheet, setApprSheet] = useState(null)
   const [reject, setReject] = useState(null)
 
   const pName = (id) => products.find((p) => p.id === id)?.name || '—'
@@ -26,9 +29,16 @@ export default function Requests({ data, profile, can }) {
   const bName = (id) => branches.find((b) => b.id === id)?.name || ''
 
   const mine = requests.filter((r) => r.author_id === profile?.id)
-  const incoming = requests.filter((r) => r.status === 'new')
-  const inWork = requests.filter((r) => ['approved', 'partial', 'revision'].includes(r.status))
-  const list = tab === 'incoming' ? incoming : tab === 'inwork' ? inWork : tab === 'all' ? requests : mine
+  // На исполнение — только согласованные
+  const toIssue = requests.filter((r) => r.status === 'approved')
+  // Мне на согласование
+  const toApprove = requests.filter((r) => {
+    const cur = currentApprover(approversOf(data.reqApprovers, r.id))
+    return r.status === 'new' && cur && ((cur.in_system && cur.user_id === profile?.id) || (!cur.in_system && profile?.role === 'admin'))
+  })
+  const inApproval = requests.filter((r) => r.status === 'new')
+  const list = tab === 'toissue' ? toIssue : tab === 'approve' ? toApprove : tab === 'inappr' ? inApproval
+    : tab === 'all' ? requests : mine
 
   const act = async (fn, okMsg) => { const { error } = await fn; if (error) return toast(error, 'error'); toast(okMsg); reload() }
 
@@ -36,12 +46,15 @@ export default function Requests({ data, profile, can }) {
     <div style={{ maxWidth: 900, margin: '0 auto', padding: '24px 20px 90px', animation: 'fadeUp .3s ease' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
         <span className="ff" style={{ fontSize: 21, fontWeight: 600 }}>Заявки</span>
-        {isAdmin && incoming.length > 0 && <Badge color="ink">{incoming.length} новых</Badge>}
+        {isAdmin && toIssue.length > 0 && <Badge color="green">{toIssue.length} к выдаче</Badge>}
         {!isAdmin && <Btn size="sm" onClick={() => { setEditReq(null); setForm(true) }} style={{ marginLeft: 'auto' }}>＋ Новая заявка</Btn>}
       </div>
 
       <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap', overflowX: 'auto' }}>
-        {(isAdmin ? [['incoming', `Новые${incoming.length ? ' · ' + incoming.length : ''}`], ['inwork', 'В работе'], ['all', 'Все']] : [['mine', 'Мои заявки']]).map(([t, l]) => (
+        {(isAdmin
+          ? [['toissue', `К выдаче${toIssue.length ? ' · ' + toIssue.length : ''}`], ['approve', `Мне на подпись${toApprove.length ? ' · ' + toApprove.length : ''}`], ['inappr', 'На согласовании'], ['all', 'Все']]
+          : [['mine', 'Мои заявки'], ['approve', `Мне на согласование${toApprove.length ? ' · ' + toApprove.length : ''}`]]
+        ).map(([t, l]) => (
           <button key={t} onClick={() => setTab(t)} style={{ fontSize: 12.5, padding: '8px 14px', minHeight: 38, borderRadius: 20, border: 'none', whiteSpace: 'nowrap', background: tab === t ? 'var(--ink-l)' : 'var(--sur)', color: tab === t ? 'var(--ink)' : 'var(--tx3)', fontWeight: tab === t ? 600 : 500 }}>{l}</button>
         ))}
       </div>
@@ -53,8 +66,8 @@ export default function Requests({ data, profile, can }) {
       </div>}
 
       {list.map((r) => (
-        <Card key={r.id} r={r} data={data} isAdmin={isAdmin} me={profile?.id} pName={pName} rName={rName} bName={bName}
-          onApprove={() => setApprove(r)} onReject={() => setReject({ req: r, mode: 'reject' })}
+        <Card key={r.id} r={r} data={data} isAdmin={isAdmin} me={profile?.id} profile={profile} pName={pName} rName={rName} bName={bName}
+          onIssue={() => setIssue(r)} onApprove={() => setApprSheet(r)} onReject={() => setReject({ req: r, mode: 'reject' })}
           onRevision={() => setReject({ req: r, mode: 'revision' })}
           onEdit={() => { setEditReq(r); setForm(true) }}
           onCancel={() => act(cancelRequest(r.id), 'Заявка отменена')}
@@ -66,13 +79,14 @@ export default function Requests({ data, profile, can }) {
         {form && <RequestForm data={data} profile={profile} editReq={editReq} onDone={() => { setForm(false); reload() }} />}
       </Sheet>
 
-      {approve && <ApproveModal req={approve} data={data} profile={profile} onClose={() => setApprove(null)} onDone={() => { setApprove(null); reload() }} />}
+      {issue && <IssueModal req={issue} data={data} profile={profile} onClose={() => setIssue(null)} onDone={() => { setIssue(null); reload() }} />}
+      {apprSheet && <ApprovalSheet req={apprSheet} data={data} profile={profile} onClose={() => setApprSheet(null)} onDone={() => { setApprSheet(null); reload() }} />}
       {reject && <RejectModal info={reject} onClose={() => setReject(null)} onDone={() => { setReject(null); reload() }} />}
     </div>
   )
 }
 
-function Card({ r, data, isAdmin, me, pName, rName, bName, onApprove, onReject, onRevision, onEdit, onCancel, onReceived, onClosePartial }) {
+function Card({ r, data, isAdmin, me, pName, rName, bName, profile, onIssue, onApprove, onReject, onRevision, onEdit, onCancel, onReceived, onClosePartial }) {
   const st = ST[r.status] || ST.new
   const mineOwn = r.author_id === me
   const canEdit = !isAdmin && mineOwn && ['new', 'revision'].includes(r.status)
@@ -131,45 +145,56 @@ function Card({ r, data, isAdmin, me, pName, rName, bName, onApprove, onReject, 
         </div>
       )}
 
-      {/* Состояние акта — куда ушла заявка */}
+      {/* Цепочка согласования */}
       {(() => {
-        const act = (data.acts || []).find((a) => a.request_id === r.id)
-        if (!act) return null
-        const chain = signersOf(data.actSigners, act.id)
-        const cur = currentSigner(chain)
-        const signed = chain.filter((s) => s.status === 'signed').length
+        const chain = approversOf(data.reqApprovers, r.id)
+        if (!chain.length) return null
+        const cur = currentApprover(chain)
+        const okCount = chain.filter((a) => a.status === 'approved').length
+        const act = (data.acts || []).find((a) => a.id === r.act_id)
         return (
           <div style={{ marginTop: 10, padding: '10px 12px', background: 'var(--bg)', borderRadius: 9 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 7, flexWrap: 'wrap' }}>
-              <span className="mono" style={{ fontSize: 11.5, fontWeight: 600 }}>{act.number}</span>
-              <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 20, background: act.issued ? 'var(--gr-l)' : act.declined ? 'var(--rd-l)' : 'var(--am-l)', color: act.issued ? 'var(--gr-m)' : act.declined ? 'var(--rd-m)' : 'var(--am-m)' }}>
-                {act.declined ? 'Отказ' : act.issued ? 'Выдано' : `Подписей ${signed} из ${chain.length}`}
-              </span>
-            </div>
-            {chain.length > 0 && <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
-              {chain.map((s, i) => (
-                <span key={s.id} style={{ display: 'flex', alignItems: 'center' }} title={`${s.signer_name || ''} · ${s.signer_role || ''}`}>
-                  <span style={{ width: 15, height: 15, borderRadius: '50%', display: 'grid', placeItems: 'center', fontSize: 9, color: '#fff',
-                    background: s.status === 'signed' ? 'var(--gr)' : s.status === 'declined' ? 'var(--rd)' : (cur && s.id === cur.id) ? 'var(--ink)' : 'var(--sur2)',
-                    border: s.status === 'waiting' && (!cur || s.id !== cur.id) ? '1px solid var(--brd2)' : 'none' }}>{s.status === 'signed' ? '✓' : s.status === 'declined' ? '×' : ''}</span>
-                  {i < chain.length - 1 && <span style={{ width: 9, height: 2, background: s.status === 'signed' ? 'var(--gr)' : 'var(--brd)' }} />}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 0, flexWrap: 'wrap' }}>
+              {chain.map((a, i) => (
+                <span key={a.id} style={{ display: 'flex', alignItems: 'center' }} title={`${a.approver_name || ''} · ${a.approver_role || ''}`}>
+                  <span style={{ width: 16, height: 16, borderRadius: '50%', display: 'grid', placeItems: 'center', fontSize: 9.5, color: '#fff',
+                    background: a.status === 'approved' ? 'var(--gr)' : a.status === 'declined' ? 'var(--rd)' : (cur && a.id === cur.id) ? 'var(--ink)' : 'var(--sur2)',
+                    border: a.status === 'waiting' && (!cur || a.id !== cur.id) ? '1px solid var(--brd2)' : 'none' }}>
+                    {a.status === 'approved' ? '✓' : a.status === 'declined' ? '×' : ''}
+                  </span>
+                  {i < chain.length - 1 && <span style={{ width: 10, height: 2, background: a.status === 'approved' ? 'var(--gr)' : 'var(--brd)' }} />}
                 </span>
               ))}
-              <span style={{ marginLeft: 8, fontSize: 10.5, color: 'var(--tx3)' }}>
-                {act.issued ? 'товар выдан' : cur ? `сейчас: ${cur.signer_name || '—'}` : 'все подписали'}
+              <span style={{ marginLeft: 9, fontSize: 10.5, color: 'var(--tx3)' }}>
+                {r.status === 'rejected' ? 'отказ' : act ? `выдано · акт ${act.number}` : cur ? `сейчас: ${cur.approver_name || '—'}` : `согласовано ${okCount} из ${chain.length}`}
               </span>
-            </div>}
+            </div>
           </div>
         )
       })()}
 
-      {isAdmin && isNew && (
+      {/* Админ: выдать согласованную */}
+      {isAdmin && r.status === 'approved' && (
         <div style={{ display: 'flex', gap: 7, marginTop: 12, flexWrap: 'wrap' }}>
-          <Btn size="sm" onClick={onApprove} style={{ flex: 1, minWidth: 150, minHeight: 42 }}>✓ Принять — оформить акт</Btn>
-          <Btn size="sm" v="secondary" onClick={onRevision} style={{ minHeight: 42 }}>На переделку</Btn>
+          <Btn size="sm" onClick={onIssue} style={{ flex: 1, minWidth: 150, minHeight: 42 }}>📤 Выдать — оформить акт</Btn>
           <Btn size="sm" v="secondary" onClick={onReject} style={{ minHeight: 42 }}>Отклонить</Btn>
         </div>
       )}
+      {/* Согласующий: моя очередь */}
+      {(() => {
+        const chain = approversOf(data.reqApprovers, r.id)
+        const cur = currentApprover(chain)
+        const mineTurn = r.status === 'new' && cur && ((cur.in_system && cur.user_id === me) || (!cur.in_system && isAdmin))
+        if (!mineTurn) return null
+        return (
+          <div style={{ display: 'flex', gap: 7, marginTop: 12, flexWrap: 'wrap' }}>
+            <Btn size="sm" onClick={onApprove} style={{ flex: 1, minWidth: 150, minHeight: 42 }}>
+              {cur.in_system ? '✓ Согласовать' : `Приложить подпись: ${cur.approver_name || ''}`}
+            </Btn>
+            <Btn size="sm" v="secondary" onClick={onRevision} style={{ minHeight: 42 }}>На переделку</Btn>
+          </div>
+        )
+      })()}
       {(canEdit || canCancel || canReceive) && (
         <div style={{ display: 'flex', gap: 7, marginTop: 12, flexWrap: 'wrap' }}>
           {canReceive && <Btn size="sm" onClick={onReceived} style={{ minHeight: 42 }}>Подтвердить получение</Btn>}
@@ -210,10 +235,17 @@ function RequestForm({ data, profile, editReq, onDone }) {
     if (shortage.length) return toast(`На складе только ${shortage[0].free} — ${shortage[0].name}`, 'error')
     setLoading(true)
     const payload = { kind, basis_type: basis, items, scanFile, ...f }
-    const { error } = editReq ? await updateRequest(editReq.id, payload) : await createRequest(payload, profile.id)
+    const res = editReq ? await updateRequest(editReq.id, payload) : await createRequest(payload, profile.id)
+    if (res.error) { setLoading(false); return toast(res.error, 'error') }
+    // Цепочка согласования
+    const reqId = res.data?.id || editReq?.id
+    if (reqId) {
+      const author = (data.profiles || []).find((p) => p.id === profile.id) || profile
+      const chain = buildApprovalChain({ author, profiles: data.profiles, externals: data.externals, branchId: f.branch_id })
+      if (!editReq) await createApprovalChain(reqId, chain)
+    }
     setLoading(false)
-    if (error) return toast(error, 'error')
-    toast(editReq ? 'Заявка обновлена' : 'Заявка отправлена'); onDone()
+    toast(editReq ? 'Заявка обновлена' : 'Заявка отправлена на согласование'); onDone()
   }
 
   const seg = (val, cur, set, label, color) => (
@@ -305,15 +337,14 @@ function RequestForm({ data, profile, editReq, onDone }) {
       {/* Предпросмотр маршрута */}
       {(() => {
         const author = (data.profiles || []).find((p) => p.id === profile.id) || profile
-        const admin = (data.profiles || []).find((p) => p.role === 'admin')
-        const route = buildChain({ author, profiles: data.profiles, adminProfile: admin, externals: data.externals,
-          branchId: f.branch_id, basisType: basis })
+        const route = [...buildApprovalChain({ author, profiles: data.profiles, externals: data.externals, branchId: f.branch_id }),
+          { name: 'Склад', role: 'исполнение' }]
         if (!route.length) return null
         return (
           <div style={{ padding: '11px 13px', background: 'var(--ink-l)', borderRadius: 10 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8 }}>
               <span style={{ fontSize: 14 }}>🧭</span>
-              <span style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--ink)' }}>Пойдёт на подпись</span>
+              <span style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--ink)' }}>Пойдёт на согласование</span>
               <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--tx3)' }}>{route.length} {route.length === 1 ? 'звено' : route.length < 5 ? 'звена' : 'звеньев'}</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 5, fontSize: 11.5 }}>
@@ -333,7 +364,7 @@ function RequestForm({ data, profile, editReq, onDone }) {
   )
 }
 
-function ApproveModal({ req, data, profile, onClose, onDone }) {
+function IssueModal({ req, data, profile, onClose, onDone }) {
   const toast = useToast()
   const { warehouses, freeByWh, stockByWh, products, profiles, recipients, branches } = data
   const [wh, setWh] = useState(req.warehouse_id || warehouses[0]?.id || '')
@@ -343,29 +374,21 @@ function ApproveModal({ req, data, profile, onClose, onDone }) {
 
   const go = async () => {
     setLoading(true)
-    // Собираем цепочку подписей
-    const recipient = recipients.find((r) => r.id === req.recipient_id)
-    const author = profiles.find((p) => p.id === req.author_id)
-    const adminProfile = profiles.find((p) => p.id === profile.id) || profile
-    const chain = buildChain({ author, profiles, adminProfile, externals: data.externals,
-      branchId: req.branch_id, basisType: req.basis_type, recipientName: recipient?.name })
-
-    // Подмешиваем название и цену в позиции
     const itemsWithInfo = req.items.map((it) => {
       const p = products.find((x) => x.id === it.product_id)
       return { ...it, name: p?.name || '', sku: p?.sku || null, price: p?.price || 0 }
     })
-    const { error } = await approveRequest({ ...req, items: itemsWithInfo }, wh, qty, freeByWh, profile, chain)
+    const { error } = await issueRequest({ ...req, items: itemsWithInfo }, wh, qty, freeByWh, profile)
     setLoading(false)
     if (error) return toast(error, 'error')
-    toast('Акт создан — ушёл на подпись'); onDone()
+    toast('Выдано — акт сформирован'); onDone()
   }
 
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'grid', placeItems: 'center', padding: 16, background: 'rgba(8,10,14,.5)', backdropFilter: 'blur(4px)' }}>
       <div onClick={(e) => e.stopPropagation()} className="card" style={{ width: '100%', maxWidth: 460, padding: 20, maxHeight: '86vh', overflowY: 'auto' }}>
-        <div className="ff" style={{ fontSize: 17, fontWeight: 600, marginBottom: 4 }}>Одобрить заявку №{req.id}</div>
-        <div style={{ fontSize: 12.5, color: 'var(--tx3)', marginBottom: 16 }}>Будет создан акт и отправлен на подпись. Товар спишется, когда вы подпишете последним.</div>
+        <div className="ff" style={{ fontSize: 17, fontWeight: 600, marginBottom: 4 }}>Выдать по заявке №{req.id}</div>
+        <div style={{ fontSize: 12.5, color: 'var(--tx3)', marginBottom: 16 }}>Заявка согласована. Товар спишется со склада, сформируется акт для подписи получателем.</div>
 
         <Field label="Склад-источник">
           <Select value={wh} onChange={(e) => setWh(e.target.value)}>
@@ -393,7 +416,7 @@ function ApproveModal({ req, data, profile, onClose, onDone }) {
         </div>
 
         <div style={{ display: 'flex', gap: 8 }}>
-          <Btn onClick={go} loading={loading} style={{ flex: 1, minHeight: 46 }}>Одобрить — создать акт</Btn>
+          <Btn onClick={go} loading={loading} style={{ flex: 1, minHeight: 46 }}>Выдать и оформить акт</Btn>
           <Btn v="secondary" onClick={onClose} style={{ minHeight: 46 }}>Отмена</Btn>
         </div>
       </div>
