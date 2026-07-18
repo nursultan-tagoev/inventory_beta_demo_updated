@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { Btn, useToast } from './ui'
 import { fmt } from '../lib/format'
-import { fileUrl } from '../lib/requests'
+import { openFile } from '../lib/requests'
 import { approversOf, currentApprover, approveOnScreen, approveByScan, declineApproval, revokeApproval } from '../lib/approval'
 
 function SignPad({ onRef }) {
@@ -35,11 +35,12 @@ export default function ApprovalSheet({ req, data, profile, onClose, onDone }) {
   const [declining, setDeclining] = useState(false)
   const [reason, setReason] = useState('')
   const [scanFile, setScanFile] = useState(null)
+  const [eMode, setEMode] = useState(false)   // электронная подпись — скрытая опция
 
   const chain = approversOf(reqApprovers, req.id)
   const cur = currentApprover(chain)
   const isMyTurn = cur && cur.in_system && cur.user_id === profile.id
-  const isExternal = cur && !cur.in_system && profile.role === 'admin'
+  const isExternal = cur && !cur.in_system && (req.author_id === profile.id || profile.role === 'admin')
   const mineDone = chain.find((a) => a.user_id === profile.id && a.status === 'approved')
   const pName = (id) => products.find((p) => p.id === id)?.name || '—'
   const rName = (id) => recipients.find((r) => r.id === id)?.name || ''
@@ -54,6 +55,12 @@ export default function ApprovalSheet({ req, data, profile, onClose, onDone }) {
     const d = pad?.data()
     if (!d) return toast('Поставьте подпись', 'error')
     setBusy(true); const { error } = await approveOnScreen(cur, d, profile.id, req.id); setBusy(false)
+    if (error) return toast(error, 'error')
+    toast('Согласовано'); onDone()
+  }
+  const doScanSelf = async () => {
+    if (!scanFile) return toast('Приложите подписанный документ', 'error')
+    setBusy(true); const { error } = await approveByScan(cur, scanFile, profile.id, req.id); setBusy(false)
     if (error) return toast(error, 'error')
     toast('Согласовано'); onDone()
   }
@@ -105,8 +112,8 @@ export default function ApprovalSheet({ req, data, profile, onClose, onDone }) {
           <div style={{ padding: '10px 12px', background: 'var(--bg)', borderRadius: 10, fontSize: 11.5, marginBottom: 12 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}><span style={{ color: 'var(--tx3)' }}>Документ:</span><span className="mono">{req.sz_number}</span></div>
             {req.sz_approvers && <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 7 }}><span style={{ color: 'var(--tx3)' }}>Согласовали:</span><span style={{ textAlign: 'right' }}>{req.sz_approvers}</span></div>}
-            {req.sz_scan_path && <a href={fileUrl(req.sz_scan_path)} target="_blank" rel="noreferrer"
-              style={{ display: 'block', textAlign: 'center', minHeight: 38, lineHeight: '38px', border: '1px solid var(--ink)', borderRadius: 8, background: 'var(--ink-l)', color: 'var(--ink)', fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>Открыть скан с визами</a>}
+            {req.sz_scan_path && <button onClick={async () => { const { error } = await openFile(req.sz_scan_path); if (error) toast(error, 'error') }}
+              style={{ display: 'block', width: '100%', textAlign: 'center', minHeight: 42, border: '1px solid var(--ink)', borderRadius: 9, background: 'var(--ink-l)', color: 'var(--ink)', fontSize: 12.5, fontWeight: 600 }}>📄 Открыть служебную записку</button>}
           </div>
         )}
         {req.priority === 'urgent' && req.urgent_reason && (
@@ -144,16 +151,41 @@ export default function ApprovalSheet({ req, data, profile, onClose, onDone }) {
         </div>
 
         {/* Действия */}
-        {isMyTurn && !declining && (
+        {isMyTurn && !declining && !eMode && (
           <>
-            <div style={{ fontSize: 10.5, fontWeight: 600, textTransform: 'uppercase', color: 'var(--tx3)', marginBottom: 6 }}>Ваша подпись</div>
+            <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--tx2)', marginBottom: 8 }}>Подписание документа</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '11px 13px', background: 'var(--bg)', borderRadius: 10, fontSize: 12, color: 'var(--tx2)', marginBottom: 11 }}>
+              <span style={{ fontSize: 17 }}>🖨</span>
+              <span>Распечатайте заявку, подпишите и приложите скан подписанного документа.</span>
+            </div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 10, minHeight: 52, padding: '0 14px', border: `1px dashed ${scanFile ? 'var(--gr)' : 'var(--brd2)'}`, borderRadius: 11, background: scanFile ? 'var(--gr-l)' : 'var(--sur)', cursor: 'pointer', marginBottom: 11 }}>
+              <span style={{ fontSize: 19 }}>{scanFile ? '✓' : '📎'}</span>
+              <span style={{ fontSize: 13, fontWeight: 500, color: scanFile ? 'var(--gr-m)' : 'var(--tx2)' }}>{scanFile ? scanFile.name : 'Приложить подписанный документ'}</span>
+              <input type="file" accept="image/*,application/pdf" onChange={(e) => setScanFile(e.target.files?.[0] || null)} style={{ display: 'none' }} />
+            </label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <Btn onClick={doScanSelf} loading={busy} style={{ flex: 1, minHeight: 48 }}>✓ Согласовать</Btn>
+              <Btn v="secondary" onClick={() => setDeclining(true)} style={{ minHeight: 48 }}>Отказать</Btn>
+            </div>
+            <button onClick={() => setEMode(true)} style={{ width: '100%', minHeight: 38, marginTop: 9, background: 'transparent', color: 'var(--tx3)', fontSize: 11 }}>
+              Подписать электронно на экране
+            </button>
+          </>
+        )}
+
+        {isMyTurn && !declining && eMode && (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <span style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--tx2)' }}>Электронная подпись</span>
+              <button onClick={() => setEMode(false)} style={{ marginLeft: 'auto', color: 'var(--ink)', fontSize: 11 }}>← к бумажной</button>
+            </div>
             <SignPad onRef={setPad} />
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10.5, color: 'var(--tx3)', margin: '6px 0 12px' }}>
               <span>Распишитесь пальцем или мышью</span>
               <button onClick={() => pad?.clear()} style={{ color: 'var(--ink)', fontSize: 11 }}>Очистить</button>
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
-              <Btn onClick={doSign} loading={busy} style={{ flex: 1, minHeight: 48 }}>✓ Согласовать</Btn>
+              <Btn onClick={doSign} loading={busy} style={{ flex: 1, minHeight: 48 }}>✓ Согласовать электронно</Btn>
               <Btn v="secondary" onClick={() => setDeclining(true)} style={{ minHeight: 48 }}>Отказать</Btn>
             </div>
           </>
@@ -192,7 +224,10 @@ export default function ApprovalSheet({ req, data, profile, onClose, onDone }) {
           <Btn v="secondary" onClick={doRevoke} loading={busy} style={{ width: '100%', minHeight: 44, marginTop: 10 }}>Отозвать моё согласование</Btn>
         )}
 
-        <Btn v="secondary" onClick={onClose} style={{ width: '100%', minHeight: 44, marginTop: 10 }}>Закрыть</Btn>
+        <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+          <Btn v="secondary" onClick={() => window.print()} style={{ flex: 1, minHeight: 44 }}>🖨 Печать</Btn>
+          <Btn v="secondary" onClick={onClose} style={{ flex: 1, minHeight: 44 }}>Закрыть</Btn>
+        </div>
       </div>
     </div>
   )

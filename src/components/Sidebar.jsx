@@ -27,7 +27,7 @@ const NAV = [
 ]
 const ROLE_RU = { admin: 'Администратор', manager: 'Менеджер', employee: 'Сотрудник', director: 'Директор' }
 
-export default function Sidebar({ view, setView, profile, onLogout, badges = {} }) {
+export default function Sidebar({ view, setView, profile, onLogout, badges = {}, branchName }) {
   const role = profile?.role || 'employee'
   const items = NAV.filter((n) => n.roles.includes(role))
   const toggleTheme = () => {
@@ -70,7 +70,7 @@ export default function Sidebar({ view, setView, profile, onLogout, badges = {} 
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 12.5, color: '#fff', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{profile?.full_name || profile?.email}</div>
-              <div style={{ fontSize: 10.5, color: 'var(--navm)' }}>{ROLE_RU[role]}</div>
+              <div style={{ fontSize: 10.5, color: 'var(--navm)' }}>{ROLE_RU[role]}{branchName ? ' · ' + branchName : ''}</div>
             </div>
           </div>
           <div style={{ display: 'flex', gap: 6 }}>

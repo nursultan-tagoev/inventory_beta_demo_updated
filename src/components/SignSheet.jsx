@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { supabase } from '../supabaseClient'
 import { Btn, useToast } from './ui'
 import { fmt } from '../lib/format'
-import { fileUrl } from '../lib/requests'
+import { openFile } from '../lib/requests'
 import { signersOf, currentSigner, signOnScreen, signByScan, declineSign, revokeSign, issueByAct } from '../lib/signing'
 
 /* Холст для росчерка */
