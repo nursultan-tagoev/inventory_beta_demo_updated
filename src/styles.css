@@ -36,14 +36,18 @@ input,select,textarea{font-family:inherit;outline:none;color:inherit}
 @media print {
   body * { visibility: hidden !important; }
   #act-print, #act-print * { visibility: visible !important; }
-  #act-print { position: absolute; left: 0; top: 0; width: 100%; padding: 0 6mm !important; box-shadow: none !important; border: none !important; }
+  #act-print { position: absolute; left: 0; top: 0; width: 100%; padding: 0 6mm !important; box-shadow: none !important; border: none !important; background: #fff !important; color: #14171D !important; }
+  #act-print * { color: #14171D !important; }
+  #act-print .act-tbl th { background: #F1F1F4 !important; color: #14171D !important; border: 1px solid #B8B8C0 !important; }
+  #act-print .act-tbl td { border: 1px solid #B8B8C0 !important; }
   .no-print { display: none !important; }
   @page { size: A4; margin: 14mm; }
+  html, body { background: #fff !important; }
 }
 .act-in { border: none; border-bottom: 1px solid var(--brd2); background: transparent; padding: 1px 4px; font-size: inherit; color: var(--tx); }
 .act-tbl { width: 100%; border-collapse: collapse; margin: 12px 0 6px; font-size: 12px; }
-.act-tbl th { background: var(--sur2); border: 1px solid var(--brd2); padding: 6px 7px; font-size: 10px; font-weight: 600; text-transform: uppercase; color: var(--tx2); text-align: left; }
-.act-tbl td { border: 1px solid var(--brd2); padding: 3px 6px; }
+.act-tbl th { background: #F1F1F4; border: 1px solid #C8C8D0; padding: 6px 7px; font-size: 10px; font-weight: 600; text-transform: uppercase; color: #5A6472; text-align: left; }
+.act-tbl td { border: 1px solid #C8C8D0; padding: 3px 6px; color: #14171D; }
 .act-tbl td input { width: 100%; border: none; background: transparent; font-size: 12px; }
 
 /* ─────────── АДАПТИВ ─────────── */
