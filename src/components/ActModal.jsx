@@ -46,7 +46,7 @@ export default function ActModal({ init, profile, onClose, onSaved }) {
   }
 
   return (
-    <div className="no-print" onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 1200, background: 'rgba(8,10,14,.5)', backdropFilter: 'blur(3px)', overflow: 'auto', padding: '24px 12px' }}>
+    <div className="act-overlay" onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 1200, background: 'rgba(8,10,14,.5)', backdropFilter: 'blur(3px)', overflow: 'auto', padding: '24px 12px' }}>
       <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: 800, margin: '0 auto' }}>
         <div className="no-print" style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
           <button onClick={() => setShowInv((v) => !v)} style={{ height: 34, padding: '0 13px', borderRadius: 9, border: `1px solid ${showInv ? 'var(--ink)' : 'var(--brd2)'}`, background: showInv ? 'var(--ink-l)' : 'var(--sur)', color: showInv ? 'var(--ink)' : 'var(--tx2)', fontSize: 12.5, fontWeight: 600 }}>Инв. №</button>
