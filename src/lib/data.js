@@ -5,15 +5,15 @@ export function useAppData(profile) {
   const [state, setState] = useState({
     products: [], movements: [], recipients: [], branches: [], suppliers: [],
     categories: [], directions: [], productTypes: [], locations: [],
-    warehouses: [], campaigns: [], requests: [],
-    stock: {}, stockByWh: {}, flows: {}, checkouts: [], loading: true, error: null,
+    warehouses: [], campaigns: [], requests: [], reservations: [], profiles: [], acts: [], actSigners: [],
+    stock: {}, stockByWh: {}, freeByWh: {}, resvByWh: {}, flows: {}, checkouts: [], loading: true, error: null,
   })
 
   const load = useCallback(async () => {
     setState((s) => ({ ...s, loading: true }))
     try {
       const q = (t, order = 'id') => supabase.from(t).select('*').order(order)
-      const [products, movements, recipients, branches, suppliers, categories, directions, productTypes, locations, warehouses, campaigns, stockRows, requestsRes, reqItemsRes] = await Promise.all([
+      const [products, movements, recipients, branches, suppliers, categories, directions, productTypes, locations, warehouses, campaigns, stockRows, requestsRes, reqItemsRes, freeRes, resvRes, profilesRes, actsRes, signersRes] = await Promise.all([
         supabase.from('products').select('*').order('name'),
         supabase.from('movements').select('*').order('created_at', { ascending: false }).limit(5000),
         supabase.from('recipients').select('*').order('name'),
@@ -22,6 +22,11 @@ export function useAppData(profile) {
         supabase.from('stock_by_warehouse').select('*'),
         supabase.from('requests').select('*').order('created_at', { ascending: false }).limit(1000),
         supabase.from('request_items').select('*'),
+        supabase.from('stock_free').select('*'),
+        supabase.from('reservations').select('*').eq('active', true),
+        supabase.from('profiles').select('*'),
+        supabase.from('acts').select('*').order('created_at', { ascending: false }).limit(1000),
+        supabase.from('act_signers').select('*').order('order_no'),
       ])
       const err = [products, movements, recipients, branches, suppliers, categories, directions, productTypes, locations, warehouses, campaigns, stockRows].find((r) => r.error)?.error
       const mv = movements.data || []
@@ -33,6 +38,14 @@ export function useAppData(profile) {
         if (!stockByWh[pid]) stockByWh[pid] = {}
         stockByWh[pid][wid] = qty
         stock[pid] = (stock[pid] || 0) + qty
+      }
+      // Свободный остаток (минус активные резервы)
+      const freeByWh = {}, resvByWh = {}
+      for (const r of freeRes?.data || []) {
+        const pid = Number(r.product_id), wid = Number(r.warehouse_id)
+        if (!freeByWh[pid]) { freeByWh[pid] = {}; resvByWh[pid] = {} }
+        freeByWh[pid][wid] = Number(r.qty_free) || 0
+        resvByWh[pid][wid] = Number(r.qty_reserved) || 0
       }
 
       const flows = {}
@@ -59,7 +72,9 @@ export function useAppData(profile) {
         directions: directions.data || [], productTypes: productTypes.data || [], locations: locations.data || [],
         warehouses: warehouses.data || [], campaigns: campaigns.data || [],
         requests: buildRequests(requestsRes?.data, reqItemsRes?.data),
-        stock, stockByWh, flows, checkouts, loading: false, error: err ? err.message : null,
+        reservations: resvRes?.data || [], profiles: profilesRes?.data || [],
+        acts: actsRes?.data || [], actSigners: signersRes?.data || [],
+        stock, stockByWh, freeByWh, resvByWh, flows, checkouts, loading: false, error: err ? err.message : null,
       })
     } catch (e) {
       setState((s) => ({ ...s, loading: false, error: e.message }))
@@ -74,6 +89,9 @@ export function useAppData(profile) {
     const ch = supabase.channel('requests-live')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'requests' }, () => load())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'request_items' }, () => load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'acts' }, () => load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'act_signers' }, () => load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'reservations' }, () => load())
       .subscribe()
     return () => { supabase.removeChannel(ch) }
   }, [profile, load])
@@ -86,6 +104,20 @@ function buildRequests(reqs, items) {
   for (const it of items || []) (byReq[it.request_id] || (byReq[it.request_id] = [])).push(it)
   return (reqs || []).map((r) => ({ ...r, items: byReq[r.id] || [] }))
 }
+
+/* Свободный остаток */
+export const freeAt = (freeByWh, stockByWh, productId, warehouseId) => {
+  const f = freeByWh?.[Number(productId)]?.[Number(warehouseId)]
+  if (f != null) return f
+  return (stockByWh?.[Number(productId)]?.[Number(warehouseId)]) || 0
+}
+export const freeAll = (freeByWh, stockByWh, productId) => {
+  const row = freeByWh?.[Number(productId)]
+  if (row) return Object.values(row).reduce((s, n) => s + n, 0)
+  return Object.values(stockByWh?.[Number(productId)] || {}).reduce((s, n) => s + n, 0)
+}
+export const reservedAll = (resvByWh, productId) =>
+  Object.values(resvByWh?.[Number(productId)] || {}).reduce((s, n) => s + n, 0)
 
 /* Иерархия: Направление → Тип → Кампания → Продукт */
 
