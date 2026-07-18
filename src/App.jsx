@@ -77,12 +77,12 @@ export default function App() {
   const safeView = allowed.includes(view) ? view : 'home'
 
   const SCREENS = {
-    home: <Home data={data} profile={profile} can={can} />,
+    home: <Home data={data} profile={profile} can={can} setView={setView} />,
     items: <Items data={data} can={can} />,
     movements: <Movements data={data} profile={profile} can={can} />,
     recipients: <Recipients data={data} can={can} />,
     reports: <Reports data={data} />,
-    acts: <Acts data={data} />,
+    acts: <Acts data={data} profile={profile} />,
     settings: <Settings data={data} />,
     requests: <Requests data={data} profile={profile} can={can} />,
     lucy: <Lucy data={data} profile={profile} can={can} setView={setView} autostart={assistAuto} onAutostart={() => setAssistAuto(false)} />,
