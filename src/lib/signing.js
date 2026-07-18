@@ -4,43 +4,40 @@ import { uploadFile } from './requests'
 /* Построение цепочки подписей по профилям.
    Порядок: получатель → его руководитель → (руководитель руководителя) → админ (склад).
    Максимум 4 звена. */
-export function buildChain({ recipientProfile, recipientName, authorProfile, profiles, adminProfile, kind, branchManager }) {
+/* Цепочка строится по уровням, без ручной настройки:
+   специалист → руководитель его филиала → внешние согласующие (зампред) → склад (админ).
+   Заявка от руководителя филиала: он → зампред → склад.
+   Мелкая заявка без СЗ: заявитель → склад. */
+export function buildChain({ author, profiles, adminProfile, externals, branchId, basisType, recipientName }) {
   const chain = []
-  const seen = new Set()
-  const push = (c) => {
-    const key = c.user_id || c.name
-    if (!key || seen.has(key)) return
-    if (chain.length >= 3) return   // 3 + админ = 4
-    seen.add(key); chain.push(c)
+  const add = (c) => { if (c && (c.user_id || c.name) && chain.length < 4) chain.push(c) }
+
+  const roleLabel = { employee: 'Специалист', manager: 'Руководитель филиала', admin: 'Склад · МОЛ', director: 'Директор' }
+
+  // 1. Заявитель — первым
+  if (author) add({ user_id: author.id, name: author.full_name || author.email, role: roleLabel[author.role] || 'Заявитель' })
+  else if (recipientName) add({ user_id: null, name: recipientName, role: 'Получатель' })
+
+  // Мелкая заявка без СЗ — сразу склад
+  if (basisType === 'none') {
+    if (adminProfile) add({ user_id: adminProfile.id, name: adminProfile.full_name || adminProfile.email, role: 'Склад · МОЛ' })
+    return chain
   }
 
-  if (kind === 'receive' && branchManager) {
-    // Заявка на филиал — первым руководитель филиала
-    push({ user_id: branchManager.id, name: branchManager.full_name, role: 'Руководитель филиала' })
-  } else if (recipientProfile) {
-    push({ user_id: recipientProfile.id, name: recipientProfile.full_name, role: 'Получатель' })
-  } else if (recipientName) {
-    push({ user_id: null, name: recipientName, role: 'Получатель' })
+  // 2. Руководитель филиала (если заявитель — специалист)
+  if (author?.role === 'employee') {
+    const bid = branchId || author.branch_id
+    const head = (profiles || []).find((p) => p.role === 'manager' && p.branch_id === bid)
+    if (head && head.id !== author.id) add({ user_id: head.id, name: head.full_name || head.email, role: 'Руководитель филиала' })
   }
 
-  // Поднимаемся по руководителям
-  let cur = recipientProfile || authorProfile
-  let guard = 0
-  while (cur && guard < 3) {
-    guard++
-    if (cur.manager_id) {
-      const m = profiles.find((p) => p.id === cur.manager_id)
-      if (!m) break
-      push({ user_id: m.id, name: m.full_name, role: m.position || 'Руководитель' })
-      cur = m
-    } else if (cur.manager_name) {
-      push({ user_id: null, name: cur.manager_name, role: cur.manager_position || 'Руководитель' })
-      break
-    } else break
+  // 3. Внешние согласующие (зампред) — по порядку уровня
+  for (const e of (externals || []).filter((x) => x.is_active).sort((a, b) => (a.level || 0) - (b.level || 0))) {
+    add({ user_id: null, name: e.full_name, role: e.position || 'Согласующий' })
   }
 
-  // Админ последним — его подпись = выдача
-  if (adminProfile) chain.push({ user_id: adminProfile.id, name: adminProfile.full_name, role: 'Склад · МОЛ' })
+  // 4. Склад — последним, его подпись = выдача
+  if (adminProfile) add({ user_id: adminProfile.id, name: adminProfile.full_name || adminProfile.email, role: 'Склад · МОЛ' })
   return chain
 }
 
