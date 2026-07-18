@@ -186,7 +186,8 @@ function RequestForm({ data, profile, editReq, onDone }) {
   const toast = useToast()
   const { products, recipients, branches, freeByWh, stockByWh, directions, productTypes, campaigns } = data
   const [kind, setKind] = useState(editReq?.kind || 'issue')
-  const [basis, setBasis] = useState(editReq?.basis_type || 'sz')
+  const isAdminUser = profile?.role === 'admin'
+  const [basis, setBasis] = useState(isAdminUser ? (editReq?.basis_type || 'sz') : 'sz')
   const [items, setItems] = useState(editReq?.items?.map((it) => ({ product_id: it.product_id, qty: it.qty })) || [{ product_id: '', qty: 1 }])
   const [f, setF] = useState({
     recipient_id: editReq?.recipient_id || '', branch_id: editReq?.branch_id || profile?.branch_id || '',
@@ -247,7 +248,12 @@ function RequestForm({ data, profile, editReq, onDone }) {
         ⚠️ {shortage[0].name} — свободно только {shortage[0].free}. Уменьшите количество.
       </div>}
 
-      <Field label="Основание"><div style={{ display: 'flex', gap: 8 }}>{seg('sz', basis, setBasis, 'По служебной записке')}{seg('none', basis, setBasis, 'Без СЗ')}</div></Field>
+      {isAdminUser
+        ? <Field label="Основание"><div style={{ display: 'flex', gap: 8 }}>{seg('sz', basis, setBasis, 'По служебной записке')}{seg('none', basis, setBasis, 'Без СЗ')}</div></Field>
+        : <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '10px 12px', background: 'var(--ink-l)', borderRadius: 10, fontSize: 11.5, color: 'var(--ink)' }}>
+            <span style={{ fontSize: 15 }}>📄</span>
+            <span>Заявка оформляется <b>по служебной записке</b> — заполните реквизиты согласования ниже.</span>
+          </div>}
 
       {basis === 'sz' ? (
         <div className="card" style={{ padding: 14, background: 'var(--bg)', display: 'flex', flexDirection: 'column', gap: 11 }}>
