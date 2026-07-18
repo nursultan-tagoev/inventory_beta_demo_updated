@@ -136,6 +136,20 @@ export async function issueRequest(req, warehouseId, approvedQty, freeByWh, prof
   const lines = req.items.map((it) => ({ ...it, give: Number(approvedQty?.[it.id] ?? it.qty) })).filter((it) => it.give > 0)
   if (!lines.length) return { error: 'Нечего выдавать — укажите количество' }
 
+  // Проверяем фактический остаток на складе (свежие данные из базы)
+  const { data: stockRows, error: stErr } = await supabase
+    .from('stock_by_warehouse').select('*').eq('warehouse_id', wid)
+  if (stErr) return { error: 'Остатки: ' + stErr.message }
+  const onHand = {}
+  for (const r of stockRows || []) onHand[Number(r.product_id)] = Number(r.qty) || 0
+
+  for (const it of lines) {
+    const have = onHand[Number(it.product_id)] || 0
+    if (it.give > have) {
+      return { error: `Недостаточно на складе: «${it.name || 'товар'}» — нужно ${it.give}, есть ${have}` }
+    }
+  }
+
   // Номер акта
   const { data: number, error: numErr } = await supabase.rpc('next_act_number', { p_prefix: 'АВ' })
   if (numErr) return { error: 'Номер акта: ' + numErr.message }
