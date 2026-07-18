@@ -91,7 +91,7 @@ export default function App() {
   return (
     <ToastProvider>
       <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
-        <Sidebar view={safeView} setView={setView} profile={profile} onLogout={logout} badges={{ requests: (data.requests || []).filter((r) => r.status === 'new' && (role === 'admin' || r.author_id === profile.id)).length }} />
+        <Sidebar view={safeView} setView={setView} profile={profile} onLogout={logout} branchName={(data.branches || []).find((b) => b.id === profile?.branch_id)?.name} badges={{ requests: (data.requests || []).filter((r) => r.status === 'new' && (role === 'admin' || r.author_id === profile.id)).length }} />
         <main style={{ flex: 1, overflow: 'auto', position: 'relative' }}>
           {data.loading && <div style={{ position: 'absolute', top: 14, right: 18, zIndex: 5 }}><Spin s={18} /></div>}
           {data.error && <div style={{ padding: '10px 24px', background: 'var(--am-l)', color: 'var(--am-m)', fontSize: 12.5, borderBottom: '1px solid var(--am)' }}>Доступ к данным закрыт: {data.error}. Проверьте, что выполнены RLS-политики.</div>}
