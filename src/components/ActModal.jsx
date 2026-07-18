@@ -17,9 +17,9 @@ export default function ActModal({ init, profile, onClose, onSaved }) {
   const toast = useToast()
   const today = new Date().toLocaleDateString('ru-RU', { day: '2-digit', month: 'long', year: 'numeric' })
   const isRet = init.type === 'return'
-  const [org, setOrg] = useState('«Наименование банка» · Отдел маркетинга')
+  const [org, setOrg] = useState('Отдел маркетинга')
   const [branch, setBranch] = useState(init.branchName || 'Центральный филиал')
-  const [giver, setGiver] = useState('[МОЛ — Ф.И.О., должность]')
+  const [giver, setGiver] = useState('')
   const [recv, setRecv] = useState(init.recipient || '')
   const [basis, setBasis] = useState(init.purpose ? 'Цель: ' + init.purpose : 'Служебная записка № ___')
   const [showInv, setShowInv] = useState(true)
