@@ -143,6 +143,28 @@ export default function Home({ data, profile, can, setView }) {
           ))}
         </div>
 
+        {!['admin', 'director'].includes(role) && <div className="card" style={{ overflow: 'hidden' }}>
+          <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--brd)', fontWeight: 600, fontSize: 14.5 }}>
+            {role === 'manager' ? 'На руках у филиала' : 'Что у меня на руках'}
+          </div>
+          {myCheckouts.length === 0 && <div style={{ padding: 30, textAlign: 'center', color: 'var(--tx3)', fontSize: 13 }}>Ничего не числится</div>}
+          {myCheckouts.slice(0, 8).map((c, i, arr) => {
+            const overdueItem = c.due_date && c.due_date < today
+            return (
+              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, padding: '11px 18px', borderBottom: i < arr.length - 1 ? '1px solid var(--brd)' : 'none' }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pName(c.product_id)}</div>
+                  <div style={{ fontSize: 11, color: overdueItem ? 'var(--rd-m)' : 'var(--tx3)' }}>
+                    {recipients.find((r) => r.id === c.recipient_id)?.name || ''}
+                    {c.due_date ? ` · до ${new Date(c.due_date).toLocaleDateString('ru-RU')}` : ''}
+                  </div>
+                </div>
+                <Badge color={overdueItem ? 'red' : 'slate'}>{c.remaining} шт</Badge>
+              </div>
+            )
+          })}
+        </div>}
+
         {['admin', 'director'].includes(role) && <div className="card" style={{ overflow: 'hidden' }}>
           <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--brd)', fontWeight: 600, fontSize: 14.5, color: 'var(--am-m)' }}>Заканчивается</div>
           {low.length === 0 && <div style={{ padding: 34, textAlign: 'center', color: 'var(--tx3)', fontSize: 13 }}>Всё в достатке.</div>}

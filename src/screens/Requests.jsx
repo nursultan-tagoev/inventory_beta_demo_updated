@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { Btn, Field, Input, Select, Badge, Sheet, useToast } from '../components/ui'
 import { chainOf, freeAll, freeAt } from '../lib/data'
-import { createRequest, updateRequest, setStatus, cancelRequest, closePartial, issueRequest, fileUrl } from '../lib/requests'
+import { createRequest, updateRequest, setStatus, cancelRequest, closePartial, issueRequest, openFile } from '../lib/requests'
 import { buildApprovalChain, approversOf, currentApprover, createApprovalChain } from '../lib/approval'
 import ApprovalSheet from '../components/ApprovalSheet'
 
@@ -34,7 +34,10 @@ export default function Requests({ data, profile, can }) {
   // Мне на согласование
   const toApprove = requests.filter((r) => {
     const cur = currentApprover(approversOf(data.reqApprovers, r.id))
-    return r.status === 'new' && cur && ((cur.in_system && cur.user_id === profile?.id) || (!cur.in_system && profile?.role === 'admin'))
+    if (r.status !== 'new' || !cur) return false
+    if (cur.in_system) return cur.user_id === profile?.id
+    // Внешний согласующий: подпись приносит автор заявки (он ходил), админ может помочь
+    return r.author_id === profile?.id || profile?.role === 'admin'
   })
   const inApproval = requests.filter((r) => r.status === 'new')
   const list = tab === 'toissue' ? toIssue : tab === 'approve' ? toApprove : tab === 'inappr' ? inApproval
@@ -101,20 +104,25 @@ function Card({ r, data, isAdmin, me, pName, rName, bName, profile, onIssue, onA
         <div style={{ flex: 1, minWidth: 190 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5, flexWrap: 'wrap' }}>
             <span className="mono" style={{ fontSize: 11, color: 'var(--tx3)' }}>№{r.id}</span>
-            <Badge color={r.kind === 'receive' ? 'purple' : 'ink'}>{KIND[r.kind]}</Badge>
+            
             {urgent && <Badge color="red">Срочно</Badge>}
             <Badge color={st[1]}>{st[0]}</Badge>
             {r.basis_type === 'sz' ? <Badge color="green">СЗ</Badge> : <Badge color="amber">без СЗ</Badge>}
           </div>
           {r.items.map((it, i) => (
-            <div key={i} style={{ fontSize: 13.5, fontWeight: 500 }}>
+            <div key={i} style={{ fontSize: 15, fontWeight: 600, marginBottom: 2 }}>
               {it.approved_qty != null && it.approved_qty !== it.qty
                 ? <>{it.approved_qty} × {pName(it.product_id)} <span style={{ fontSize: 11, color: 'var(--am-m)' }}>(просили {it.qty})</span></>
                 : <>{it.qty} × {pName(it.product_id)}</>}
             </div>
           ))}
-          <div style={{ fontSize: 11.5, color: 'var(--tx3)', marginTop: 3 }}>
-            {[r.recipient_id && rName(r.recipient_id), r.branch_id && bName(r.branch_id), r.purpose].filter(Boolean).join(' · ')}
+          <div style={{ fontSize: 12.5, color: 'var(--tx2)', marginTop: 5, lineHeight: 1.6 }}>
+            {(() => { const author = (data.profiles || []).find((p) => p.id === r.author_id)
+              return <>
+                {author && <div><span style={{ color: 'var(--tx3)' }}>Запросил:</span> <b>{author.full_name || author.email}</b>{author.branch_id ? ` · ${bName(author.branch_id)}` : ''}</div>}
+                {r.recipient_id && <div><span style={{ color: 'var(--tx3)' }}>Получатель:</span> {rName(r.recipient_id)}</div>}
+                {r.purpose && <div><span style={{ color: 'var(--tx3)' }}>Цель:</span> {r.purpose}</div>}
+              </> })()}
           </div>
         </div>
         <div style={{ fontSize: 11, color: 'var(--tx3)', textAlign: 'right' }}>
@@ -123,15 +131,15 @@ function Card({ r, data, isAdmin, me, pName, rName, bName, profile, onIssue, onA
       </div>
 
       {/* Основание */}
-      {isAdmin && r.basis_type === 'sz' && (
+      {r.basis_type === 'sz' && (
         <div style={{ marginTop: 10, padding: '10px 12px', background: 'var(--bg)', borderRadius: 9, fontSize: 11.5 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}><span style={{ color: 'var(--tx3)' }}>Документ:</span><span className="mono">{r.sz_number} {r.sz_date ? 'от ' + new Date(r.sz_date).toLocaleDateString('ru-RU') : ''}</span></div>
           {r.sz_approvers && <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 7 }}><span style={{ color: 'var(--tx3)' }}>Согласовали:</span><span style={{ textAlign: 'right' }}>{r.sz_approvers}</span></div>}
-          {r.sz_scan_path && <a href={fileUrl(r.sz_scan_path)} target="_blank" rel="noreferrer"
-            style={{ display: 'block', textAlign: 'center', height: 36, lineHeight: '36px', border: '1px solid var(--ink)', borderRadius: 8, background: 'var(--ink-l)', color: 'var(--ink)', fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>Открыть скан с визами</a>}
+          {r.sz_scan_path && <button onClick={async (e) => { e.stopPropagation(); const { error } = await openFile(r.sz_scan_path); if (error) alert(error) }}
+            style={{ display: 'block', width: '100%', textAlign: 'center', minHeight: 40, border: '1px solid var(--ink)', borderRadius: 8, background: 'var(--ink-l)', color: 'var(--ink)', fontSize: 12.5, fontWeight: 600 }}>📄 Открыть служебную записку</button>}
         </div>
       )}
-      {isAdmin && r.basis_type === 'none' && r.no_sz_reason && (
+      {r.basis_type === 'none' && r.no_sz_reason && (
         <div style={{ marginTop: 9, padding: '8px 11px', background: 'var(--am-l)', borderRadius: 8, fontSize: 11.5, color: 'var(--am-m)' }}>«{r.no_sz_reason}»</div>
       )}
       {urgent && r.urgent_reason && (
@@ -184,14 +192,23 @@ function Card({ r, data, isAdmin, me, pName, rName, bName, profile, onIssue, onA
       {(() => {
         const chain = approversOf(data.reqApprovers, r.id)
         const cur = currentApprover(chain)
-        const mineTurn = r.status === 'new' && cur && ((cur.in_system && cur.user_id === me) || (!cur.in_system && isAdmin))
+        if (r.status !== 'new' || !cur) return null
+        const mineTurn = cur.in_system ? cur.user_id === me : (r.author_id === me || isAdmin)
         if (!mineTurn) return null
+        const isExt = !cur.in_system
         return (
-          <div style={{ display: 'flex', gap: 7, marginTop: 12, flexWrap: 'wrap' }}>
-            <Btn size="sm" onClick={onApprove} style={{ flex: 1, minWidth: 150, minHeight: 42 }}>
-              {cur.in_system ? '✓ Согласовать' : `Приложить подпись: ${cur.approver_name || ''}`}
-            </Btn>
-            <Btn size="sm" v="secondary" onClick={onRevision} style={{ minHeight: 42 }}>На переделку</Btn>
+          <div style={{ marginTop: 12 }}>
+            {isExt && <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', background: 'var(--am-l)', borderRadius: 9, fontSize: 12, color: 'var(--am-m)', marginBottom: 9 }}>
+              <span style={{ fontSize: 16 }}>📄</span>
+              <span>Распечатайте заявку, получите подпись <b>{cur.approver_name}</b> и приложите скан</span>
+            </div>}
+            <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
+              <Btn size="sm" onClick={onApprove} style={{ flex: 1, minWidth: 160, minHeight: 44 }}>
+                {isExt ? '📎 Приложить подпись' : '✓ Согласовать'}
+              </Btn>
+              <Btn size="sm" v="secondary" onClick={onRevision} style={{ minHeight: 44 }}>На переделку</Btn>
+              <Btn size="sm" v="secondary" onClick={onReject} style={{ minHeight: 44 }}>Отклонить</Btn>
+            </div>
           </div>
         )
       })()}
@@ -210,7 +227,7 @@ function Card({ r, data, isAdmin, me, pName, rName, bName, profile, onIssue, onA
 function RequestForm({ data, profile, editReq, onDone }) {
   const toast = useToast()
   const { products, recipients, branches, freeByWh, stockByWh, directions, productTypes, campaigns } = data
-  const [kind, setKind] = useState(editReq?.kind || 'issue')
+  const kind = 'issue'
   const isAdminUser = profile?.role === 'admin'
   const [basis, setBasis] = useState(isAdminUser ? (editReq?.basis_type || 'sz') : 'sz')
   const [items, setItems] = useState(editReq?.items?.map((it) => ({ product_id: it.product_id, qty: it.qty })) || [{ product_id: '', qty: 1 }])
@@ -254,7 +271,6 @@ function RequestForm({ data, profile, editReq, onDone }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <Field label="Тип заявки"><div style={{ display: 'flex', gap: 8 }}>{seg('issue', kind, setKind, 'На выдачу')}{seg('receive', kind, setKind, 'На получение')}</div></Field>
 
       <div>
         <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.04em', color: 'var(--tx3)', marginBottom: 6 }}>Позиции</div>
@@ -294,10 +310,10 @@ function RequestForm({ data, profile, editReq, onDone }) {
             <Field label="Дата"><Input type="date" value={f.sz_date} onChange={(e) => up('sz_date', e.target.value)} /></Field>
           </div>
           <Field label="Кто согласовал"><Input value={f.sz_approvers} onChange={(e) => up('sz_approvers', e.target.value)} placeholder="ФИО и должности" /></Field>
-          <Field label="Скан с визами">
+          <Field label="Согласованная служебная записка">
             <label style={{ display: 'flex', alignItems: 'center', gap: 10, minHeight: 48, padding: '0 13px', border: `1px dashed ${scanFile ? 'var(--gr)' : 'var(--ink)'}`, borderRadius: 10, background: scanFile ? 'var(--gr-l)' : 'var(--ink-l)', cursor: 'pointer' }}>
               <span style={{ fontSize: 18 }}>{scanFile ? '✓' : '📎'}</span>
-              <span style={{ fontSize: 12.5, color: scanFile ? 'var(--gr-m)' : 'var(--ink)', fontWeight: 600 }}>{scanFile ? scanFile.name : 'Приложить скан (PDF, JPG)'}</span>
+              <span style={{ fontSize: 12.5, color: scanFile ? 'var(--gr-m)' : 'var(--ink)', fontWeight: 600 }}>{scanFile ? scanFile.name : 'Приложить документ (PDF, JPG)'}</span>
               <input type="file" accept="image/*,application/pdf" onChange={(e) => setScan(e.target.files?.[0] || null)} style={{ display: 'none' }} />
             </label>
           </Field>

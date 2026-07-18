@@ -126,14 +126,14 @@ function ActView({ act, data, onClose, onChanged }) {
           </div>
         )}
         {act.annulled && <div className="no-print" style={{ background: 'var(--rd-l)', border: '1px solid var(--rd)', borderRadius: 10, padding: '11px 14px', marginBottom: 12, fontSize: 12.5, color: 'var(--rd-m)' }}>Акт аннулирован{act.annul_reason ? `: ${act.annul_reason}` : ''}. Остаток возвращён.</div>}
-        <div id="act-print" style={{ background: '#fff', color: '#14171D', borderRadius: 8, padding: '46px 54px', boxShadow: 'var(--sh3)' }}>
+        <div id="act-print" style={{ background: '#fff', color: '#14171D', borderRadius: 8, padding: '28px 32px', boxShadow: 'var(--sh3)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
             <div style={{ fontSize: 12, color: '#5A6472' }}>Отдел маркетинга</div>
             <div style={{ textAlign: 'right', fontSize: 12, color: '#5A6472' }}>Акт № <b className="mono" style={{ color: '#14171D' }}>{act.number}</b><br />от {today}</div>
           </div>
           <hr style={{ border: 'none', borderTop: '1px solid #14171D' }} />
-          <div style={{ textAlign: 'center', margin: '18px 0 14px' }}><div className="ff" style={{ fontSize: 25 }}>Акт приёма-передачи</div><div style={{ fontSize: 13, color: '#5A6472' }}>ТМЦ · {isRet ? 'возврат' : 'выдача'}</div></div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18, fontSize: 13, marginBottom: 10 }}>
+          <div style={{ textAlign: 'center', margin: '12px 0 10px' }}><div className="ff" style={{ fontSize: 21 }}>Акт приёма-передачи</div><div style={{ fontSize: 13, color: '#5A6472' }}>· {isRet ? 'возврат' : 'выдача'}</div></div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, fontSize: 12.5, marginBottom: 8 }}>
             <div><div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', color: '#98A0AE' }}>{isRet ? 'Возвращает' : 'Передал'}</div>{isRet ? act.recipient_name : act.giver_name}</div>
             <div><div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', color: '#98A0AE' }}>Принял</div>{isRet ? act.giver_name : act.recipient_name}</div>
           </div>
@@ -144,10 +144,19 @@ function ActView({ act, data, onClose, onChanged }) {
             </table>
           )}
           <div style={{ textAlign: 'right', fontSize: 13, marginTop: 4 }}>Итого на сумму <b className="mono">{fmt(act.total_sum)} сом</b></div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 40, fontSize: 12 }}>
-            <div>{isRet ? 'Возвращает' : 'Передал'}: ______________<div style={{ fontSize: 10, color: '#98A0AE', marginTop: 4 }}>подпись</div></div>
-            <div>Принял: ______________<div style={{ fontSize: 10, color: '#98A0AE', marginTop: 4 }}>подпись</div></div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 26, fontSize: 12, gap: 24 }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ marginBottom: 3 }}>{isRet ? 'Возвращает' : 'Передал'}</div>
+              <div style={{ borderBottom: '1px solid #14171D', height: 22 }} />
+              <div style={{ fontSize: 10, color: '#98A0AE', marginTop: 3 }}>подпись · {isRet ? act.recipient_name : act.giver_name}</div>
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ marginBottom: 3 }}>Принял</div>
+              <div style={{ borderBottom: '1px solid #14171D', height: 22 }} />
+              <div style={{ fontSize: 10, color: '#98A0AE', marginTop: 3 }}>подпись · {isRet ? act.giver_name : act.recipient_name}</div>
+            </div>
           </div>
+          <div style={{ fontSize: 10.5, color: '#98A0AE', marginTop: 14 }}>Дата получения: ______________</div>
         </div>
       </div>
     </div>
