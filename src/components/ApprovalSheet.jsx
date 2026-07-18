@@ -83,9 +83,53 @@ export default function ApprovalSheet({ req, data, profile, onClose, onDone }) {
   }
 
   return (
-    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 1100, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', background: 'rgba(8,10,14,.5)', backdropFilter: 'blur(4px)' }}>
+    <div onClick={onClose} className="sheet-print-host" style={{ position: 'fixed', inset: 0, zIndex: 1100, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', background: 'rgba(8,10,14,.5)', backdropFilter: 'blur(4px)' }}>
       <div onClick={(e) => e.stopPropagation()} className="sheet-up" style={{ width: '100%', maxWidth: 520, maxHeight: '92vh', overflowY: 'auto', background: 'var(--sur)', borderRadius: '20px 20px 0 0', padding: '10px 18px calc(22px + env(safe-area-inset-bottom))' }}>
-        <div style={{ width: 38, height: 4, background: 'var(--brd2)', borderRadius: 3, margin: '0 auto 14px' }} />
+        <div className="no-print" style={{ width: 38, height: 4, background: 'var(--brd2)', borderRadius: 3, margin: '0 auto 14px' }} />
+
+        {/* Печатный бланк заявки — виден только при печати */}
+        <div id="req-print" style={{ display: 'none' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, fontSize: 12 }}>
+            <div>Отдел маркетинга</div>
+            <div style={{ textAlign: 'right' }}>Заявка № <b className="mono">{req.id}</b><br />от {new Date(req.created_at).toLocaleDateString('ru-RU')}</div>
+          </div>
+          <hr style={{ border: 'none', borderTop: '1px solid #14171D' }} />
+          <div style={{ textAlign: 'center', margin: '12px 0 12px' }}>
+            <div className="ff" style={{ fontSize: 20 }}>Заявка на выдачу</div>
+            {req.priority === 'urgent' && <div style={{ fontSize: 12 }}>срочная</div>}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, fontSize: 12.5, marginBottom: 10 }}>
+            <div><div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase' }}>Запросил</div>
+              {(data.profiles || []).find((p) => p.id === req.author_id)?.full_name || '—'}</div>
+            <div><div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase' }}>Филиал</div>{bName(req.branch_id) || '—'}</div>
+            <div><div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase' }}>Получатель</div>{rName(req.recipient_id) || '—'}</div>
+            <div><div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase' }}>Цель</div>{req.purpose || '—'}</div>
+          </div>
+          {req.basis_type === 'sz' && <div style={{ fontSize: 12, marginBottom: 8 }}>Основание: {req.sz_number} от {req.sz_date ? new Date(req.sz_date).toLocaleDateString('ru-RU') : '—'}{req.sz_approvers ? ` · согласовали: ${req.sz_approvers}` : ''}</div>}
+          <table className="act-tbl"><thead><tr><th style={{ width: 26 }}>№</th><th>Наименование</th><th style={{ width: 60, textAlign: 'right' }}>Кол-во</th><th style={{ width: 80, textAlign: 'right' }}>Цена</th><th style={{ width: 90, textAlign: 'right' }}>Сумма</th></tr></thead>
+            <tbody>{req.items.map((it, i) => {
+              const pr = products.find((x) => x.id === it.product_id)
+              return <tr key={i}><td style={{ textAlign: 'center' }}>{i + 1}</td><td>{pName(it.product_id)}</td>
+                <td className="mono" style={{ textAlign: 'right' }}>{it.qty}</td>
+                <td className="mono" style={{ textAlign: 'right' }}>{fmt(pr?.price || 0)}</td>
+                <td className="mono" style={{ textAlign: 'right' }}>{fmt(it.qty * (pr?.price || 0))}</td></tr>
+            })}</tbody>
+          </table>
+          <div style={{ textAlign: 'right', fontSize: 12.5, marginTop: 5 }}>Итого <b className="mono">{fmt(total)} сом</b></div>
+          <div style={{ marginTop: 24, fontSize: 12 }}>
+            <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', marginBottom: 10 }}>Согласование</div>
+            {chain.map((a) => (
+              <div key={a.id} style={{ display: 'flex', gap: 20, marginBottom: 18, alignItems: 'flex-end' }}>
+                <div style={{ width: 210 }}>{a.approver_role}<br /><b>{a.approver_name}</b></div>
+                <div style={{ flex: 1, borderBottom: '1px solid #14171D', height: 20 }} />
+                <div style={{ width: 90, borderBottom: '1px solid #14171D', height: 20 }} />
+              </div>
+            ))}
+            <div style={{ display: 'flex', gap: 20, fontSize: 10, color: '#5A6472' }}>
+              <div style={{ width: 210 }} /><div style={{ flex: 1 }}>подпись</div><div style={{ width: 90 }}>дата</div>
+            </div>
+          </div>
+        </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 4, flexWrap: 'wrap' }}>
           <span className="ff" style={{ fontSize: 17, fontWeight: 600 }}>Заявка №{req.id}</span>
