@@ -100,7 +100,7 @@ function ActView({ act, data, onClose, onChanged }) {
         {act.annulled && <div className="no-print" style={{ background: 'var(--rd-l)', border: '1px solid var(--rd)', borderRadius: 10, padding: '11px 14px', marginBottom: 12, fontSize: 12.5, color: 'var(--rd-m)' }}>Акт аннулирован{act.annul_reason ? `: ${act.annul_reason}` : ''}. Остаток возвращён.</div>}
         <div id="act-print" style={{ background: '#fff', color: '#14171D', borderRadius: 8, padding: '46px 54px', boxShadow: 'var(--sh3)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-            <div style={{ fontSize: 12, color: '#5A6472' }}>«Наименование банка» · Отдел маркетинга</div>
+            <div style={{ fontSize: 12, color: '#5A6472' }}>Отдел маркетинга</div>
             <div style={{ textAlign: 'right', fontSize: 12, color: '#5A6472' }}>Акт № <b className="mono" style={{ color: '#14171D' }}>{act.number}</b><br />от {today}</div>
           </div>
           <hr style={{ border: 'none', borderTop: '1px solid #14171D' }} />

@@ -75,9 +75,11 @@ export default function Movements({ data, profile, can }) {
     }))
   }, [list])
 
-  const sub = (m) => m.type === 'transfer'
-    ? `${whName(m.warehouse_id)} → ${whName(m.warehouse_to_id)}`
-    : [rName(m.recipient_id), bName(m.branch_id), whName(m.warehouse_id) && 'склад ' + whName(m.warehouse_id)].filter(Boolean).join(' · ')
+  const sub = (m) => {
+    if (m.annul_of_act) return `Аннулирование акта ${m.annul_of_act} · склад ${whName(m.warehouse_id)}`
+    if (m.type === 'transfer') return `${whName(m.warehouse_id)} → ${whName(m.warehouse_to_id)}`
+    return [rName(m.recipient_id), bName(m.branch_id), whName(m.warehouse_id) && 'склад ' + whName(m.warehouse_id)].filter(Boolean).join(' · ')
+  }
 
   const hierActive = hier.direction_id || hier.product_type_id || hier.campaign_id
   const selStyle = { height: 36, padding: '0 10px', borderRadius: 10, border: '1px solid var(--brd2)', background: 'var(--sur)', fontSize: 12.5, color: 'var(--tx)' }
@@ -148,7 +150,10 @@ export default function Movements({ data, profile, can }) {
               <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderBottom: i < d.items.length - 1 ? '1px solid var(--brd)' : 'none' }}>
                 <div style={{ width: 34, height: 34, borderRadius: 10, background: BG[m.type], display: 'grid', placeItems: 'center', fontSize: 16, flexShrink: 0 }}>{ICO[m.type]}</div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13.5, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pName(m.product_id)}</div>
+                  <div style={{ fontSize: 13.5, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 7 }}>
+                    {pName(m.product_id)}
+                    {m.annul_of_act && <span style={{ fontSize: 9.5, padding: '1px 7px', borderRadius: 20, background: 'var(--rd-l)', color: 'var(--rd-m)', fontWeight: 600 }}>аннулирование</span>}
+                  </div>
                   {sub(m) && <div style={{ fontSize: 11.5, color: 'var(--tx3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sub(m)}</div>}
                 </div>
                 <div style={{ textAlign: 'right', flexShrink: 0 }}>
