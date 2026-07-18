@@ -17,7 +17,8 @@ export default function Requests({ data, profile, can }) {
   const toast = useToast()
   const { requests, products, recipients, branches, warehouses, profiles, freeByWh, stockByWh, reload } = data
   const isAdmin = profile?.role === 'admin'
-  const [tab, setTab] = useState(isAdmin ? 'toissue' : 'mine')
+  const isManager = profile?.role === 'manager'
+  const [tab, setTab] = useState(isAdmin ? 'toissue' : isManager ? 'approve' : 'mine')
   const [form, setForm] = useState(false)
   const [editReq, setEditReq] = useState(null)
   const [issue, setIssue] = useState(null)
@@ -36,11 +37,23 @@ export default function Requests({ data, profile, can }) {
     const cur = currentApprover(approversOf(data.reqApprovers, r.id))
     if (r.status !== 'new' || !cur) return false
     if (cur.in_system) return cur.user_id === profile?.id
-    // Внешний согласующий: подпись приносит автор заявки (он ходил), админ может помочь
-    return r.author_id === profile?.id || profile?.role === 'admin'
+    // Внешний согласующий: подпись приносит только автор заявки
+    return r.author_id === profile?.id
   })
   const inApproval = requests.filter((r) => r.status === 'new')
-  const list = tab === 'toissue' ? toIssue : tab === 'approve' ? toApprove : tab === 'inappr' ? inApproval
+  const branchReq = requests.filter((r) => {
+    const a = (data.profiles || []).find((p) => p.id === r.author_id)
+    return a && a.branch_id === profile?.branch_id
+  })
+  const list =
+    tab === 'toissue' ? toIssue
+    : tab === 'approve' ? toApprove
+    : tab === 'inappr' ? inApproval
+    : tab === 'issued' ? requests.filter((r) => ['issued', 'partial', 'received'].includes(r.status))
+    : tab === 'rejected' ? (isAdmin ? requests : isManager ? branchReq : mine).filter((r) => r.status === 'rejected')
+    : tab === 'branch' ? branchReq
+    : tab === 'inappr_my' ? mine.filter((r) => r.status === 'new')
+    : tab === 'revision_my' ? mine.filter((r) => r.status === 'revision')
     : tab === 'all' ? requests : mine
 
   const act = async (fn, okMsg) => { const { error } = await fn; if (error) return toast(error, 'error'); toast(okMsg); reload() }
@@ -55,8 +68,10 @@ export default function Requests({ data, profile, can }) {
 
       <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap', overflowX: 'auto' }}>
         {(isAdmin
-          ? [['toissue', `К выдаче${toIssue.length ? ' · ' + toIssue.length : ''}`], ['approve', `Мне на подпись${toApprove.length ? ' · ' + toApprove.length : ''}`], ['inappr', 'На согласовании'], ['all', 'Все']]
-          : [['mine', 'Мои заявки'], ['approve', `Мне на согласование${toApprove.length ? ' · ' + toApprove.length : ''}`]]
+          ? [['toissue', `К выдаче${toIssue.length ? ' · ' + toIssue.length : ''}`], ['inappr', 'На согласовании'], ['issued', 'Выданные'], ['rejected', 'Отклонённые'], ['all', 'Все']]
+          : isManager
+            ? [['approve', `Мне на согласование${toApprove.length ? ' · ' + toApprove.length : ''}`], ['mine', 'Мои заявки'], ['branch', 'Заявки филиала'], ['rejected', 'Отклонённые']]
+            : [['mine', 'Все мои заявки'], ['inappr_my', 'На согласовании'], ['revision_my', 'На переделке'], ['rejected', 'Отклонённые']]
         ).map(([t, l]) => (
           <button key={t} onClick={() => setTab(t)} style={{ fontSize: 12.5, padding: '8px 14px', minHeight: 38, borderRadius: 20, border: 'none', whiteSpace: 'nowrap', background: tab === t ? 'var(--ink-l)' : 'var(--sur)', color: tab === t ? 'var(--ink)' : 'var(--tx3)', fontWeight: tab === t ? 600 : 500 }}>{l}</button>
         ))}
@@ -193,7 +208,7 @@ function Card({ r, data, isAdmin, me, pName, rName, bName, profile, onIssue, onA
         const chain = approversOf(data.reqApprovers, r.id)
         const cur = currentApprover(chain)
         if (r.status !== 'new' || !cur) return null
-        const mineTurn = cur.in_system ? cur.user_id === me : (r.author_id === me || isAdmin)
+        const mineTurn = cur.in_system ? cur.user_id === me : r.author_id === me
         if (!mineTurn) return null
         const isExt = !cur.in_system
         return (

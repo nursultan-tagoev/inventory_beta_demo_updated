@@ -5,7 +5,7 @@ import { signersOf, currentSigner } from '../lib/signing'
 import { Badge, Spin } from '../components/ui'
 import { fmt } from '../lib/format'
 
-const ST = { draft: ['Черновик', 'slate'], awaiting_sign: ['Ожидает подписи', 'amber'], signed: ['Подписан (эл.)', 'green'], signed_manual: ['Подписан (скан)', 'green'], annulled: ['Аннулирован', 'red'] }
+const ST = { draft: ['Черновик', 'slate'], awaiting_sign: ['Ждёт подписи получателя', 'amber'], signed: ['Подписан', 'green'], signed_manual: ['Подписан (скан)', 'green'], annulled: ['Аннулирован', 'red'], declined: ['Отказ', 'red'] }
 
 export default function Acts({ data, profile }) {
   const [acts, setActs] = useState(null)

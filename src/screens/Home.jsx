@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { Stat, Btn, Badge, Sheet } from '../components/ui'
 import { signersOf, currentSigner } from '../lib/signing'
+import { approversOf, currentApprover } from '../lib/approval'
 import { fmt, som, TL } from '../lib/format'
 import OperationSheet from '../components/OperationSheet'
 
 export default function Home({ data, profile, can, setView }) {
-  const { products, movements, stock, stockByWh, warehouses, checkouts, recipients, branches, requests, acts, actSigners } = data
+  const { products, movements, stock, stockByWh, warehouses, checkouts, recipients, branches, requests, acts, actSigners, reqApprovers } = data
   const [sheet, setSheet] = useState(null)
   const role = profile?.role || 'employee'
 
@@ -73,13 +74,25 @@ export default function Home({ data, profile, can, setView }) {
 
       {/* Счётчики документооборота */}
       {(() => {
-        const newReq = (requests || []).filter((r) => r.status === 'new' && (role === 'admin' || r.author_id === profile.id))
-        const waitActs = (acts || []).filter((a) => !a.issued && !a.annulled && !a.declined && signersOf(actSigners, a.id).some((s) => s.status === 'waiting'))
-        const mySign = waitActs.filter((a) => { const c = currentSigner(signersOf(actSigners, a.id)); return c && ((c.in_system && c.user_id === profile.id) || (!c.in_system && role === 'admin')) })
         const cards = []
-        if (role === 'admin' && newReq.length) cards.push({ ico: '📥', l: 'Новые заявки', n: newReq.length, c: 'var(--ink)', bg: 'var(--ink-l)', to: 'requests' })
-        if (mySign.length) cards.push({ ico: '✍️', l: 'Мне на подпись', n: mySign.length, c: 'var(--ink)', bg: 'var(--ink-l)', to: 'acts' })
-        if (role === 'admin' && waitActs.length) cards.push({ ico: '📄', l: 'Ждут подписи', n: waitActs.length, c: 'var(--am-m)', bg: 'var(--am-l)', to: 'acts' })
+        // На моём согласовании
+        const onMe = (requests || []).filter((r) => {
+          if (r.status !== 'new') return false
+          const c = currentApprover(approversOf(reqApprovers, r.id))
+          if (!c) return false
+          return c.in_system ? c.user_id === profile.id : r.author_id === profile.id
+        })
+        if (onMe.length) cards.push({ ico: '✍️', l: 'На вашем согласовании', n: onMe.length, c: 'var(--ink)', bg: 'var(--ink-l)', to: 'requests' })
+        // Админу — к выдаче
+        if (role === 'admin') {
+          const toIssue = (requests || []).filter((r) => r.status === 'approved')
+          if (toIssue.length) cards.push({ ico: '📤', l: 'К выдаче', n: toIssue.length, c: 'var(--gr-m)', bg: 'var(--gr-l)', to: 'requests' })
+        }
+        // Заявителю — свои в работе
+        if (role !== 'admin') {
+          const myActive = (requests || []).filter((r) => r.author_id === profile.id && ['new', 'approved', 'revision'].includes(r.status))
+          if (myActive.length) cards.push({ ico: '📋', l: 'Мои в работе', n: myActive.length, c: 'var(--am-m)', bg: 'var(--am-l)', to: 'requests' })
+        }
         if (!cards.length) return null
         return <div className="home-actions" style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(cards.length, 3)},1fr)`, gap: 12, marginBottom: 18 }}>
           {cards.map((c) => (
