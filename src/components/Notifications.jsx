@@ -72,8 +72,11 @@ export default function Notifications({ profile, onOpen }) {
 
             {actions.length > 0 && (
               <div style={{ border: '1.5px solid var(--ink)', borderRadius: 12, padding: '11px 13px', marginBottom: 13 }}>
-                <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', color: 'var(--ink)', marginBottom: 6 }}>Требует действия · {actions.length}</div>
-                {actions.map((n) => <Row key={n.id} n={n} dismissable={false} onGo={go} onRead={readOne} />)}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                  <span style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', color: 'var(--ink)' }}>Требует действия · {actions.length}</span>
+                  <button onClick={async () => { await markSeen(actions.map((n) => n.id)); load() }} style={{ marginLeft: 'auto', fontSize: 10.5, color: 'var(--tx3)' }}>скрыть все</button>
+                </div>
+                {actions.map((n) => <Row key={n.id} n={n} dismissable onGo={go} onRead={readOne} />)}
               </div>
             )}
 

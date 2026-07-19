@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { supabase } from '../supabaseClient'
-import { push } from '../lib/notify'
+import { push, clearFor } from '../lib/notify'
 import { Btn } from './ui'
 
 /* Чат уточнения внутри заявки — пишут все участники */
@@ -20,6 +20,8 @@ export default function RequestChat({ req, data, profile, compact }) {
     setBusy(false)
     if (error) return
     setText('')
+    // ответил — вопрос для меня закрыт
+    await clearFor('request', req.id, profile.id)
     // уведомляем остальных участников
     const parts = new Set()
     if (req.author_id) parts.add(req.author_id)
