@@ -49,7 +49,13 @@ export default function App() {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session || null))
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setSession(s || null))
+    // Обновляем только при реальной смене пользователя — иначе лишние перерисовки
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
+      setSession((prev) => {
+        const a = prev?.user?.id || null, b = s?.user?.id || null
+        return a === b ? prev : (s || null)
+      })
+    })
     return () => sub.subscription.unsubscribe()
   }, [])
 
