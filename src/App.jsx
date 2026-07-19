@@ -4,6 +4,7 @@ import { useAppData } from './lib/data'
 import { Spin, ToastProvider } from './components/ui'
 import Login from './components/Login'
 import Sidebar from './components/Sidebar'
+import Notifications from './components/Notifications'
 import Home from './screens/Home'
 import Items from './screens/Items'
 import Movements from './screens/Movements'
@@ -93,6 +94,16 @@ export default function App() {
       <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
         <Sidebar view={safeView} setView={setView} profile={profile} onLogout={logout} branchName={(data.branches || []).find((b) => b.id === profile?.branch_id)?.name} badges={{ requests: (data.requests || []).filter((r) => r.status === 'new' && (role === 'admin' || r.author_id === profile.id)).length }} />
         <main style={{ flex: 1, overflow: 'auto', position: 'relative' }}>
+          <div className="top-bar" style={{ position: 'sticky', top: 0, zIndex: 40, display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', background: 'var(--bg)', borderBottom: '1px solid var(--brd)' }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{profile?.full_name || profile?.email}</div>
+              <div style={{ fontSize: 10.5, color: 'var(--tx3)' }}>
+                {({ admin: 'склад', manager: 'руководитель филиала', employee: 'специалист', director: 'директор' })[role] || role}
+                {profile?.branch_id ? ' · ' + ((data.branches || []).find((b) => b.id === profile.branch_id)?.name || '') : ''}
+              </div>
+            </div>
+            <Notifications profile={profile} onOpen={(n) => { if (n.entity === 'request') setView('requests'); if (n.entity === 'act') setView('acts') }} />
+          </div>
           {data.loading && <div style={{ position: 'absolute', top: 14, right: 18, zIndex: 5 }}><Spin s={18} /></div>}
           {data.error && <div style={{ padding: '10px 24px', background: 'var(--am-l)', color: 'var(--am-m)', fontSize: 12.5, borderBottom: '1px solid var(--am)' }}>Доступ к данным закрыт: {data.error}. Проверьте, что выполнены RLS-политики.</div>}
           <ErrorBoundary k={safeView}>{SCREENS[safeView]}</ErrorBoundary>

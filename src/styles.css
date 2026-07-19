@@ -1,23 +1,40 @@
 :root{
   --f:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;--ff:'Fraunces',Georgia,serif;--mono:'JetBrains Mono',ui-monospace,monospace;
-  --bg:#F6F7F9;--sur:#fff;--sur2:#F1F3F6;--brd:#E8EBF0;--brd2:#DCE0E8;
-  --tx:#0F1218;--tx2:#535D6D;--tx3:#949CAB;
-  --ink:#4B45E4;--ink-h:#3A34C9;--ink-l:#EEEDFF;
-  --gr:#0E9E72;--gr-l:#E7F7F0;--gr-m:#0B7E5B;--rd:#E14B4B;--rd-l:#FDECEC;--rd-m:#C13A3A;
-  --am:#D9820A;--am-l:#FCF3E4;--am-m:#B26907;--pu:#7C5CF6;--pu-l:#F1EDFE;
-  --nav:#12151B;--nav2:#1A1E27;--nav3:#262B36;--navm:#8A93A3;
-  --sh:0 1px 2px rgba(16,18,24,.04),0 1px 3px rgba(16,18,24,.06);
-  --sh2:0 2px 8px rgba(16,18,24,.06),0 8px 24px rgba(16,18,24,.07);
-  --sh3:0 24px 60px rgba(16,18,24,.16);--r:16px;
+  /* Тёплая основа */
+  --bg:#FDF8F0;--sur:#FFFCF7;--sur2:#F7F1E7;--brd:#ECE0CF;--brd2:#E0D2BE;
+  --tx:#3D372F;--tx2:#6B6255;--tx3:#96897A;
+  /* Акцент — тёплый сиреневый */
+  --ink:#6B5CE0;--ink-h:#5A4AD0;--ink-l:#F0ECFD;
+  /* Операции */
+  --gr:#5D8F63;--gr-l:#EAF3EA;--gr-m:#4A7850;--rd:#C4574A;--rd-l:#FAECE7;--rd-m:#A8463A;
+  --am:#C08A3E;--am-l:#FAF1E0;--am-m:#A0722F;--pu:#8B5A8C;--pu-l:#F5ECF5;
+  /* Оттенки разделов */
+  --sec-req:#6B5CE0;--sec-req-l:#F0ECFD;
+  --sec-cat:#5D8F63;--sec-cat-l:#EAF3EA;
+  --sec-mov:#C08A3E;--sec-mov-l:#FAF1E0;
+  --sec-act:#B5654A;--sec-act-l:#FAECE7;
+  --sec-inv:#4A7BA7;--sec-inv-l:#E9F1F7;
+  --sec-ana:#8B5A8C;--sec-ana-l:#F5ECF5;
+  /* Меню */
+  --nav:#2E2A24;--nav2:#3A352D;--nav3:#4A443A;--navm:#A99C8B;
+  --sh:0 1px 2px rgba(61,55,47,.04),0 2px 6px rgba(61,55,47,.05);
+  --sh2:0 4px 14px rgba(61,55,47,.06),0 10px 28px rgba(61,55,47,.07);
+  --sh3:0 22px 56px rgba(61,55,47,.14);--r:16px;
 }
 [data-theme="dark"]{
-  --bg:#0A0C10;--sur:#12151B;--sur2:#171B22;--brd:#232833;--brd2:#2E3542;
-  --tx:#F1F3F7;--tx2:#A5AEBF;--tx3:#6A7382;
-  --ink:#7A74FF;--ink-h:#948FFF;--ink-l:#1B1B33;
-  --gr:#2CC28E;--gr-l:#0F2620;--gr-m:#2CC28E;--rd:#F26A6A;--rd-l:#2A1618;--rd-m:#F26A6A;
-  --am:#E8A13C;--am-l:#2A2113;--am-m:#E8A13C;--pu:#9E86FF;--pu-l:#211D38;
-  --nav:#0E1116;--nav2:#171B22;--nav3:#232833;--navm:#6A7382;
-  --sh:0 1px 2px rgba(0,0,0,.4);--sh2:0 2px 10px rgba(0,0,0,.5);--sh3:0 24px 60px rgba(0,0,0,.6);
+  --bg:#1A1713;--sur:#221E19;--sur2:#2B261F;--brd:#3A342B;--brd2:#4A4237;
+  --tx:#F2EDE4;--tx2:#B5AA9A;--tx3:#8A7F70;
+  --ink:#9B8AF0;--ink-h:#B0A2F5;--ink-l:#2A2440;
+  --gr:#7DAE83;--gr-l:#1E2A20;--gr-m:#7DAE83;--rd:#D97A6C;--rd-l:#2E1E1A;--rd-m:#D97A6C;
+  --am:#D9A55E;--am-l:#2E2618;--am-m:#D9A55E;--pu:#AE7CAF;--pu-l:#2A2029;
+  --sec-req:#9B8AF0;--sec-req-l:#2A2440;
+  --sec-cat:#7DAE83;--sec-cat-l:#1E2A20;
+  --sec-mov:#D9A55E;--sec-mov-l:#2E2618;
+  --sec-act:#D08770;--sec-act-l:#2E1F1A;
+  --sec-inv:#6E9FC4;--sec-inv-l:#1B2630;
+  --sec-ana:#AE7CAF;--sec-ana-l:#2A2029;
+  --nav:#141210;--nav2:#221E19;--nav3:#2E2820;--navm:#8A7F70;
+  --sh:0 1px 2px rgba(0,0,0,.4);--sh2:0 4px 16px rgba(0,0,0,.45);--sh3:0 24px 60px rgba(0,0,0,.6);
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 body{font-family:var(--f);background:var(--bg);color:var(--tx);height:100vh;overflow:hidden;line-height:1.5;font-size:14px;-webkit-font-smoothing:antialiased;transition:background .3s,color .3s}
@@ -96,3 +113,11 @@ input,select,textarea{font-family:inherit;outline:none;color:inherit}
 /* Отклик на тап */
 button, .tapable { transition: transform .1s ease, opacity .1s ease; }
 button:active { transform: scale(.97); }
+
+/* Шторка уведомлений */
+@keyframes notifDrop { from { transform: translateY(-100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+.notif-panel { animation: notifDrop .26s cubic-bezier(.32,.72,0,1); }
+/* Логотип входа — по центру только на телефоне */
+@media (min-width: 861px) { .login-mark { align-items: flex-start !important; } .login-mark > div:last-child { text-align: left !important; } }
+/* Шапка с колокольчиком — на десктопе компактнее */
+@media (min-width: 861px) { .top-bar { justify-content: flex-end; } .top-bar > div:first-child { display: none; } }
