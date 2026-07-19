@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { Btn, useToast } from './ui'
 import { fmt } from '../lib/format'
 import { openFile } from '../lib/requests'
+import { printDoc } from '../lib/print'
 import { approversOf, currentApprover, approveOnScreen, approveByScan, declineApproval, revokeApproval } from '../lib/approval'
 
 function SignPad({ onRef }) {
@@ -40,7 +41,8 @@ export default function ApprovalSheet({ req, data, profile, onClose, onDone }) {
   const chain = approversOf(reqApprovers, req.id)
   const cur = currentApprover(chain)
   const isMyTurn = cur && cur.in_system && cur.user_id === profile.id
-  const isExternal = cur && !cur.in_system && (req.author_id === profile.id || profile.role === 'admin')
+  const prevInSystem = cur ? chain.filter((a) => a.order_no < cur.order_no && a.in_system).slice(-1)[0] : null
+  const isExternal = cur && !cur.in_system && ((prevInSystem && prevInSystem.user_id === profile.id) || req.author_id === profile.id || profile.role === 'admin')
   const mineDone = chain.find((a) => a.user_id === profile.id && a.status === 'approved')
   const pName = (id) => products.find((p) => p.id === id)?.name || '—'
   const rName = (id) => recipients.find((r) => r.id === id)?.name || ''
@@ -269,7 +271,7 @@ export default function ApprovalSheet({ req, data, profile, onClose, onDone }) {
         )}
 
         <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-          <Btn v="secondary" onClick={() => window.print()} style={{ flex: 1, minHeight: 44 }}>🖨 Печать</Btn>
+          <Btn v="secondary" onClick={() => printDoc('req-print')} style={{ flex: 1, minHeight: 44 }}>🖨 Печать</Btn>
           <Btn v="secondary" onClick={onClose} style={{ flex: 1, minHeight: 44 }}>Закрыть</Btn>
         </div>
       </div>
