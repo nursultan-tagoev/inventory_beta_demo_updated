@@ -1,344 +1,385 @@
-import { useState, useMemo } from 'react'
-import { Btn, Field, Input, Select, Badge, Sheet, useToast } from '../components/ui'
-import { chainOf, freeAll, freeAt } from '../lib/data'
+import { useState, useEffect } from 'react'
+import { Btn, Badge, Sheet, useToast } from '../components/ui'
+import { chainOf, freeAll } from '../lib/data'
 import { createRequest, updateRequest, setStatus, cancelRequest, closePartial, issueRequest, openFile } from '../lib/requests'
-import { buildApprovalChain, approversOf, currentApprover, createApprovalChain, chainComplete, sendToWarehouse, approveInSystem, approveByScan } from '../lib/approval'
+import { buildApprovalChain, approversOf, currentApprover, createApprovalChain, chainComplete, sendToWarehouse, approveInSystem } from '../lib/approval'
+import { canArchive, canDelete, archiveRequest, deleteRequest } from '../lib/lifecycle'
+import { push, clearFor } from '../lib/notify'
 import ApprovalSheet from '../components/ApprovalSheet'
+import RequestChat from '../components/RequestChat'
 
+const SEC = 'var(--sec-req)', SEC_L = 'var(--sec-req-l)'
 const ST = {
-  new: ['На согласовании', 'amber'], approved: ['Согласована — к выдаче', 'green'],
+  new: ['На согласовании', 'amber'], approved: ['К выдаче', 'green'],
   issued: ['Выдано', 'ink'], partial: ['Выдано частично', 'amber'],
-  rejected: ['Отклонена', 'red'], revision: ['На переделке', 'amber'], received: ['Получено', 'ink'],
+  received: ['Завершена', 'slate'], rejected: ['Отклонена', 'red'], revision: ['На переделке', 'amber'],
 }
-const KIND = { receive: 'на получение', issue: 'на выдачу' }
-const PRIO = { low: ['Низкий', 'slate'], normal: ['Обычный', 'slate'], urgent: ['Срочно', 'red'] }
+const PRIO = { low: 'Низкий', normal: '', urgent: 'Срочно' }
 
-export default function Requests({ data, profile, can }) {
+export default function Requests({ data, profile, can, draftItems, onDraftUsed }) {
   const toast = useToast()
-  const { requests, products, recipients, branches, warehouses, profiles, freeByWh, stockByWh, reload } = data
-  const isAdmin = profile?.role === 'admin'
-  const isManager = profile?.role === 'manager'
-  const [tab, setTab] = useState(isAdmin ? 'toissue' : isManager ? 'approve' : 'all')
+  const { requests, products, branches, profiles, reqApprovers, reload } = data
+  const role = profile?.role
+  const isAdmin = role === 'admin'
+  const isManager = role === 'manager'
+  const me = profile?.id
+
+  const [tab, setTab] = useState('all')
   const [form, setForm] = useState(false)
   const [editReq, setEditReq] = useState(null)
+  const [openId, setOpenId] = useState(null)      // раскрытая карточка
   const [issue, setIssue] = useState(null)
   const [apprSheet, setApprSheet] = useState(null)
   const [reject, setReject] = useState(null)
+  const [confirmDel, setConfirmDel] = useState(null)
+
+  // черновик из каталога
+  useEffect(() => { if (draftItems?.length) { setEditReq(null); setForm(true) } }, [draftItems])
 
   const pName = (id) => products.find((p) => p.id === id)?.name || '—'
-  const rName = (id) => recipients.find((r) => r.id === id)?.name || ''
   const bName = (id) => branches.find((b) => b.id === id)?.name || ''
+  const uName = (id) => { const p = profiles.find((x) => x.id === id); return p?.full_name || p?.email || '' }
 
-  const mine = requests.filter((r) => r.author_id === profile?.id)
-  // На исполнение — только согласованные
-  const toIssue = requests.filter((r) => r.status === 'approved' && r.sent_at)
-  // Мне на согласование
-  const toApprove = requests.filter((r) => {
-    const cur = currentApprover(approversOf(data.reqApprovers, r.id))
-    if (r.status !== 'new' || !cur) return false
-    if (cur.in_system) return cur.user_id === profile?.id
-    const chain = approversOf(data.reqApprovers, r.id)
-    const prev = chain.filter((a) => a.order_no < cur.order_no && a.in_system).slice(-1)[0]
-    return (prev && prev.user_id === profile?.id) || r.author_id === profile?.id
-  })
-  // Собранные, но не отправленные — тоже требуют действия
-  const toSend = requests.filter((r) => {
-    if (r.status !== 'new' || r.sent_at) return false
-    const chain = approversOf(data.reqApprovers, r.id)
-    if (!chainComplete(chain)) return false
-    const lastIn = chain.filter((a) => a.in_system).slice(-1)[0]
-    return (lastIn && lastIn.user_id === profile?.id) || r.author_id === profile?.id
-  })
-  const inApproval = requests.filter((r) => r.status === 'new')
+  // Область видимости
+  const mine = requests.filter((r) => r.author_id === me)
   const branchReq = requests.filter((r) => {
-    const a = (data.profiles || []).find((p) => p.id === r.author_id)
+    const a = profiles.find((p) => p.id === r.author_id)
     return a && a.branch_id === profile?.branch_id
   })
-  // Область видимости: админ/директор — все, менеджер — свой филиал, спец — свои
-  const scope = isAdmin || profile?.role === 'director' ? requests : isManager ? branchReq : mine
+  const scopeAll = isAdmin || role === 'director' ? requests : isManager ? branchReq : mine
+  const scope = scopeAll.filter((r) => !r.archived)
+
+  // Требует действия
+  const needAction = scope.filter((r) => {
+    if (isAdmin && r.status === 'approved' && r.sent_at) return true
+    if (r.status !== 'new') return false
+    const chain = approversOf(reqApprovers, r.id)
+    const cur = currentApprover(chain)
+    if (cur) {
+      if (cur.in_system) return cur.user_id === me
+      const prev = chain.filter((a) => a.order_no < cur.order_no && a.in_system).slice(-1)[0]
+      return (prev && prev.user_id === me) || r.author_id === me
+    }
+    // всё согласовано, но не отправлено
+    if (chainComplete(chain) && !r.sent_at) {
+      const lastIn = chain.filter((a) => a.in_system).slice(-1)[0]
+      return (lastIn && lastIn.user_id === me) || r.author_id === me
+    }
+    return false
+  })
+
+  const TABS = [
+    ...(needAction.length ? [['action', `Требует действия · ${needAction.length}`]] : []),
+    ['all', 'Все заявки'],
+    ['new', 'На согласовании'],
+    ['revision', 'На переделке'],
+    ['rejected', 'Отклонённые'],
+    ['approved', 'К выдаче'],
+    ['done', 'Завершённые'],
+    ['archive', 'Архив'],
+  ]
   const list =
-    tab === 'toissue' ? toIssue
-    : tab === 'approve' ? [...toApprove, ...toSend.filter((x) => !toApprove.find((y) => y.id === x.id))]
-    : tab === 'toissue2' ? scope.filter((r) => r.status === 'approved')
-    : tab === 'inappr' ? scope.filter((r) => r.status === 'new')
-    : tab === 'issued' ? scope.filter((r) => ['issued', 'partial'].includes(r.status))
-    : tab === 'done' ? scope.filter((r) => r.status === 'received')
+    tab === 'action' ? needAction
+    : tab === 'archive' ? scopeAll.filter((r) => r.archived)
+    : tab === 'new' ? scope.filter((r) => r.status === 'new')
     : tab === 'revision' ? scope.filter((r) => r.status === 'revision')
     : tab === 'rejected' ? scope.filter((r) => r.status === 'rejected')
+    : tab === 'approved' ? scope.filter((r) => r.status === 'approved')
+    : tab === 'done' ? scope.filter((r) => ['issued', 'partial', 'received'].includes(r.status))
     : scope
 
-  const act = async (fn, okMsg) => { const { error } = await fn; if (error) return toast(error, 'error'); toast(okMsg); reload() }
-
-  // Согласовать нажатием (пользователь в системе)
+  /* ── Действия ── */
   const approveNow = async (r, appr) => {
-    if (!appr) return
     const { error } = await approveInSystem(appr, profile.id, r.id)
     if (error) return toast(error, 'error')
+    await clearFor('request', r.id, me)
+    // уведомляем следующего
+    const chain = approversOf(reqApprovers, r.id)
+    const next = chain.find((a) => a.order_no > appr.order_no && a.status === 'waiting')
+    if (next?.in_system && next.user_id) {
+      await push({ userId: next.user_id, kind: 'to_approve', action: true,
+        title: `Заявка №${r.id} ждёт согласования`, body: r.purpose || '', entity: 'request', entityId: r.id })
+    }
+    if (r.author_id && r.author_id !== me) {
+      await push({ userId: r.author_id, kind: 'approved', action: false,
+        title: `Заявку №${r.id} согласовали`, body: uName(me), entity: 'request', entityId: r.id })
+    }
     toast('Согласовано'); reload()
   }
-  // Отправить на склад
+
   const sendNow = async (r) => {
     const { error } = await sendToWarehouse(r.id, profile.id)
     if (error) return toast(error, 'error')
-    toast('Заявка отправлена на склад'); reload()
+    const admin = profiles.find((p) => p.role === 'admin')
+    if (admin) await push({ userId: admin.id, kind: 'to_issue', action: true,
+      title: `Заявка №${r.id} к выдаче`, body: `${bName(r.branch_id)} · ${r.purpose || ''}`, entity: 'request', entityId: r.id })
+    if (r.author_id && r.author_id !== me) await push({ userId: r.author_id, kind: 'approved', action: false,
+      title: `Заявка №${r.id} отправлена на склад`, body: 'ожидает выдачи', entity: 'request', entityId: r.id })
+    toast('Отправлено на склад'); reload()
+  }
+
+  const doArchive = async (r) => {
+    const { error } = await archiveRequest(r, profile)
+    if (error) return toast(error, 'error')
+    toast('В архиве'); reload()
+  }
+  const doDelete = async (r) => {
+    const { error } = await deleteRequest(r, profile, null)
+    if (error) return toast(error, 'error')
+    setConfirmDel(null); toast('Заявка удалена'); reload()
   }
 
   return (
-    <div style={{ maxWidth: 900, margin: '0 auto', padding: '24px 20px 90px', animation: 'fadeUp .3s ease' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
-        <span className="ff" style={{ fontSize: 21, fontWeight: 600 }}>Заявки</span>
-        {isAdmin && toIssue.length > 0 && <Badge color="green">{toIssue.length} к выдаче</Badge>}
-        {!isAdmin && <Btn size="sm" onClick={() => { setEditReq(null); setForm(true) }} style={{ marginLeft: 'auto' }}>＋ Новая заявка</Btn>}
+    <div style={{ maxWidth: 900, margin: '0 auto', padding: '20px 18px 90px', animation: 'fadeUp .3s ease' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 11, marginBottom: 13, flexWrap: 'wrap' }}>
+        <span className="ff" style={{ fontSize: 20, fontWeight: 600 }}>Заявки</span>
+        {!isAdmin && role !== 'director' && (
+          <Btn size="sm" onClick={() => { setEditReq(null); setForm(true) }} style={{ marginLeft: 'auto', minHeight: 40 }}>＋ Новая</Btn>
+        )}
       </div>
 
-      <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap', overflowX: 'auto' }}>
-        {[
-          ...(isAdmin ? [['toissue', `К выдаче${toIssue.length ? ' · ' + toIssue.length : ''}`]] : []),
-          ...(toApprove.length + toSend.length || isManager ? [['approve', `Требует действия${toApprove.length + toSend.length ? ' · ' + (toApprove.length + toSend.length) : ''}`]] : []),
-          ['all', 'Все заявки'],
-          ['inappr', 'На согласовании'],
-          ['toissue2', 'К выдаче'],
-          ['issued', 'Выданные'],
-          ['revision', 'На переделке'],
-          ['rejected', 'Отклонённые'],
-          ['done', 'Завершённые'],
-        ].map(([t, l]) => (
-          <button key={t} onClick={() => setTab(t)} style={{ fontSize: 12.5, padding: '8px 14px', minHeight: 38, borderRadius: 20, border: 'none', whiteSpace: 'nowrap', background: tab === t ? 'var(--ink-l)' : 'var(--sur)', color: tab === t ? 'var(--ink)' : 'var(--tx3)', fontWeight: tab === t ? 600 : 500 }}>{l}</button>
+      {/* Вкладки */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 14, overflowX: 'auto', paddingBottom: 2 }}>
+        {TABS.map(([t, l]) => (
+          <button key={t} onClick={() => setTab(t)} style={{
+            fontSize: 12, padding: '8px 13px', minHeight: 38, borderRadius: 20, border: 'none', whiteSpace: 'nowrap',
+            background: tab === t ? SEC_L : 'var(--sur)', color: tab === t ? SEC : 'var(--tx3)', fontWeight: tab === t ? 600 : 500,
+          }}>{l}</button>
         ))}
       </div>
 
-      {!list.length && <div className="card" style={{ padding: 44, textAlign: 'center' }}>
-        <div style={{ fontSize: 32, marginBottom: 10 }}>📋</div>
-        <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 5 }}>{isAdmin ? 'Заявок нет' : 'У вас пока нет заявок'}</div>
-        <div style={{ fontSize: 12, color: 'var(--tx3)' }}>{isAdmin ? 'Новые появятся здесь автоматически' : 'Создайте первую — укажите товары и основание'}</div>
-      </div>}
+      {list.length === 0 && (
+        <div className="card" style={{ padding: 40, textAlign: 'center' }}>
+          <div style={{ fontSize: 30, marginBottom: 9 }}>📋</div>
+          <div style={{ fontSize: 13.5, fontWeight: 600, marginBottom: 4 }}>Здесь пусто</div>
+          <div style={{ fontSize: 11.5, color: 'var(--tx3)' }}>
+            {tab === 'action' ? 'Ничего не требует вашего участия' : isAdmin ? 'Заявки появятся, когда филиалы их отправят' : 'Создайте первую заявку'}
+          </div>
+        </div>
+      )}
 
-      {list.map((r) => (
-        <Card key={r.id} r={r} data={data} isAdmin={isAdmin} me={profile?.id} profile={profile} pName={pName} rName={rName} bName={bName}
-          onIssue={() => setIssue(r)} onApprove={() => setApprSheet(r)} onApproveNow={approveNow} onSend={sendNow}
-          onReject={() => setReject({ req: r, mode: 'reject' })}
-          onRevision={() => setReject({ req: r, mode: 'revision' })}
-          onEdit={() => { setEditReq(r); setForm(true) }}
-          onCancel={() => act(cancelRequest(r.id), 'Заявка отменена')}
-          onReceived={() => act(setStatus(r.id, 'received'), 'Получение подтверждено')}
-          onClosePartial={() => act(closePartial(r.id), 'Заявка завершена')} />
-      ))}
+      {list.map((r) => {
+        const st = ST[r.status] || ST.new
+        const chain = approversOf(reqApprovers, r.id)
+        const cur = currentApprover(chain)
+        const open = openId === r.id
+        const msgCount = (data.reqMessages || []).filter((m) => m.request_id === r.id).length
 
-      <Sheet open={form} onClose={() => setForm(false)} title={editReq ? 'Изменить заявку' : 'Новая заявка'}>
-        {form && <RequestForm data={data} profile={profile} editReq={editReq} onDone={() => { setForm(false); reload() }} />}
+        // Что могу я
+        const prevIn = cur ? chain.filter((a) => a.order_no < cur.order_no && a.in_system).slice(-1)[0] : null
+        const myTurn = cur && cur.in_system && cur.user_id === me
+        const canAttach = cur && !cur.in_system && ((prevIn && prevIn.user_id === me) || r.author_id === me)
+        const lastIn = chain.filter((a) => a.in_system).slice(-1)[0]
+        const canSend = chainComplete(chain) && !r.sent_at && ((lastIn && lastIn.user_id === me) || r.author_id === me)
+        const onMe = myTurn || canAttach || canSend || (isAdmin && r.status === 'approved' && r.sent_at)
+
+        const mySigned = chain.find((a) => a.in_system && a.user_id === me && a.status === 'approved')
+
+        return (
+          <div key={r.id} className="card" style={{ marginBottom: 9, overflow: 'hidden', border: onMe ? `1.5px solid ${SEC}` : '1px solid var(--brd)' }}>
+
+            {/* Компактная строка */}
+            <div onClick={() => setOpenId(open ? null : r.id)} style={{ padding: '13px 15px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 11 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 4 }}>
+                  <span className="mono" style={{ fontSize: 11, color: 'var(--tx3)' }}>№{r.id}</span>
+                  <Badge color={st[1]}>{st[0]}</Badge>
+                  {r.priority === 'urgent' && <Badge color="red">Срочно</Badge>}
+                  {onMe && <Badge color="ink">на вашей стороне</Badge>}
+                  {msgCount > 0 && <span style={{ fontSize: 10, color: 'var(--pu)' }}>💬 {msgCount}</span>}
+                </div>
+                <div style={{ fontSize: 13.5, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {r.items.map((it) => `${it.approved_qty ?? it.qty} × ${pName(it.product_id)}`).join(' · ')}
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--tx3)', marginTop: 2 }}>
+                  {[uName(r.author_id), bName(r.branch_id), new Date(r.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })].filter(Boolean).join(' · ')}
+                </div>
+              </div>
+              <span style={{ fontSize: 13, color: 'var(--tx3)', flexShrink: 0 }}>{open ? '▾' : '▸'}</span>
+            </div>
+
+            {/* Раскрытые детали */}
+            {open && (
+              <div style={{ padding: '0 15px 15px', borderTop: '1px solid var(--brd)' }}>
+
+                {/* Позиции */}
+                <div style={{ padding: '11px 0' }}>
+                  {r.items.map((it, i) => (
+                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, padding: '4px 0' }}>
+                      <span>{pName(it.product_id)}</span>
+                      <span className="mono" style={{ color: 'var(--tx3)' }}>
+                        {it.approved_qty != null && it.approved_qty !== it.qty
+                          ? <>{it.approved_qty} <span style={{ fontSize: 10 }}>(просили {it.qty})</span></>
+                          : it.qty} шт
+                      </span>
+                    </div>
+                  ))}
+                  {r.purpose && <div style={{ fontSize: 11.5, color: 'var(--tx3)', marginTop: 6 }}>Цель: {r.purpose}</div>}
+                </div>
+
+                {/* Основание */}
+                {r.basis_type === 'sz' && r.sz_number && (
+                  <div style={{ padding: '10px 12px', background: 'var(--bg)', borderRadius: 10, fontSize: 11.5, marginBottom: 10 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                      <span style={{ color: 'var(--tx3)' }}>Записка:</span>
+                      <span className="mono">{r.sz_number}{r.sz_date ? ' от ' + new Date(r.sz_date).toLocaleDateString('ru-RU') : ''}</span>
+                    </div>
+                    {r.sz_approvers && <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 7 }}>
+                      <span style={{ color: 'var(--tx3)' }}>Согласовали:</span><span style={{ textAlign: 'right' }}>{r.sz_approvers}</span>
+                    </div>}
+                    {r.sz_scan_path && <button onClick={async () => { const { error } = await openFile(r.sz_scan_path); if (error) toast(error, 'error') }}
+                      style={{ width: '100%', minHeight: 38, border: `1px solid ${SEC}`, borderRadius: 9, background: SEC_L, color: SEC, fontSize: 12, fontWeight: 600 }}>
+                      📄 Открыть записку
+                    </button>}
+                  </div>
+                )}
+
+                {r.priority === 'urgent' && r.urgent_reason && (
+                  <div style={{ padding: '9px 12px', background: 'var(--rd-l)', borderRadius: 9, fontSize: 11.5, color: 'var(--rd-m)', marginBottom: 10 }}>
+                    <b>Срочно:</b> {r.urgent_reason}
+                  </div>
+                )}
+
+                {r.admin_comment && ['rejected', 'revision'].includes(r.status) && (
+                  <div style={{ padding: '9px 12px', background: r.status === 'rejected' ? 'var(--rd-l)' : 'var(--am-l)', borderRadius: 9, fontSize: 11.5, color: r.status === 'rejected' ? 'var(--rd-m)' : 'var(--am-m)', marginBottom: 10 }}>
+                    <b>{r.status === 'rejected' ? 'Причина: ' : 'Комментарий: '}</b>{r.admin_comment}
+                  </div>
+                )}
+
+                {/* Цепочка */}
+                {chain.length > 0 && (
+                  <div style={{ padding: '10px 12px', background: 'var(--bg)', borderRadius: 10, marginBottom: 10 }}>
+                    {chain.map((a, i) => (
+                      <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '5px 0' }}>
+                        <span style={{ width: 18, height: 18, borderRadius: '50%', display: 'grid', placeItems: 'center', fontSize: 10, color: '#fff', flexShrink: 0,
+                          background: a.status === 'approved' ? 'var(--gr)' : a.status === 'declined' ? 'var(--rd)' : (cur && a.id === cur.id) ? SEC : 'var(--sur2)',
+                          border: a.status === 'waiting' && (!cur || a.id !== cur.id) ? '1px solid var(--brd2)' : 'none' }}>
+                          {a.status === 'approved' ? '✓' : a.status === 'declined' ? '×' : ''}
+                        </span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 12, fontWeight: 500 }}>{a.approver_name}
+                            {!a.in_system && <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 20, background: 'var(--am-l)', color: 'var(--am-m)', marginLeft: 6 }}>вне системы</span>}
+                          </div>
+                          <div style={{ fontSize: 10, color: 'var(--tx3)' }}>
+                            {a.approver_role}
+                            {a.status === 'approved' && a.acted_at ? ` · ${new Date(a.acted_at).toLocaleDateString('ru-RU')}` : ''}
+                            {a.status === 'declined' ? ` · отказ: ${a.decline_reason || ''}` : ''}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    {r.sent_at && <div style={{ fontSize: 10.5, color: 'var(--gr-m)', marginTop: 6, paddingTop: 6, borderTop: '1px solid var(--brd)' }}>
+                      Отправлено на склад {new Date(r.sent_at).toLocaleDateString('ru-RU')}
+                    </div>}
+                  </div>
+                )}
+
+                {/* Три шага согласования */}
+                {r.status === 'new' && (myTurn || canAttach || canSend || mySigned) && (
+                  <div style={{ marginBottom: 10 }}>
+                    {(myTurn || mySigned) && (
+                      <div style={{ border: mySigned ? '1px solid var(--brd)' : `1.5px solid ${SEC}`, borderRadius: 11, padding: 12, marginBottom: 8 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: mySigned ? 0 : 9 }}>
+                          <span className="mono" style={{ width: 21, height: 21, borderRadius: 6, display: 'grid', placeItems: 'center', fontSize: 10.5, fontWeight: 700,
+                            background: mySigned ? 'var(--gr-l)' : SEC_L, color: mySigned ? 'var(--gr-m)' : SEC }}>{mySigned ? '✓' : '1'}</span>
+                          <span style={{ fontSize: 12, fontWeight: 600 }}>Ваше согласование</span>
+                          {mySigned && <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--gr-m)' }}>готово</span>}
+                        </div>
+                        {!mySigned && (
+                          <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
+                            <Btn size="sm" onClick={() => approveNow(r, cur)} style={{ flex: 1, minWidth: 120, minHeight: 44 }}>✓ Согласовать</Btn>
+                            <Btn size="sm" v="secondary" onClick={() => setReject({ req: r, mode: 'revision' })} style={{ minHeight: 44 }}>Переделка</Btn>
+                            <Btn size="sm" v="secondary" onClick={() => setReject({ req: r, mode: 'reject' })} style={{ minHeight: 44 }}>Отклонить</Btn>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {chain.some((a) => !a.in_system) && (
+                      <div style={{ border: canAttach ? `1.5px solid ${SEC}` : '1px solid var(--brd)', borderRadius: 11, padding: 12, marginBottom: 8, opacity: (canAttach || chain.filter((a) => !a.in_system).every((a) => a.status === 'approved')) ? 1 : .55 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: canAttach ? 9 : 0 }}>
+                          <span className="mono" style={{ width: 21, height: 21, borderRadius: 6, display: 'grid', placeItems: 'center', fontSize: 10.5, fontWeight: 700,
+                            background: chain.filter((a) => !a.in_system).every((a) => a.status === 'approved') ? 'var(--gr-l)' : SEC_L,
+                            color: chain.filter((a) => !a.in_system).every((a) => a.status === 'approved') ? 'var(--gr-m)' : SEC }}>
+                            {chain.filter((a) => !a.in_system).every((a) => a.status === 'approved') ? '✓' : '2'}
+                          </span>
+                          <span style={{ fontSize: 12, fontWeight: 600 }}>Подпись: {chain.find((a) => !a.in_system)?.approver_name}</span>
+                        </div>
+                        {canAttach && <Btn size="sm" v="secondary" onClick={() => setApprSheet(r)} style={{ width: '100%', minHeight: 44 }}>📎 Приложить подпись</Btn>}
+                      </div>
+                    )}
+                    <div style={{ border: canSend ? `1.5px solid ${SEC}` : '1px solid var(--brd)', borderRadius: 11, padding: 12, opacity: canSend || r.sent_at ? 1 : .55 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: canSend ? 9 : 0 }}>
+                        <span className="mono" style={{ width: 21, height: 21, borderRadius: 6, display: 'grid', placeItems: 'center', fontSize: 10.5, fontWeight: 700, background: SEC_L, color: SEC }}>3</span>
+                        <span style={{ fontSize: 12, fontWeight: 600 }}>Отправка на склад</span>
+                      </div>
+                      {canSend && <Btn onClick={() => sendNow(r)} style={{ width: '100%', minHeight: 46 }}>📤 Отправить на склад</Btn>}
+                    </div>
+                  </div>
+                )}
+
+                {/* Админ: выдать */}
+                {isAdmin && r.status === 'approved' && r.sent_at && (
+                  <div style={{ display: 'flex', gap: 7, marginBottom: 10, flexWrap: 'wrap' }}>
+                    <Btn onClick={() => setIssue(r)} style={{ flex: 1, minWidth: 150, minHeight: 46 }}>📤 Выдать — оформить акт</Btn>
+                    <Btn v="secondary" onClick={() => setReject({ req: r, mode: 'reject' })} style={{ minHeight: 46 }}>Отклонить</Btn>
+                  </div>
+                )}
+
+                {/* Заявитель */}
+                {r.author_id === me && (
+                  <div style={{ display: 'flex', gap: 7, marginBottom: 10, flexWrap: 'wrap' }}>
+                    {['issued', 'partial'].includes(r.status) && <Btn size="sm" onClick={async () => { await setStatus(r.id, 'received'); await clearFor('request', r.id, me); toast('Получение подтверждено'); reload() }} style={{ minHeight: 44 }}>Подтвердить получение</Btn>}
+                    {r.status === 'partial' && <Btn size="sm" v="secondary" onClick={async () => { await closePartial(r.id); toast('Завершено'); reload() }} style={{ minHeight: 44 }}>Хватит, завершить</Btn>}
+                    {['new', 'revision'].includes(r.status) && !chain.some((a) => a.status === 'approved') && (
+                      <Btn size="sm" v="secondary" onClick={() => { setEditReq(r); setForm(true) }} style={{ minHeight: 44 }}>Изменить</Btn>
+                    )}
+                    {r.status === 'new' && !chain.some((a) => a.status === 'approved') && (
+                      <Btn size="sm" v="secondary" onClick={async () => { await cancelRequest(r.id); toast('Отменено'); reload() }} style={{ minHeight: 44 }}>Отменить</Btn>
+                    )}
+                  </div>
+                )}
+
+                {/* Чат */}
+                <RequestChat req={r} data={data} profile={profile} compact />
+
+                {/* Архив и удаление */}
+                <div style={{ display: 'flex', gap: 7, marginTop: 10, flexWrap: 'wrap' }}>
+                  {canArchive(r, profile) && !r.archived && <button onClick={() => doArchive(r)} style={{ fontSize: 11.5, color: 'var(--tx3)', minHeight: 38, padding: '0 10px' }}>В архив</button>}
+                  {canDelete(r, profile) && <button onClick={() => setConfirmDel(r)} style={{ fontSize: 11.5, color: 'var(--rd-m)', minHeight: 38, padding: '0 10px' }}>Удалить</button>}
+                </div>
+              </div>
+            )}
+          </div>
+        )
+      })}
+
+      {/* Формы */}
+      <Sheet open={form} onClose={() => { setForm(false); onDraftUsed && onDraftUsed() }} title={editReq ? 'Изменить заявку' : 'Новая заявка'}>
+        {form && <RequestForm data={data} profile={profile} editReq={editReq} draftItems={draftItems}
+          onDone={() => { setForm(false); onDraftUsed && onDraftUsed(); reload() }} />}
       </Sheet>
 
       {issue && <IssueModal req={issue} data={data} profile={profile} onClose={() => setIssue(null)} onDone={() => { setIssue(null); reload() }} />}
       {apprSheet && <ApprovalSheet req={apprSheet} data={data} profile={profile} onClose={() => setApprSheet(null)} onDone={() => { setApprSheet(null); reload() }} />}
-      {reject && <RejectModal info={reject} onClose={() => setReject(null)} onDone={() => { setReject(null); reload() }} />}
+      {reject && <RejectModal info={reject} profile={profile} data={data} onClose={() => setReject(null)} onDone={() => { setReject(null); reload() }} />}
+      {confirmDel && <ConfirmDelete req={confirmDel} onCancel={() => setConfirmDel(null)} onOk={() => doDelete(confirmDel)} />}
     </div>
   )
 }
 
-function Card({ r, data, isAdmin, me, pName, rName, bName, profile, onIssue, onApprove, onApproveNow, onSend, onReject, onRevision, onEdit, onCancel, onReceived, onClosePartial }) {
-  const st = ST[r.status] || ST.new
-  const mineOwn = r.author_id === me
-  const canEdit = !isAdmin && mineOwn && ['new', 'revision'].includes(r.status)
-  const canCancel = !isAdmin && mineOwn && r.status === 'new'
-  const canReceive = !isAdmin && mineOwn && ['approved', 'partial'].includes(r.status)
-  const isNew = r.status === 'new'
-  const urgent = r.priority === 'urgent'
-
-  return (
-    <div className="card" style={{ padding: '14px 16px', marginBottom: 10, border: isAdmin && isNew ? '2px solid var(--ink)' : urgent ? '1px solid var(--rd)' : '1px solid var(--brd)' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
-        <div style={{ flex: 1, minWidth: 190 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5, flexWrap: 'wrap' }}>
-            <span className="mono" style={{ fontSize: 11, color: 'var(--tx3)' }}>№{r.id}</span>
-            
-            {urgent && <Badge color="red">Срочно</Badge>}
-            <Badge color={st[1]}>{st[0]}</Badge>
-            {r.basis_type === 'sz' ? <Badge color="green">СЗ</Badge> : <Badge color="amber">без СЗ</Badge>}
-          </div>
-          {r.items.map((it, i) => (
-            <div key={i} style={{ fontSize: 15, fontWeight: 600, marginBottom: 2 }}>
-              {it.approved_qty != null && it.approved_qty !== it.qty
-                ? <>{it.approved_qty} × {pName(it.product_id)} <span style={{ fontSize: 11, color: 'var(--am-m)' }}>(просили {it.qty})</span></>
-                : <>{it.qty} × {pName(it.product_id)}</>}
-            </div>
-          ))}
-          <div style={{ fontSize: 12.5, color: 'var(--tx2)', marginTop: 5, lineHeight: 1.6 }}>
-            {(() => { const author = (data.profiles || []).find((p) => p.id === r.author_id)
-              return <>
-                {author && <div><span style={{ color: 'var(--tx3)' }}>Запросил:</span> <b>{author.full_name || author.email}</b>{author.branch_id ? ` · ${bName(author.branch_id)}` : ''}</div>}
-                {r.recipient_id && <div><span style={{ color: 'var(--tx3)' }}>Получатель:</span> {rName(r.recipient_id)}</div>}
-                {r.purpose && <div><span style={{ color: 'var(--tx3)' }}>Цель:</span> {r.purpose}</div>}
-              </> })()}
-          </div>
-        </div>
-        <div style={{ fontSize: 11, color: 'var(--tx3)', textAlign: 'right' }}>
-          {new Date(r.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
-        </div>
-      </div>
-
-      {/* Основание */}
-      {r.basis_type === 'sz' && (
-        <div style={{ marginTop: 10, padding: '10px 12px', background: 'var(--bg)', borderRadius: 9, fontSize: 11.5 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}><span style={{ color: 'var(--tx3)' }}>Документ:</span><span className="mono">{r.sz_number} {r.sz_date ? 'от ' + new Date(r.sz_date).toLocaleDateString('ru-RU') : ''}</span></div>
-          {r.sz_approvers && <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 7 }}><span style={{ color: 'var(--tx3)' }}>Согласовали:</span><span style={{ textAlign: 'right' }}>{r.sz_approvers}</span></div>}
-          {r.sz_scan_path && <button onClick={async (e) => { e.stopPropagation(); const { error } = await openFile(r.sz_scan_path); if (error) alert(error) }}
-            style={{ display: 'block', width: '100%', textAlign: 'center', minHeight: 40, border: '1px solid var(--ink)', borderRadius: 8, background: 'var(--ink-l)', color: 'var(--ink)', fontSize: 12.5, fontWeight: 600 }}>📄 Открыть служебную записку</button>}
-        </div>
-      )}
-      {r.basis_type === 'none' && r.no_sz_reason && (
-        <div style={{ marginTop: 9, padding: '8px 11px', background: 'var(--am-l)', borderRadius: 8, fontSize: 11.5, color: 'var(--am-m)' }}>«{r.no_sz_reason}»</div>
-      )}
-      {urgent && r.urgent_reason && (
-        <div style={{ marginTop: 9, padding: '8px 11px', background: 'var(--rd-l)', borderRadius: 8, fontSize: 11.5, color: 'var(--rd-m)' }}>
-          <b>Срочно:</b> {r.urgent_reason}{r.urgent_due ? ` · до ${new Date(r.urgent_due).toLocaleDateString('ru-RU')}` : ''}
-        </div>
-      )}
-      {r.admin_comment && ['rejected', 'revision'].includes(r.status) && (
-        <div style={{ marginTop: 9, padding: '8px 11px', background: r.status === 'rejected' ? 'var(--rd-l)' : 'var(--am-l)', borderRadius: 8, fontSize: 11.5, color: r.status === 'rejected' ? 'var(--rd-m)' : 'var(--am-m)' }}>
-          <b>{r.status === 'rejected' ? 'Причина: ' : 'Комментарий: '}</b>{r.admin_comment}
-        </div>
-      )}
-
-      {/* Подсказка автору, если ждёт внешнего, а он не на этой вкладке */}
-      {(() => {
-        const ch = approversOf(data.reqApprovers, r.id); const c = currentApprover(ch)
-        if (!c || r.status !== 'new' || c.in_system) return null
-        if (r.author_id !== me) return null
-        return null  // подробная плашка показывается в блоке действий ниже
-      })()}
-
-      {/* Цепочка согласования */}
-      {(() => {
-        const chain = approversOf(data.reqApprovers, r.id)
-        if (!chain.length) return null
-        const cur = currentApprover(chain)
-        const okCount = chain.filter((a) => a.status === 'approved').length
-        const act = (data.acts || []).find((a) => a.id === r.act_id)
-        return (
-          <div style={{ marginTop: 10, padding: '10px 12px', background: 'var(--bg)', borderRadius: 9 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 0, flexWrap: 'wrap' }}>
-              {chain.map((a, i) => (
-                <span key={a.id} style={{ display: 'flex', alignItems: 'center' }} title={`${a.approver_name || ''} · ${a.approver_role || ''}`}>
-                  <span style={{ width: 16, height: 16, borderRadius: '50%', display: 'grid', placeItems: 'center', fontSize: 9.5, color: '#fff',
-                    background: a.status === 'approved' ? 'var(--gr)' : a.status === 'declined' ? 'var(--rd)' : (cur && a.id === cur.id) ? 'var(--ink)' : 'var(--sur2)',
-                    border: a.status === 'waiting' && (!cur || a.id !== cur.id) ? '1px solid var(--brd2)' : 'none' }}>
-                    {a.status === 'approved' ? '✓' : a.status === 'declined' ? '×' : ''}
-                  </span>
-                  {i < chain.length - 1 && <span style={{ width: 10, height: 2, background: a.status === 'approved' ? 'var(--gr)' : 'var(--brd)' }} />}
-                </span>
-              ))}
-              <span style={{ marginLeft: 9, fontSize: 10.5, color: 'var(--tx3)' }}>
-                {r.status === 'rejected' ? 'отказ' : act ? `выдано · акт ${act.number}` : cur ? `сейчас: ${cur.approver_name || '—'}` : `согласовано ${okCount} из ${chain.length}`}
-              </span>
-            </div>
-          </div>
-        )
-      })()}
-
-      {/* Админ: выдать согласованную */}
-      {isAdmin && r.status === 'approved' && (
-        <div style={{ display: 'flex', gap: 7, marginTop: 12, flexWrap: 'wrap' }}>
-          <Btn size="sm" onClick={onIssue} style={{ flex: 1, minWidth: 150, minHeight: 42 }}>📤 Выдать — оформить акт</Btn>
-          <Btn size="sm" v="secondary" onClick={onReject} style={{ minHeight: 42 }}>Отклонить</Btn>
-        </div>
-      )}
-      {/* Процесс согласования — три шага на одном экране */}
-      {(() => {
-        const chain = approversOf(data.reqApprovers, r.id)
-        if (!chain.length || !['new'].includes(r.status)) return null
-        const cur = currentApprover(chain)
-        const complete = chainComplete(chain)
-
-        // Моё ли звено сейчас
-        const myTurn = cur && cur.in_system && cur.user_id === me
-        // Кто прикладывает за внешнего: предыдущий в системе, автор или админ
-        const prevIn = cur ? chain.filter((a) => a.order_no < cur.order_no && a.in_system).slice(-1)[0] : null
-        const canAttach = cur && !cur.in_system && ((prevIn && prevIn.user_id === me) || r.author_id === me || isAdmin)
-        // Кто отправляет: последний согласовавший в системе, автор или админ
-        const lastIn = chain.filter((a) => a.in_system).slice(-1)[0]
-        const canSend = complete && !r.sent_at && ((lastIn && lastIn.user_id === me) || r.author_id === me || isAdmin)
-
-        if (!myTurn && !canAttach && !canSend) return null
-
-        const stepBox = (n, title, state, body) => (
-          <div style={{ border: state === 'active' ? '1.5px solid var(--ink)' : '1px solid var(--brd)', borderRadius: 12, padding: 13, marginBottom: 9, opacity: state === 'wait' ? 0.55 : 1, transition: 'all .25s ease' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: body ? 10 : 0 }}>
-              <div className="mono" style={{ width: 23, height: 23, borderRadius: 7, display: 'grid', placeItems: 'center', fontSize: 11, fontWeight: 700,
-                background: state === 'done' ? 'var(--gr-l)' : state === 'active' ? 'var(--ink-l)' : 'var(--sur2)',
-                color: state === 'done' ? 'var(--gr-m)' : state === 'active' ? 'var(--ink)' : 'var(--tx3)' }}>{state === 'done' ? '✓' : n}</div>
-              <span style={{ fontSize: 12.5, fontWeight: 600, color: state === 'wait' ? 'var(--tx3)' : 'var(--tx)' }}>{title}</span>
-              {state === 'done' && <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--gr-m)' }}>готово</span>}
-            </div>
-            {body}
-          </div>
-        )
-
-        const mySigned = chain.find((a) => a.in_system && a.user_id === me && a.status === 'approved')
-        const extDone = chain.filter((a) => !a.in_system).every((a) => a.status === 'approved')
-        const extPending = chain.find((a) => !a.in_system && a.status === 'waiting')
-
-        return (
-          <div style={{ marginTop: 12 }}>
-            {/* 1. Моё согласование */}
-            {(myTurn || mySigned) && stepBox(1, 'Ваше согласование', mySigned ? 'done' : 'active',
-              mySigned
-                ? <div style={{ fontSize: 11, color: 'var(--tx3)', paddingLeft: 32 }}>{mySigned.approver_name} · {new Date(mySigned.acted_at).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</div>
-                : <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
-                    <Btn size="sm" onClick={() => onApproveNow(r, cur)} style={{ flex: 1, minWidth: 130, minHeight: 46 }}>✓ Согласовать</Btn>
-                    <Btn size="sm" v="secondary" onClick={onRevision} style={{ minHeight: 46 }}>Переделка</Btn>
-                    <Btn size="sm" v="secondary" onClick={onReject} style={{ minHeight: 46 }}>Отклонить</Btn>
-                  </div>
-            )}
-
-            {/* 2. Подпись внешнего */}
-            {chain.some((a) => !a.in_system) && stepBox(2, `Подпись: ${chain.find((a) => !a.in_system)?.approver_name || ''}`,
-              extDone ? 'done' : (canAttach ? 'active' : 'wait'),
-              extDone
-                ? <div style={{ fontSize: 11, color: 'var(--tx3)', paddingLeft: 32 }}>скан приложен</div>
-                : canAttach
-                  ? <>
-                      <div style={{ fontSize: 12, color: 'var(--tx2)', marginBottom: 10 }}>Распечатайте заявку, получите подпись и приложите скан.</div>
-                      <Btn size="sm" v="secondary" onClick={() => onApprove()} style={{ width: '100%', minHeight: 46 }}>📎 Приложить подпись</Btn>
-                    </>
-                  : <div style={{ fontSize: 11, color: 'var(--tx3)', paddingLeft: 32 }}>После вашего согласования</div>
-            )}
-
-            {/* 3. Отправка на склад */}
-            {stepBox(3, 'Отправка на склад', r.sent_at ? 'done' : (complete ? 'active' : 'wait'),
-              r.sent_at
-                ? <div style={{ fontSize: 11, color: 'var(--tx3)', paddingLeft: 32 }}>отправлена {new Date(r.sent_at).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</div>
-                : complete && canSend
-                  ? <Btn onClick={() => onSend(r)} style={{ width: '100%', minHeight: 48 }}>📤 Отправить на склад</Btn>
-                  : <div style={{ fontSize: 11, color: 'var(--tx3)', paddingLeft: 32 }}>После сбора подписей</div>
-            )}
-          </div>
-        )
-      })()}
-
-      {(canEdit || canCancel || canReceive) && (
-        <div style={{ display: 'flex', gap: 7, marginTop: 12, flexWrap: 'wrap' }}>
-          {canReceive && <Btn size="sm" onClick={onReceived} style={{ minHeight: 42 }}>Подтвердить получение</Btn>}
-          {r.status === 'partial' && mineOwn && <Btn size="sm" v="secondary" onClick={onClosePartial} style={{ minHeight: 42 }}>Хватит, завершить</Btn>}
-          {canEdit && <Btn size="sm" v="secondary" onClick={onEdit} style={{ minHeight: 42 }}>Изменить</Btn>}
-          {canCancel && <Btn size="sm" v="secondary" onClick={onCancel} style={{ minHeight: 42 }}>Отменить</Btn>}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function RequestForm({ data, profile, editReq, onDone }) {
+/* ── Форма заявки ── */
+function RequestForm({ data, profile, editReq, draftItems, onDone }) {
   const toast = useToast()
-  const { products, recipients, branches, freeByWh, stockByWh, directions, productTypes, campaigns } = data
-  const kind = 'issue'
-  const isAdminUser = profile?.role === 'admin'
-  const [basis, setBasis] = useState(isAdminUser ? (editReq?.basis_type || 'sz') : 'sz')
-  const [items, setItems] = useState(editReq?.items?.map((it) => ({ product_id: it.product_id, qty: it.qty })) || [{ product_id: '', qty: 1 }])
+  const { products, branches, freeByWh, stockByWh, directions, productTypes, campaigns, profiles, externals } = data
+  const [items, setItems] = useState(
+    editReq?.items?.map((it) => ({ product_id: it.product_id, qty: it.qty }))
+    || draftItems?.map((d) => ({ product_id: d.product_id, qty: d.qty }))
+    || [{ product_id: '', qty: 1 }]
+  )
   const [f, setF] = useState({
-    recipient_id: editReq?.recipient_id || '', branch_id: editReq?.branch_id || profile?.branch_id || '',
     purpose: editReq?.purpose || '', sz_number: editReq?.sz_number || '', sz_date: editReq?.sz_date || '',
-    sz_approvers: editReq?.sz_approvers || '', no_sz_reason: editReq?.no_sz_reason || '',
-    priority: editReq?.priority || 'normal', urgent_reason: editReq?.urgent_reason || '', urgent_due: editReq?.urgent_due || '',
+    sz_approvers: editReq?.sz_approvers || '', priority: editReq?.priority || 'normal',
+    urgent_reason: editReq?.urgent_reason || '', urgent_due: editReq?.urgent_due || '',
   })
   const [scanFile, setScan] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -351,141 +392,128 @@ function RequestForm({ data, profile, editReq, onDone }) {
     return it.qty > free ? { name: products.find((p) => p.id == it.product_id)?.name, free } : null
   }).filter(Boolean)
 
+  const author = profiles.find((p) => p.id === profile.id) || profile
+  const route = [...buildApprovalChain({ author, profiles, externals, branchId: profile.branch_id }), { name: 'Склад', role: 'исполнение' }]
+
   const submit = async () => {
-    if (shortage.length) return toast(`На складе только ${shortage[0].free} — ${shortage[0].name}`, 'error')
+    if (shortage.length) return toast(`Свободно только ${shortage[0].free} — ${shortage[0].name}`, 'error')
     setLoading(true)
-    const payload = { kind, basis_type: basis, items, scanFile, ...f }
+    const payload = { ...f, basis_type: 'sz', items, scanFile, branch_id: profile.branch_id, recipient_id: null, kind: 'issue' }
     const res = editReq ? await updateRequest(editReq.id, payload) : await createRequest(payload, profile.id)
     if (res.error) { setLoading(false); return toast(res.error, 'error') }
-    // Цепочка согласования
     const reqId = res.data?.id || editReq?.id
-    if (reqId) {
-      const author = (data.profiles || []).find((p) => p.id === profile.id) || profile
-      const chain = buildApprovalChain({ author, profiles: data.profiles, externals: data.externals, branchId: f.branch_id })
-      if (!editReq) await createApprovalChain(reqId, chain)
+    if (reqId && !editReq) {
+      const chain = buildApprovalChain({ author, profiles, externals, branchId: profile.branch_id })
+      await createApprovalChain(reqId, chain)
+      const first = chain[0]
+      if (first?.user_id) await push({ userId: first.user_id, kind: 'to_approve', action: true,
+        title: `Заявка №${reqId} ждёт согласования`, body: f.purpose || '', entity: 'request', entityId: reqId })
     }
     setLoading(false)
-    toast(editReq ? 'Заявка обновлена' : 'Заявка отправлена на согласование'); onDone()
+    toast(editReq ? 'Обновлено' : 'Заявка отправлена'); onDone()
   }
 
-  const seg = (val, cur, set, label, color) => (
-    <button key={val} onClick={() => set(val)} style={{ flex: 1, minHeight: 44, borderRadius: 10, border: `1px solid ${cur === val ? (color || 'var(--ink)') : 'var(--brd2)'}`, background: cur === val ? (color ? color + '18' : 'var(--ink-l)') : 'var(--sur)', color: cur === val ? (color || 'var(--ink)') : 'var(--tx2)', fontSize: 12.5, fontWeight: cur === val ? 600 : 500 }}>{label}</button>
-  )
+  const lbl = (t, req) => <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.04em', color: 'var(--tx3)', marginBottom: 6 }}>{t}{req && <span style={{ color: 'var(--rd)' }}> *</span>}</div>
+  const inp = { width: '100%', minHeight: 46, padding: '0 13px', border: '1.5px solid var(--brd)', borderRadius: 12, background: 'var(--sur)', fontSize: 13.5, color: 'var(--tx)' }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-
       <div>
-        <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.04em', color: 'var(--tx3)', marginBottom: 6 }}>Позиции</div>
+        {lbl('Позиции', true)}
         {items.map((it, i) => (
           <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-            <div style={{ flex: 1 }}>
-              <Select value={it.product_id} onChange={(e) => setItem(i, 'product_id', e.target.value)}>
-                <option value="">— товар —</option>
-                {products.filter((p) => !p.archived).map((p) => {
-                  const ch = chainOf(p, { directions, productTypes, campaigns })
-                  return <option key={p.id} value={p.id}>{p.name}{ch ? ` · ${ch}` : ''}</option>
-                })}
-              </Select>
-            </div>
-            <Input type="number" inputMode="numeric" value={it.qty} onChange={(e) => setItem(i, 'qty', Number(e.target.value))} style={{ width: 76 }} />
-            {items.length > 1 && <button onClick={() => setItems((s) => s.filter((_, j) => j !== i))} style={{ width: 42, minHeight: 44, borderRadius: 10, color: 'var(--tx3)', fontSize: 17 }}>×</button>}
+            <select value={it.product_id} onChange={(e) => setItem(i, 'product_id', e.target.value)} style={{ ...inp, flex: 1, minWidth: 0 }}>
+              <option value="">— товар —</option>
+              {products.filter((p) => !p.archived).map((p) => {
+                const ch = chainOf(p, { directions, productTypes, campaigns })
+                return <option key={p.id} value={p.id}>{p.name}{ch ? ` · ${ch}` : ''}</option>
+              })}
+            </select>
+            <input type="number" inputMode="numeric" value={it.qty} onChange={(e) => setItem(i, 'qty', Number(e.target.value))} style={{ ...inp, width: 76 }} />
+            {items.length > 1 && <button onClick={() => setItems((s) => s.filter((_, j) => j !== i))} style={{ width: 44, minHeight: 46, borderRadius: 12, color: 'var(--tx3)', fontSize: 17 }}>×</button>}
           </div>
         ))}
-        <button onClick={() => setItems((s) => [...s, { product_id: '', qty: 1 }])} style={{ width: '100%', minHeight: 42, border: '1px dashed var(--brd2)', borderRadius: 10, background: 'transparent', color: 'var(--ink)', fontSize: 12.5 }}>＋ Добавить позицию</button>
+        <button onClick={() => setItems((s) => [...s, { product_id: '', qty: 1 }])}
+          style={{ width: '100%', minHeight: 44, border: '1px dashed var(--brd2)', borderRadius: 12, background: 'transparent', color: SEC, fontSize: 12.5 }}>＋ Добавить позицию</button>
       </div>
 
-      {shortage.length > 0 && <div style={{ display: 'flex', gap: 8, padding: '10px 12px', background: 'var(--am-l)', borderRadius: 9, fontSize: 11.5, color: 'var(--am-m)' }}>
-        ⚠️ {shortage[0].name} — свободно только {shortage[0].free}. Уменьшите количество.
+      {shortage.length > 0 && <div style={{ display: 'flex', gap: 8, padding: '10px 12px', background: 'var(--am-l)', borderRadius: 10, fontSize: 11.5, color: 'var(--am-m)' }}>
+        ⚠️ {shortage[0].name} — свободно только {shortage[0].free}
       </div>}
 
-      {isAdminUser
-        ? <Field label="Основание"><div style={{ display: 'flex', gap: 8 }}>{seg('sz', basis, setBasis, 'По служебной записке')}{seg('none', basis, setBasis, 'Без СЗ')}</div></Field>
-        : <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '10px 12px', background: 'var(--ink-l)', borderRadius: 10, fontSize: 11.5, color: 'var(--ink)' }}>
-            <span style={{ fontSize: 15 }}>📄</span>
-            <span>Заявка оформляется <b>по служебной записке</b> — заполните реквизиты согласования ниже.</span>
-          </div>}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '10px 12px', background: SEC_L, borderRadius: 11, fontSize: 11.5, color: SEC }}>
+        <span style={{ fontSize: 15 }}>📄</span>
+        <span>Заявка оформляется <b>по служебной записке</b> — заполните реквизиты</span>
+      </div>
 
-      {basis === 'sz' ? (
-        <div className="card" style={{ padding: 14, background: 'var(--bg)', display: 'flex', flexDirection: 'column', gap: 11 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 10 }}>
-            <Field label="Номер документа"><Input value={f.sz_number} onChange={(e) => up('sz_number', e.target.value)} placeholder="СЗ-2026-0142" /></Field>
-            <Field label="Дата"><Input type="date" value={f.sz_date} onChange={(e) => up('sz_date', e.target.value)} /></Field>
-          </div>
-          <Field label="Кто согласовал"><Input value={f.sz_approvers} onChange={(e) => up('sz_approvers', e.target.value)} placeholder="ФИО и должности" /></Field>
-          <Field label="Согласованная служебная записка">
-            <label style={{ display: 'flex', alignItems: 'center', gap: 10, minHeight: 48, padding: '0 13px', border: `1px dashed ${scanFile ? 'var(--gr)' : 'var(--ink)'}`, borderRadius: 10, background: scanFile ? 'var(--gr-l)' : 'var(--ink-l)', cursor: 'pointer' }}>
-              <span style={{ fontSize: 18 }}>{scanFile ? '✓' : '📎'}</span>
-              <span style={{ fontSize: 12.5, color: scanFile ? 'var(--gr-m)' : 'var(--ink)', fontWeight: 600 }}>{scanFile ? scanFile.name : 'Приложить документ (PDF, JPG)'}</span>
-              <input type="file" accept="image/*,application/pdf" onChange={(e) => setScan(e.target.files?.[0] || null)} style={{ display: 'none' }} />
-            </label>
-          </Field>
+      <div className="card" style={{ padding: 14, background: 'var(--bg)', display: 'flex', flexDirection: 'column', gap: 11 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 10 }}>
+          <div>{lbl('Номер', true)}<input value={f.sz_number} onChange={(e) => up('sz_number', e.target.value)} placeholder="СЗ-2026-0142" style={inp} /></div>
+          <div>{lbl('Дата', true)}<input type="date" value={f.sz_date} onChange={(e) => up('sz_date', e.target.value)} style={inp} /></div>
         </div>
-      ) : (
-        <Field label="Причина"><Input value={f.no_sz_reason} onChange={(e) => up('no_sz_reason', e.target.value)} placeholder="Для чего нужен товар" /></Field>
-      )}
+        <div>{lbl('Кто согласовал', true)}<input value={f.sz_approvers} onChange={(e) => up('sz_approvers', e.target.value)} placeholder="ФИО и должности" style={inp} /></div>
+        <div>
+          {lbl('Скан записки', true)}
+          <label style={{ display: 'flex', alignItems: 'center', gap: 10, minHeight: 50, padding: '0 13px', border: `1px dashed ${scanFile ? 'var(--gr)' : SEC}`, borderRadius: 12, background: scanFile ? 'var(--gr-l)' : SEC_L, cursor: 'pointer' }}>
+            <span style={{ fontSize: 17 }}>{scanFile ? '✓' : '📎'}</span>
+            <span style={{ fontSize: 12.5, fontWeight: 600, color: scanFile ? 'var(--gr-m)' : SEC, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{scanFile ? scanFile.name : 'Приложить документ'}</span>
+            <input type="file" accept="image/*,application/pdf" onChange={(e) => setScan(e.target.files?.[0] || null)} style={{ display: 'none' }} />
+          </label>
+        </div>
+      </div>
 
-      <Field label="Приоритет"><div style={{ display: 'flex', gap: 8 }}>
-        {seg('low', f.priority, (v) => up('priority', v), 'Низкий')}
-        {seg('normal', f.priority, (v) => up('priority', v), 'Обычный')}
-        {seg('urgent', f.priority, (v) => up('priority', v), 'Срочно', 'var(--rd)')}
-      </div></Field>
+      <div>
+        {lbl('Приоритет')}
+        <div style={{ display: 'flex', gap: 8 }}>
+          {[['low', 'Низкий'], ['normal', 'Обычный'], ['urgent', 'Срочно']].map(([v, l]) => (
+            <button key={v} onClick={() => up('priority', v)} style={{
+              flex: 1, minHeight: 44, borderRadius: 11, fontSize: 12.5, fontWeight: f.priority === v ? 600 : 500,
+              border: `1px solid ${f.priority === v ? (v === 'urgent' ? 'var(--rd)' : SEC) : 'var(--brd2)'}`,
+              background: f.priority === v ? (v === 'urgent' ? 'var(--rd-l)' : SEC_L) : 'var(--sur)',
+              color: f.priority === v ? (v === 'urgent' ? 'var(--rd-m)' : SEC) : 'var(--tx2)',
+            }}>{l}</button>
+          ))}
+        </div>
+      </div>
+
       {f.priority === 'urgent' && (
         <div className="card" style={{ padding: 14, background: 'var(--rd-l)', display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <Field label="Обоснование срочности"><Input value={f.urgent_reason} onChange={(e) => up('urgent_reason', e.target.value)} placeholder="Почему срочно" /></Field>
-          <Field label="Нужно до"><Input type="date" value={f.urgent_due} onChange={(e) => up('urgent_due', e.target.value)} /></Field>
+          <div>{lbl('Обоснование срочности', true)}<input value={f.urgent_reason} onChange={(e) => up('urgent_reason', e.target.value)} placeholder="Почему срочно" style={inp} /></div>
+          <div>{lbl('Нужно до')}<input type="date" value={f.urgent_due} onChange={(e) => up('urgent_due', e.target.value)} style={inp} /></div>
         </div>
       )}
 
-      {kind === 'issue' && <Field label="Получатель">
-        <Select value={f.recipient_id} onChange={(e) => { up('recipient_id', e.target.value); const rr = recipients.find((x) => x.id == e.target.value); if (rr?.branch_id) up('branch_id', rr.branch_id) }}>
-          <option value="">— выбрать —</option>
-          {recipients.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
-        </Select>
-      </Field>}
+      <div>{lbl('Цель')}<input value={f.purpose} onChange={(e) => up('purpose', e.target.value)} placeholder="Конференция, акция…" style={inp} /></div>
 
-      <Field label="Филиал-адресат">
-        <Select value={f.branch_id} onChange={(e) => up('branch_id', e.target.value)}>
-          <option value="">— выбрать —</option>
-          {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-        </Select>
-      </Field>
-
-      <Field label="Цель / примечание"><Input value={f.purpose} onChange={(e) => up('purpose', e.target.value)} placeholder="Конференция, акция…" /></Field>
-
-      {/* Предпросмотр маршрута */}
-      {(() => {
-        const author = (data.profiles || []).find((p) => p.id === profile.id) || profile
-        const route = [...buildApprovalChain({ author, profiles: data.profiles, externals: data.externals, branchId: f.branch_id }),
-          { name: 'Склад', role: 'исполнение' }]
-        if (!route.length) return null
-        return (
-          <div style={{ padding: '11px 13px', background: 'var(--ink-l)', borderRadius: 10 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8 }}>
-              <span style={{ fontSize: 14 }}>🧭</span>
-              <span style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--ink)' }}>Пойдёт на согласование</span>
-              <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--tx3)' }}>{route.length} {route.length === 1 ? 'звено' : route.length < 5 ? 'звена' : 'звеньев'}</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 5, fontSize: 11.5 }}>
-              {route.map((r, i) => (
-                <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                  <span title={r.role} style={{ padding: '3px 9px', borderRadius: 20, background: 'var(--sur)', border: '1px solid var(--brd)' }}>{(r.name || '').split(' ')[0]}</span>
-                  {i < route.length - 1 && <span style={{ color: 'var(--tx3)' }}>→</span>}
-                </span>
-              ))}
-            </div>
+      {/* Маршрут */}
+      {route.length > 0 && (
+        <div style={{ padding: '11px 13px', background: SEC_L, borderRadius: 11 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8 }}>
+            <span style={{ fontSize: 14 }}>🧭</span>
+            <span style={{ fontSize: 11.5, fontWeight: 600, color: SEC }}>Пойдёт на согласование</span>
           </div>
-        )
-      })()}
+          <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 5, fontSize: 11.5 }}>
+            {route.map((r, i) => (
+              <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                <span title={r.role} style={{ padding: '3px 9px', borderRadius: 20, background: 'var(--sur)', border: '1px solid var(--brd)' }}>{(r.name || '').split(' ')[0]}</span>
+                {i < route.length - 1 && <span style={{ color: 'var(--tx3)' }}>→</span>}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
-      <Btn onClick={submit} loading={loading} disabled={shortage.length > 0} size="lg" style={{ minHeight: 48 }}>{editReq ? 'Сохранить и отправить' : 'Отправить заявку'}</Btn>
+      <Btn onClick={submit} loading={loading} disabled={shortage.length > 0} size="lg" style={{ minHeight: 50 }}>
+        {editReq ? 'Сохранить' : 'Отправить заявку'}
+      </Btn>
     </div>
   )
 }
 
+/* ── Выдача ── */
 function IssueModal({ req, data, profile, onClose, onDone }) {
   const toast = useToast()
-  const { warehouses, freeByWh, stockByWh, products, profiles, recipients, branches } = data
+  const { warehouses, freeByWh, stockByWh, products } = data
   const [wh, setWh] = useState(req.warehouse_id || warehouses[0]?.id || '')
   const [qty, setQty] = useState(Object.fromEntries(req.items.map((it) => [it.id, it.qty])))
   const [loading, setLoading] = useState(false)
@@ -500,50 +528,52 @@ function IssueModal({ req, data, profile, onClose, onDone }) {
     const { error } = await issueRequest({ ...req, items: itemsWithInfo }, wh, qty, freeByWh, profile)
     setLoading(false)
     if (error) return toast(error, 'error')
+    await clearFor('request', req.id, profile.id)
+    if (req.author_id) await push({ userId: req.author_id, kind: 'to_confirm', action: true,
+      title: `Товар по заявке №${req.id} выдан`, body: 'подтвердите получение', entity: 'request', entityId: req.id })
     toast('Выдано — акт сформирован'); onDone()
   }
 
   return (
-    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'grid', placeItems: 'center', padding: 16, background: 'rgba(8,10,14,.5)', backdropFilter: 'blur(4px)' }}>
-      <div onClick={(e) => e.stopPropagation()} className="card" style={{ width: '100%', maxWidth: 460, padding: 20, maxHeight: '86vh', overflowY: 'auto' }}>
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'grid', placeItems: 'center', padding: 16, background: 'rgba(61,55,47,.45)', backdropFilter: 'blur(4px)' }}>
+      <div onClick={(e) => e.stopPropagation()} className="card" style={{ width: '100%', maxWidth: 440, padding: 20, maxHeight: '86vh', overflowY: 'auto' }}>
         <div className="ff" style={{ fontSize: 17, fontWeight: 600, marginBottom: 4 }}>Выдать по заявке №{req.id}</div>
-        <div style={{ fontSize: 12.5, color: 'var(--tx3)', marginBottom: 16 }}>Заявка согласована. Товар спишется со склада, сформируется акт для подписи получателем.</div>
+        <div style={{ fontSize: 12, color: 'var(--tx3)', marginBottom: 15 }}>Товар спишется, сформируется акт для подписи получателем.</div>
 
-        <Field label="Склад-источник">
-          <Select value={wh} onChange={(e) => setWh(e.target.value)}>
-            {warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
-          </Select>
-        </Field>
+        <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', color: 'var(--tx3)', marginBottom: 6 }}>Склад</div>
+        <select value={wh} onChange={(e) => setWh(e.target.value)}
+          style={{ width: '100%', minHeight: 46, padding: '0 13px', border: '1.5px solid var(--brd)', borderRadius: 12, background: 'var(--sur)', fontSize: 13.5, color: 'var(--tx)', marginBottom: 14 }}>
+          {warehouses.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+        </select>
 
-        <div style={{ margin: '14px 0', display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', color: 'var(--tx3)' }}>Сколько выдать</div>
-          {req.items.map((it) => {
-            const free = freeAt(freeByWh, stockByWh, it.product_id, wh)
-            const give = Number(qty[it.id] ?? it.qty)
-            const ok = give <= free + it.qty
-            return (
-              <div key={it.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 11px', background: ok ? 'var(--bg)' : 'var(--rd-l)', borderRadius: 9 }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 12.5, fontWeight: 500 }}>{pName(it.product_id)}</div>
-                  <div style={{ fontSize: 10.5, color: 'var(--tx3)' }}>просили {it.qty} · свободно {free}</div>
-                </div>
-                <Input type="number" inputMode="numeric" value={qty[it.id] ?? it.qty}
-                  onChange={(e) => setQty({ ...qty, [it.id]: Number(e.target.value) })} style={{ width: 72, height: 40 }} />
+        <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', color: 'var(--tx3)', marginBottom: 7 }}>Сколько выдать</div>
+        {req.items.map((it) => {
+          const free = (freeByWh?.[it.product_id]?.[Number(wh)]) ?? (stockByWh?.[it.product_id]?.[Number(wh)] ?? 0)
+          const give = Number(qty[it.id] ?? it.qty)
+          const ok = give <= free + it.qty
+          return (
+            <div key={it.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: ok ? 'var(--bg)' : 'var(--am-l)', borderRadius: 10, marginBottom: 8 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 12.5, fontWeight: 500 }}>{pName(it.product_id)}</div>
+                <div style={{ fontSize: 10.5, color: ok ? 'var(--tx3)' : 'var(--am-m)' }}>просили {it.qty} · свободно {free}</div>
               </div>
-            )
-          })}
-        </div>
+              <input type="number" inputMode="numeric" value={qty[it.id] ?? it.qty} onChange={(e) => setQty({ ...qty, [it.id]: Number(e.target.value) })}
+                style={{ width: 68, minHeight: 42, textAlign: 'center', border: '1px solid var(--brd2)', borderRadius: 10, background: 'var(--sur)', fontFamily: 'var(--mono)', fontSize: 14, color: 'var(--tx)' }} />
+            </div>
+          )
+        })}
 
-        <div style={{ display: 'flex', gap: 8 }}>
-          <Btn onClick={go} loading={loading} style={{ flex: 1, minHeight: 46 }}>Выдать и оформить акт</Btn>
-          <Btn v="secondary" onClick={onClose} style={{ minHeight: 46 }}>Отмена</Btn>
+        <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+          <Btn onClick={go} loading={loading} style={{ flex: 1, minHeight: 48 }}>Выдать и оформить акт</Btn>
+          <Btn v="secondary" onClick={onClose} style={{ minHeight: 48 }}>Отмена</Btn>
         </div>
       </div>
     </div>
   )
 }
 
-function RejectModal({ info, onClose, onDone }) {
+/* ── Отклонение / переделка ── */
+function RejectModal({ info, profile, data, onClose, onDone }) {
   const toast = useToast()
   const [comment, setComment] = useState('')
   const [loading, setLoading] = useState(false)
@@ -554,18 +584,39 @@ function RejectModal({ info, onClose, onDone }) {
     const { error } = await setStatus(info.req.id, isReject ? 'rejected' : 'revision', comment.trim())
     setLoading(false)
     if (error) return toast(error, 'error')
-    toast(isReject ? 'Заявка отклонена' : 'Отправлена на переделку'); onDone()
+    if (info.req.author_id) await push({ userId: info.req.author_id, kind: isReject ? 'rejected' : 'revision', action: true,
+      title: isReject ? `Заявка №${info.req.id} отклонена` : `Заявка №${info.req.id} на переделке`,
+      body: comment.trim(), entity: 'request', entityId: info.req.id })
+    toast(isReject ? 'Отклонено' : 'На переделку'); onDone()
   }
   return (
-    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'grid', placeItems: 'center', padding: 16, background: 'rgba(8,10,14,.5)', backdropFilter: 'blur(4px)' }}>
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'grid', placeItems: 'center', padding: 16, background: 'rgba(61,55,47,.45)', backdropFilter: 'blur(4px)' }}>
       <div onClick={(e) => e.stopPropagation()} className="card" style={{ width: '100%', maxWidth: 420, padding: 20 }}>
         <div className="ff" style={{ fontSize: 17, fontWeight: 600, marginBottom: 4 }}>{isReject ? 'Отклонить' : 'На переделку'} · №{info.req.id}</div>
-        <div style={{ fontSize: 12.5, color: 'var(--tx3)', marginBottom: 14 }}>{isReject ? 'Укажите причину.' : 'Что нужно исправить?'}</div>
+        <div style={{ fontSize: 12, color: 'var(--tx3)', marginBottom: 13 }}>{isReject ? 'Укажите причину.' : 'Что нужно исправить?'}</div>
         <textarea value={comment} onChange={(e) => setComment(e.target.value)} autoFocus placeholder="Комментарий (обязательно)…"
-          style={{ width: '100%', minHeight: 84, padding: '11px 12px', borderRadius: 10, border: '1px solid var(--brd2)', background: 'var(--bg)', fontSize: 13, resize: 'vertical', fontFamily: 'inherit' }} />
-        <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+          style={{ width: '100%', minHeight: 84, padding: '11px 12px', borderRadius: 12, border: '1.5px solid var(--brd)', background: 'var(--sur)', fontSize: 13, resize: 'vertical', fontFamily: 'inherit', color: 'var(--tx)' }} />
+        <div style={{ display: 'flex', gap: 8, marginTop: 13 }}>
           <Btn onClick={go} loading={loading} v={isReject ? 'danger' : 'primary'} style={{ flex: 1, minHeight: 46 }}>{isReject ? 'Отклонить' : 'На переделку'}</Btn>
           <Btn v="secondary" onClick={onClose} style={{ minHeight: 46 }}>Отмена</Btn>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* ── Подтверждение удаления ── */
+function ConfirmDelete({ req, onCancel, onOk }) {
+  return (
+    <div onClick={onCancel} style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'grid', placeItems: 'center', padding: 16, background: 'rgba(61,55,47,.45)', backdropFilter: 'blur(4px)' }}>
+      <div onClick={(e) => e.stopPropagation()} className="card" style={{ width: '100%', maxWidth: 380, padding: 20 }}>
+        <div className="ff" style={{ fontSize: 16, fontWeight: 600, marginBottom: 6 }}>Удалить заявку №{req.id}?</div>
+        <div style={{ fontSize: 12.5, color: 'var(--tx2)', lineHeight: 1.6, marginBottom: 16 }}>
+          Заявка удалится вместе с перепиской. Резерв снимется. Действие запишется в журнал.
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <Btn v="danger" onClick={onOk} style={{ flex: 1, minHeight: 46 }}>Удалить</Btn>
+          <Btn v="secondary" onClick={onCancel} style={{ minHeight: 46 }}>Отмена</Btn>
         </div>
       </div>
     </div>
