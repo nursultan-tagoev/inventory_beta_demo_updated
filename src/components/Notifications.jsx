@@ -2,6 +2,20 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../supabaseClient'
 import { markSeen, splitNotifs, ICONS, TONE } from '../lib/notify'
 
+function Row({ n, dismissable, onGo, onRead }) {
+  const t = TONE[n.kind] || ['var(--sur2)', 'var(--tx2)']
+  return (
+    <div onClick={() => onGo(n)} style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '11px 0', borderBottom: '1px solid var(--brd)', cursor: 'pointer' }}>
+      <div style={{ width: 32, height: 32, borderRadius: 10, background: t[0], display: 'grid', placeItems: 'center', fontSize: 15, flexShrink: 0 }}>{ICONS[n.kind] || '🔔'}</div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 12.5, fontWeight: 600 }}>{n.title}</div>
+        {n.body && <div style={{ fontSize: 10.5, color: 'var(--tx3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{n.body}</div>}
+      </div>
+      {dismissable && <button onClick={(e) => { e.stopPropagation(); onRead(n) }} style={{ fontSize: 15, color: 'var(--tx3)', padding: '0 4px' }}>×</button>}
+    </div>
+  )
+}
+
 /* Колокольчик в шапке + шторка со списком */
 export default function Notifications({ profile, onOpen }) {
   const [list, setList] = useState([])
@@ -33,20 +47,6 @@ export default function Notifications({ profile, onOpen }) {
     if (onOpen) onOpen(n)
   }
 
-  const Row = ({ n, dismissable }) => {
-    const t = TONE[n.kind] || ['var(--sur2)', 'var(--tx2)']
-    return (
-      <div onClick={() => go(n)} style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '11px 0', borderBottom: '1px solid var(--brd)', cursor: 'pointer' }}>
-        <div style={{ width: 32, height: 32, borderRadius: 10, background: t[0], display: 'grid', placeItems: 'center', fontSize: 15, flexShrink: 0 }}>{ICONS[n.kind] || '🔔'}</div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 12.5, fontWeight: 600 }}>{n.title}</div>
-          {n.body && <div style={{ fontSize: 10.5, color: 'var(--tx3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{n.body}</div>}
-        </div>
-        {dismissable && <button onClick={(e) => { e.stopPropagation(); readOne(n) }} style={{ fontSize: 15, color: 'var(--tx3)', padding: '0 4px' }}>×</button>}
-      </div>
-    )
-  }
-
   return (
     <>
       <button onClick={() => setOpen(!open)} title="Уведомления"
@@ -73,14 +73,14 @@ export default function Notifications({ profile, onOpen }) {
             {actions.length > 0 && (
               <div style={{ border: '1.5px solid var(--ink)', borderRadius: 12, padding: '11px 13px', marginBottom: 13 }}>
                 <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', color: 'var(--ink)', marginBottom: 6 }}>Требует действия · {actions.length}</div>
-                {actions.map((n) => <Row key={n.id} n={n} dismissable={false} />)}
+                {actions.map((n) => <Row key={n.id} n={n} dismissable={false} onGo={go} onRead={readOne} />)}
               </div>
             )}
 
             {news.length > 0 && (
               <>
                 <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', color: 'var(--tx3)', marginBottom: 5 }}>Что нового · {news.length}</div>
-                {news.map((n) => <Row key={n.id} n={n} dismissable />)}
+                {news.map((n) => <Row key={n.id} n={n} dismissable onGo={go} onRead={readOne} />)}
               </>
             )}
 

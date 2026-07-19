@@ -57,13 +57,6 @@ export default function Login() {
     ['🎙', 'Люси — заявка голосом', 'var(--sec-mov-l)'],
   ]
 
-  const Field = ({ label, children }) => (
-    <div style={{ marginBottom: 15 }}>
-      <div style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: '.04em', color: 'var(--tx3)', marginBottom: 7 }}>{label}</div>
-      {children}
-    </div>
-  )
-
   return (
     <div style={{ height: '100vh', display: 'flex', background: 'var(--bg)', overflow: 'hidden' }}>
 
@@ -87,7 +80,8 @@ export default function Login() {
             {known?.display ? 'Рады видеть снова' : 'Войдите данными, которые выдал администратор'}
           </div>
 
-          <Field label="Логин">
+          <div style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: '.04em', color: 'var(--tx3)', marginBottom: 7 }}>Логин</div>
+          <div style={{ marginBottom: 15 }}>
             <div style={{ display: 'flex', alignItems: 'stretch', border: '1.5px solid var(--brd)', borderRadius: 14, background: 'var(--sur)', overflow: 'hidden' }}>
               <div style={{ display: 'grid', placeItems: 'center', paddingLeft: 14, color: 'var(--tx3)', fontSize: 15 }}>👤</div>
               <input value={name} onChange={(e) => setName(e.target.value)} placeholder="ваш логин"
@@ -96,9 +90,10 @@ export default function Login() {
                 style={{ flex: 1, minWidth: 0, minHeight: 52, padding: '0 10px 0 11px', border: 'none', background: 'transparent', fontSize: 14, color: 'var(--tx)' }} />
               <div style={{ display: 'grid', placeItems: 'center', padding: '0 13px', background: 'var(--sur2)', borderLeft: '1px solid var(--brd)', fontSize: 12.5, color: 'var(--tx3)', whiteSpace: 'nowrap' }}>{DOMAIN}</div>
             </div>
-          </Field>
+          </div>
 
-          <Field label="Пароль">
+          <div style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: '.04em', color: 'var(--tx3)', marginBottom: 7 }}>Пароль</div>
+          <div style={{ marginBottom: 15 }}>
             <div style={{ position: 'relative' }}>
               <input type={show ? 'text' : 'password'} value={pass} onChange={(e) => setPass(e.target.value)}
                 autoComplete="current-password" onKeyDown={(e) => e.key === 'Enter' && submit()}
@@ -109,7 +104,7 @@ export default function Login() {
                 {show ? '🙈' : '👁'}
               </button>
             </div>
-          </Field>
+          </div>
 
           {err && <div style={{ display: 'flex', gap: 9, padding: '11px 13px', background: 'var(--rd-l)', border: '1px solid var(--rd)', borderRadius: 12, fontSize: 11.5, color: 'var(--rd-m)', lineHeight: 1.6, marginBottom: 14 }}>
             <span style={{ flexShrink: 0 }}>⚠️</span><span>{err}</span>
