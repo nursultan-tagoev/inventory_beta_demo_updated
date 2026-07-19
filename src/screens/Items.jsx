@@ -100,7 +100,7 @@ export default function Items({ data, can, profile }) {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(184px,1fr))', gap: 14 }}>
         {list.map((p) => {
           const s = seeStock ? (stock[p.id] || 0) : null
-          const c = s === 0 ? 'var(--tx3)' : s < 5 ? 'var(--am)' : 'var(--gr)'
+          const c = s === null ? 'var(--tx3)' : s < 0 ? 'var(--rd)' : s === 0 ? 'var(--tx3)' : s < 5 ? 'var(--am)' : 'var(--gr)'
           const cat = categories.find((x) => x.id === p.category_id)
           return (
             <div key={p.id} onClick={() => setSel(p)} className="card" style={{ padding: 0, overflow: 'hidden', cursor: 'pointer' }}>
@@ -117,7 +117,7 @@ export default function Items({ data, can, profile }) {
                       <div style={{ width: `${Math.max(0, (tot - rsv) / (tot || 1) * 100)}%`, background: 'var(--gr)' }} />
                       <div style={{ width: `${rsv / (tot || 1) * 100}%`, background: 'var(--am)' }} />
                     </div>
-                    <div style={{ fontSize: 10, color: 'var(--am-m)', marginTop: 3 }}>свободно {tot - rsv} · резерв {rsv}</div>
+                    <div style={{ fontSize: 10, color: 'var(--am-m)', marginTop: 3 }}>зарезервировано {rsv} · свободно {tot - rsv}</div>
                   </div> })()}
                 {seeStock && <div style={{ display: 'flex', gap: 10, marginTop: 7, paddingTop: 7, borderTop: '1px solid var(--brd)', flexWrap: 'wrap' }}>
                   {warehouses.map((w) => (

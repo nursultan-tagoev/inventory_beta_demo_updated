@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import { Btn, Field, Input, Select, Badge, Sheet, useToast } from '../components/ui'
 import { chainOf, freeAll, freeAt } from '../lib/data'
 import { createRequest, updateRequest, setStatus, cancelRequest, closePartial, issueRequest, openFile } from '../lib/requests'
-import { buildApprovalChain, approversOf, currentApprover, createApprovalChain } from '../lib/approval'
+import { buildApprovalChain, approversOf, currentApprover, createApprovalChain, chainComplete, sendToWarehouse, approveInSystem, approveByScan } from '../lib/approval'
 import ApprovalSheet from '../components/ApprovalSheet'
 
 const ST = {
@@ -18,7 +18,7 @@ export default function Requests({ data, profile, can }) {
   const { requests, products, recipients, branches, warehouses, profiles, freeByWh, stockByWh, reload } = data
   const isAdmin = profile?.role === 'admin'
   const isManager = profile?.role === 'manager'
-  const [tab, setTab] = useState(isAdmin ? 'toissue' : isManager ? 'approve' : 'mine')
+  const [tab, setTab] = useState(isAdmin ? 'toissue' : isManager ? 'approve' : 'all')
   const [form, setForm] = useState(false)
   const [editReq, setEditReq] = useState(null)
   const [issue, setIssue] = useState(null)
@@ -31,32 +31,57 @@ export default function Requests({ data, profile, can }) {
 
   const mine = requests.filter((r) => r.author_id === profile?.id)
   // На исполнение — только согласованные
-  const toIssue = requests.filter((r) => r.status === 'approved')
+  const toIssue = requests.filter((r) => r.status === 'approved' && r.sent_at)
   // Мне на согласование
   const toApprove = requests.filter((r) => {
     const cur = currentApprover(approversOf(data.reqApprovers, r.id))
     if (r.status !== 'new' || !cur) return false
     if (cur.in_system) return cur.user_id === profile?.id
-    // Внешний согласующий: подпись приносит только автор заявки
-    return r.author_id === profile?.id
+    const chain = approversOf(data.reqApprovers, r.id)
+    const prev = chain.filter((a) => a.order_no < cur.order_no && a.in_system).slice(-1)[0]
+    return (prev && prev.user_id === profile?.id) || r.author_id === profile?.id
+  })
+  // Собранные, но не отправленные — тоже требуют действия
+  const toSend = requests.filter((r) => {
+    if (r.status !== 'new' || r.sent_at) return false
+    const chain = approversOf(data.reqApprovers, r.id)
+    if (!chainComplete(chain)) return false
+    const lastIn = chain.filter((a) => a.in_system).slice(-1)[0]
+    return (lastIn && lastIn.user_id === profile?.id) || r.author_id === profile?.id
   })
   const inApproval = requests.filter((r) => r.status === 'new')
   const branchReq = requests.filter((r) => {
     const a = (data.profiles || []).find((p) => p.id === r.author_id)
     return a && a.branch_id === profile?.branch_id
   })
+  // Область видимости: админ/директор — все, менеджер — свой филиал, спец — свои
+  const scope = isAdmin || profile?.role === 'director' ? requests : isManager ? branchReq : mine
   const list =
     tab === 'toissue' ? toIssue
-    : tab === 'approve' ? toApprove
-    : tab === 'inappr' ? inApproval
-    : tab === 'issued' ? requests.filter((r) => ['issued', 'partial', 'received'].includes(r.status))
-    : tab === 'rejected' ? (isAdmin ? requests : isManager ? branchReq : mine).filter((r) => r.status === 'rejected')
-    : tab === 'branch' ? branchReq
-    : tab === 'inappr_my' ? mine.filter((r) => r.status === 'new')
-    : tab === 'revision_my' ? mine.filter((r) => r.status === 'revision')
-    : tab === 'all' ? requests : mine
+    : tab === 'approve' ? [...toApprove, ...toSend.filter((x) => !toApprove.find((y) => y.id === x.id))]
+    : tab === 'toissue2' ? scope.filter((r) => r.status === 'approved')
+    : tab === 'inappr' ? scope.filter((r) => r.status === 'new')
+    : tab === 'issued' ? scope.filter((r) => ['issued', 'partial'].includes(r.status))
+    : tab === 'done' ? scope.filter((r) => r.status === 'received')
+    : tab === 'revision' ? scope.filter((r) => r.status === 'revision')
+    : tab === 'rejected' ? scope.filter((r) => r.status === 'rejected')
+    : scope
 
   const act = async (fn, okMsg) => { const { error } = await fn; if (error) return toast(error, 'error'); toast(okMsg); reload() }
+
+  // Согласовать нажатием (пользователь в системе)
+  const approveNow = async (r, appr) => {
+    if (!appr) return
+    const { error } = await approveInSystem(appr, profile.id, r.id)
+    if (error) return toast(error, 'error')
+    toast('Согласовано'); reload()
+  }
+  // Отправить на склад
+  const sendNow = async (r) => {
+    const { error } = await sendToWarehouse(r.id, profile.id)
+    if (error) return toast(error, 'error')
+    toast('Заявка отправлена на склад'); reload()
+  }
 
   return (
     <div style={{ maxWidth: 900, margin: '0 auto', padding: '24px 20px 90px', animation: 'fadeUp .3s ease' }}>
@@ -67,12 +92,17 @@ export default function Requests({ data, profile, can }) {
       </div>
 
       <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap', overflowX: 'auto' }}>
-        {(isAdmin
-          ? [['toissue', `К выдаче${toIssue.length ? ' · ' + toIssue.length : ''}`], ['inappr', 'На согласовании'], ['issued', 'Выданные'], ['rejected', 'Отклонённые'], ['all', 'Все']]
-          : isManager
-            ? [['approve', `Мне на согласование${toApprove.length ? ' · ' + toApprove.length : ''}`], ['mine', 'Мои заявки'], ['branch', 'Заявки филиала'], ['rejected', 'Отклонённые']]
-            : [['mine', 'Все мои заявки'], ['inappr_my', 'На согласовании'], ['revision_my', 'На переделке'], ['rejected', 'Отклонённые']]
-        ).map(([t, l]) => (
+        {[
+          ...(isAdmin ? [['toissue', `К выдаче${toIssue.length ? ' · ' + toIssue.length : ''}`]] : []),
+          ...(toApprove.length + toSend.length || isManager ? [['approve', `Требует действия${toApprove.length + toSend.length ? ' · ' + (toApprove.length + toSend.length) : ''}`]] : []),
+          ['all', 'Все заявки'],
+          ['inappr', 'На согласовании'],
+          ['toissue2', 'К выдаче'],
+          ['issued', 'Выданные'],
+          ['revision', 'На переделке'],
+          ['rejected', 'Отклонённые'],
+          ['done', 'Завершённые'],
+        ].map(([t, l]) => (
           <button key={t} onClick={() => setTab(t)} style={{ fontSize: 12.5, padding: '8px 14px', minHeight: 38, borderRadius: 20, border: 'none', whiteSpace: 'nowrap', background: tab === t ? 'var(--ink-l)' : 'var(--sur)', color: tab === t ? 'var(--ink)' : 'var(--tx3)', fontWeight: tab === t ? 600 : 500 }}>{l}</button>
         ))}
       </div>
@@ -85,7 +115,8 @@ export default function Requests({ data, profile, can }) {
 
       {list.map((r) => (
         <Card key={r.id} r={r} data={data} isAdmin={isAdmin} me={profile?.id} profile={profile} pName={pName} rName={rName} bName={bName}
-          onIssue={() => setIssue(r)} onApprove={() => setApprSheet(r)} onReject={() => setReject({ req: r, mode: 'reject' })}
+          onIssue={() => setIssue(r)} onApprove={() => setApprSheet(r)} onApproveNow={approveNow} onSend={sendNow}
+          onReject={() => setReject({ req: r, mode: 'reject' })}
           onRevision={() => setReject({ req: r, mode: 'revision' })}
           onEdit={() => { setEditReq(r); setForm(true) }}
           onCancel={() => act(cancelRequest(r.id), 'Заявка отменена')}
@@ -104,7 +135,7 @@ export default function Requests({ data, profile, can }) {
   )
 }
 
-function Card({ r, data, isAdmin, me, pName, rName, bName, profile, onIssue, onApprove, onReject, onRevision, onEdit, onCancel, onReceived, onClosePartial }) {
+function Card({ r, data, isAdmin, me, pName, rName, bName, profile, onIssue, onApprove, onApproveNow, onSend, onReject, onRevision, onEdit, onCancel, onReceived, onClosePartial }) {
   const st = ST[r.status] || ST.new
   const mineOwn = r.author_id === me
   const canEdit = !isAdmin && mineOwn && ['new', 'revision'].includes(r.status)
@@ -168,6 +199,14 @@ function Card({ r, data, isAdmin, me, pName, rName, bName, profile, onIssue, onA
         </div>
       )}
 
+      {/* Подсказка автору, если ждёт внешнего, а он не на этой вкладке */}
+      {(() => {
+        const ch = approversOf(data.reqApprovers, r.id); const c = currentApprover(ch)
+        if (!c || r.status !== 'new' || c.in_system) return null
+        if (r.author_id !== me) return null
+        return null  // подробная плашка показывается в блоке действий ниже
+      })()}
+
       {/* Цепочка согласования */}
       {(() => {
         const chain = approversOf(data.reqApprovers, r.id)
@@ -203,30 +242,79 @@ function Card({ r, data, isAdmin, me, pName, rName, bName, profile, onIssue, onA
           <Btn size="sm" v="secondary" onClick={onReject} style={{ minHeight: 42 }}>Отклонить</Btn>
         </div>
       )}
-      {/* Согласующий: моя очередь */}
+      {/* Процесс согласования — три шага на одном экране */}
       {(() => {
         const chain = approversOf(data.reqApprovers, r.id)
+        if (!chain.length || !['new'].includes(r.status)) return null
         const cur = currentApprover(chain)
-        if (r.status !== 'new' || !cur) return null
-        const mineTurn = cur.in_system ? cur.user_id === me : r.author_id === me
-        if (!mineTurn) return null
-        const isExt = !cur.in_system
+        const complete = chainComplete(chain)
+
+        // Моё ли звено сейчас
+        const myTurn = cur && cur.in_system && cur.user_id === me
+        // Кто прикладывает за внешнего: предыдущий в системе, автор или админ
+        const prevIn = cur ? chain.filter((a) => a.order_no < cur.order_no && a.in_system).slice(-1)[0] : null
+        const canAttach = cur && !cur.in_system && ((prevIn && prevIn.user_id === me) || r.author_id === me || isAdmin)
+        // Кто отправляет: последний согласовавший в системе, автор или админ
+        const lastIn = chain.filter((a) => a.in_system).slice(-1)[0]
+        const canSend = complete && !r.sent_at && ((lastIn && lastIn.user_id === me) || r.author_id === me || isAdmin)
+
+        if (!myTurn && !canAttach && !canSend) return null
+
+        const stepBox = (n, title, state, body) => (
+          <div style={{ border: state === 'active' ? '1.5px solid var(--ink)' : '1px solid var(--brd)', borderRadius: 12, padding: 13, marginBottom: 9, opacity: state === 'wait' ? 0.55 : 1, transition: 'all .25s ease' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: body ? 10 : 0 }}>
+              <div className="mono" style={{ width: 23, height: 23, borderRadius: 7, display: 'grid', placeItems: 'center', fontSize: 11, fontWeight: 700,
+                background: state === 'done' ? 'var(--gr-l)' : state === 'active' ? 'var(--ink-l)' : 'var(--sur2)',
+                color: state === 'done' ? 'var(--gr-m)' : state === 'active' ? 'var(--ink)' : 'var(--tx3)' }}>{state === 'done' ? '✓' : n}</div>
+              <span style={{ fontSize: 12.5, fontWeight: 600, color: state === 'wait' ? 'var(--tx3)' : 'var(--tx)' }}>{title}</span>
+              {state === 'done' && <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--gr-m)' }}>готово</span>}
+            </div>
+            {body}
+          </div>
+        )
+
+        const mySigned = chain.find((a) => a.in_system && a.user_id === me && a.status === 'approved')
+        const extDone = chain.filter((a) => !a.in_system).every((a) => a.status === 'approved')
+        const extPending = chain.find((a) => !a.in_system && a.status === 'waiting')
+
         return (
           <div style={{ marginTop: 12 }}>
-            {isExt && <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', background: 'var(--am-l)', borderRadius: 9, fontSize: 12, color: 'var(--am-m)', marginBottom: 9 }}>
-              <span style={{ fontSize: 16 }}>📄</span>
-              <span>Распечатайте заявку, получите подпись <b>{cur.approver_name}</b> и приложите скан</span>
-            </div>}
-            <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
-              <Btn size="sm" onClick={onApprove} style={{ flex: 1, minWidth: 160, minHeight: 44 }}>
-                {isExt ? '📎 Приложить подпись' : '✓ Согласовать'}
-              </Btn>
-              <Btn size="sm" v="secondary" onClick={onRevision} style={{ minHeight: 44 }}>На переделку</Btn>
-              <Btn size="sm" v="secondary" onClick={onReject} style={{ minHeight: 44 }}>Отклонить</Btn>
-            </div>
+            {/* 1. Моё согласование */}
+            {(myTurn || mySigned) && stepBox(1, 'Ваше согласование', mySigned ? 'done' : 'active',
+              mySigned
+                ? <div style={{ fontSize: 11, color: 'var(--tx3)', paddingLeft: 32 }}>{mySigned.approver_name} · {new Date(mySigned.acted_at).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</div>
+                : <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
+                    <Btn size="sm" onClick={() => onApproveNow(r, cur)} style={{ flex: 1, minWidth: 130, minHeight: 46 }}>✓ Согласовать</Btn>
+                    <Btn size="sm" v="secondary" onClick={onRevision} style={{ minHeight: 46 }}>Переделка</Btn>
+                    <Btn size="sm" v="secondary" onClick={onReject} style={{ minHeight: 46 }}>Отклонить</Btn>
+                  </div>
+            )}
+
+            {/* 2. Подпись внешнего */}
+            {chain.some((a) => !a.in_system) && stepBox(2, `Подпись: ${chain.find((a) => !a.in_system)?.approver_name || ''}`,
+              extDone ? 'done' : (canAttach ? 'active' : 'wait'),
+              extDone
+                ? <div style={{ fontSize: 11, color: 'var(--tx3)', paddingLeft: 32 }}>скан приложен</div>
+                : canAttach
+                  ? <>
+                      <div style={{ fontSize: 12, color: 'var(--tx2)', marginBottom: 10 }}>Распечатайте заявку, получите подпись и приложите скан.</div>
+                      <Btn size="sm" v="secondary" onClick={() => onApprove()} style={{ width: '100%', minHeight: 46 }}>📎 Приложить подпись</Btn>
+                    </>
+                  : <div style={{ fontSize: 11, color: 'var(--tx3)', paddingLeft: 32 }}>После вашего согласования</div>
+            )}
+
+            {/* 3. Отправка на склад */}
+            {stepBox(3, 'Отправка на склад', r.sent_at ? 'done' : (complete ? 'active' : 'wait'),
+              r.sent_at
+                ? <div style={{ fontSize: 11, color: 'var(--tx3)', paddingLeft: 32 }}>отправлена {new Date(r.sent_at).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</div>
+                : complete && canSend
+                  ? <Btn onClick={() => onSend(r)} style={{ width: '100%', minHeight: 48 }}>📤 Отправить на склад</Btn>
+                  : <div style={{ fontSize: 11, color: 'var(--tx3)', paddingLeft: 32 }}>После сбора подписей</div>
+            )}
           </div>
         )
       })()}
+
       {(canEdit || canCancel || canReceive) && (
         <div style={{ display: 'flex', gap: 7, marginTop: 12, flexWrap: 'wrap' }}>
           {canReceive && <Btn size="sm" onClick={onReceived} style={{ minHeight: 42 }}>Подтвердить получение</Btn>}

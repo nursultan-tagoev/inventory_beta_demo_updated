@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabaseClient'
-import SignSheet from '../components/SignSheet'
+import { printDoc } from '../lib/print'
+import ReceiptSign from '../components/ReceiptSign'
 import { signersOf, currentSigner } from '../lib/signing'
 import { Badge, Spin } from '../components/ui'
 import { fmt } from '../lib/format'
@@ -47,9 +48,7 @@ export default function Acts({ data, profile }) {
                 <div style={{ fontSize: 12, color: 'var(--tx3)', marginTop: 2 }}>{rName(a.recipient_id, a.recipient_name)} · {a.act_date}</div>
               </div>
               <div style={{ textAlign: 'right' }} onClick={(e) => e.stopPropagation()}>
-                {(() => { const ch = signersOf(data.actSigners, a.id); const cur = currentSigner(ch);
-                  const mine = cur && ((cur.in_system && cur.user_id === profile?.id) || (!cur.in_system && profile?.role === 'admin'))
-                  return mine ? <button onClick={() => setSignAct(a)} style={{ minHeight: 34, padding: '0 12px', borderRadius: 8, border: 'none', background: 'var(--ink)', color: '#fff', fontSize: 11.5, fontWeight: 600, marginBottom: 4 }}>Подписать</button> : null })()}
+                {!a.recipient_signed && !a.annulled && a.issued && <button onClick={() => setSignAct(a)} style={{ minHeight: 36, padding: '0 12px', borderRadius: 8, border: 'none', background: 'var(--ink)', color: '#fff', fontSize: 11.5, fontWeight: 600, marginBottom: 4 }}>Подтвердить получение</button>}
                 <div className="mono" style={{ fontWeight: 600, fontSize: 13.5 }}>{fmt(a.total_sum)} сом</div>
                 <div style={{ marginTop: 3 }}><Badge color={ST[a.status]?.[1] || 'slate'}>{ST[a.status]?.[0] || a.status}</Badge></div>
               </div>
@@ -58,7 +57,7 @@ export default function Acts({ data, profile }) {
         </div>
       )}
 
-      {signAct && <SignSheet act={signAct} data={data} profile={profile} onClose={() => setSignAct(null)} onDone={() => { setSignAct(null); load() }} />}
+      {signAct && <ReceiptSign act={signAct} data={data} profile={profile} onClose={() => setSignAct(null)} onDone={() => { setSignAct(null); load() }} />}
       {open && <ActView act={open} data={data} onClose={() => setOpen(null)} onChanged={() => { load(); setOpen(null) }} />}
     </div>
   )
@@ -107,7 +106,7 @@ function ActView({ act, data, onClose, onChanged }) {
       <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: 780, margin: '0 auto' }}>
         <div className="no-print" style={{ display: 'flex', gap: 8, marginBottom: 12, justifyContent: 'flex-end' }}>
           {!act.annulled && <button onClick={() => setAnnulling(!annulling)} style={{ height: 34, padding: '0 14px', borderRadius: 9, border: '1px solid var(--rd)', background: 'var(--rd-l)', color: 'var(--rd-m)', fontSize: 12.5, fontWeight: 600 }}>Аннулировать</button>}
-          <button onClick={() => window.print()} style={{ height: 34, padding: '0 14px', borderRadius: 9, border: '1px solid var(--brd2)', background: 'var(--sur)', fontSize: 12.5, fontWeight: 600 }}>🖨 Печать / PDF</button>
+          <button onClick={() => printDoc('act-print')} style={{ height: 34, padding: '0 14px', borderRadius: 9, border: '1px solid var(--brd2)', background: 'var(--sur)', fontSize: 12.5, fontWeight: 600 }}>🖨 Печать / PDF</button>
           <button onClick={onClose} style={{ height: 34, padding: '0 14px', borderRadius: 9, border: '1px solid var(--brd2)', background: 'var(--sur)', fontSize: 12.5, fontWeight: 600 }}>Закрыть</button>
         </div>
         {annulling && !act.annulled && (

@@ -16,7 +16,8 @@ export default function Home({ data, profile, can, setView }) {
   const onHands = checkouts.reduce((a, c) => a + c.remaining, 0)
   const today = new Date().toISOString().slice(0, 10)
   const overdue = checkouts.filter((c) => c.due_date && c.due_date < today)
-  const low = active.filter((p) => (stock[p.id] || 0) < 5)
+  const low = active.filter((p) => { const q = stock[p.id] || 0; return q < (p.min_qty || 5) })
+    .sort((a, b) => (stock[a.id] || 0) - (stock[b.id] || 0))
   const whTotal = (wid) => !wid ? 0 : active.reduce((a, p) => a + ((stockByWh?.[p.id]?.[wid]) || 0), 0)
   // Для спеца — его выдачи; для рук. филиала — его филиал
   const myCheckouts = checkouts.filter((c) => {
@@ -184,7 +185,7 @@ export default function Home({ data, profile, can, setView }) {
           {low.slice(0, 6).map((p, i, arr) => (
             <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 18px', borderBottom: i < arr.length - 1 ? '1px solid var(--brd)' : 'none', fontSize: 13 }}>
               <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</span>
-              <Badge color={(stock[p.id] || 0) === 0 ? 'red' : 'amber'}>{stock[p.id] || 0} шт</Badge>
+              <Badge color={(stock[p.id] || 0) <= 0 ? 'red' : 'amber'}>{stock[p.id] || 0} шт{(stock[p.id] || 0) < 0 ? ' ⚠' : ''}</Badge>
             </div>
           ))}
         </div>}
