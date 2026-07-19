@@ -38,20 +38,23 @@ export async function createApprovalChain(requestId, chain) {
   return { error: error ? error.message : null }
 }
 
-// Согласовать (подпись на экране)
-export async function approveOnScreen(appr, dataUrl, profileId, requestId) {
+// Согласовать нажатием (пользователь авторизован — это и есть его подпись).
+// dataUrl — необязательный росчерк, если человек захотел расписаться.
+export async function approveInSystem(appr, profileId, requestId, dataUrl) {
   let signature_path = null
   if (dataUrl) {
     try { const blob = await (await fetch(dataUrl)).blob(); signature_path = await uploadFile('appr', 'sig.png', blob) }
     catch (e) { return { error: 'Подпись: ' + e.message } }
   }
   const { error } = await supabase.from('request_approvers').update({
-    status: 'approved', method: 'screen', signature_path, acted_at: new Date().toISOString(), uploaded_by: profileId,
+    status: 'approved', method: dataUrl ? 'screen' : 'system', signature_path,
+    acted_at: new Date().toISOString(), uploaded_by: profileId,
   }).eq('id', appr.id)
   if (error) return { error: error.message }
   await supabase.rpc('touch_reservation', { p_request_id: requestId })
-  return await finishIfComplete(requestId)
+  return { error: null }
 }
+export const approveOnScreen = (appr, dataUrl, profileId, requestId) => approveInSystem(appr, profileId, requestId, dataUrl)
 
 // Согласовать сканом (за того, кого нет в системе)
 export async function approveByScan(appr, file, profileId, requestId) {
@@ -62,7 +65,7 @@ export async function approveByScan(appr, file, profileId, requestId) {
   }).eq('id', appr.id)
   if (error) return { error: error.message }
   await supabase.rpc('touch_reservation', { p_request_id: requestId })
-  return await finishIfComplete(requestId)
+  return { error: null }
 }
 
 // Отказ в согласовании
@@ -77,11 +80,20 @@ export async function declineApproval(appr, reason, requestId) {
   return { error: null }
 }
 
-// Если все согласовали — заявка готова к исполнению
-async function finishIfComplete(requestId) {
+// Все ли согласовали
+export const chainComplete = (chain) => (chain || []).length > 0 && chain.every((a) => a.status === 'approved')
+
+// Отправить на склад — явное действие того, кто собрал подписи
+export async function sendToWarehouse(requestId, profileId) {
   const { data } = await supabase.from('request_approvers').select('status').eq('request_id', requestId)
-  const all = (data || []).every((a) => a.status === 'approved')
-  if (all) await supabase.from('requests').update({ status: 'approved' }).eq('id', requestId)
+  if (!(data || []).length || !(data || []).every((a) => a.status === 'approved')) {
+    return { error: 'Ещё не все согласовали' }
+  }
+  const { error } = await supabase.from('requests').update({
+    status: 'approved', sent_at: new Date().toISOString(), sent_by: profileId,
+  }).eq('id', requestId)
+  if (error) return { error: error.message }
+  await supabase.rpc('touch_reservation', { p_request_id: requestId })
   return { error: null }
 }
 
