@@ -108,8 +108,20 @@ export default function Home({ data, profile, can, setView }) {
         </div>
       })()}
 
-      {/* Карточки-действия */}
-      {showActions && (
+      {/* Заявителям — одно действие */}
+      {['employee', 'manager'].includes(role) && (
+        <button onClick={() => setView && setView('requests')} className="card"
+          style={{ width: '100%', padding: '18px 20px', textAlign: 'left', cursor: 'pointer', border: '1.5px solid var(--sec-req)', marginBottom: 18, display: 'flex', alignItems: 'center', gap: 14 }}>
+          <div style={{ width: 46, height: 46, borderRadius: 14, background: 'var(--sec-req-l)', display: 'grid', placeItems: 'center', fontSize: 21, flexShrink: 0 }}>＋</div>
+          <div>
+            <div className="ff" style={{ fontSize: 16, fontWeight: 600 }}>Подать заявку</div>
+            <div style={{ fontSize: 12, color: 'var(--tx3)', marginTop: 2 }}>запросить товар со склада</div>
+          </div>
+        </button>
+      )}
+
+      {/* Карточки-действия (только склад) */}
+      {showActions && role === 'admin' && (
         <div className="home-actions" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 22 }}>
           {actions.map((a) => (
             <button key={a.t} onClick={() => setSheet(a.t)} className="card" style={{ padding: 17, textAlign: 'left', cursor: 'pointer', transition: 'all .15s' }}
@@ -131,12 +143,7 @@ export default function Home({ data, profile, can, setView }) {
           {warehouses.map((w) => (<Stat key={w.id} label={w.name} value={fmt(whTotal(w.id))} unit="шт" />))}
           <Stat label="Просрочено" value={overdue.length} color={overdue.length ? 'var(--rd)' : 'var(--gr)'} />
         </div>
-      ) : (
-        <div className="home-kpi" style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 12, marginBottom: 22 }}>
-          <Stat label="На руках" value={fmt(myHands)} unit="шт" color="var(--ink)" accent />
-          <Stat label="Просрочено" value={myOverdue} color={myOverdue ? 'var(--rd)' : 'var(--gr)'} />
-        </div>
-      )}
+      ) : null}
 
       {/* Панели */}
       <div className="home-panels" style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 16 }}>
