@@ -7,6 +7,7 @@ import Sidebar from './components/Sidebar'
 import Notifications from './components/Notifications'
 import Home from './screens/Home'
 import Items from './screens/Items'
+import Catalog from './screens/Catalog'
 import Movements from './screens/Movements'
 import Recipients from './screens/Recipients'
 import Reports from './screens/Reports'
@@ -36,9 +37,9 @@ class ErrorBoundary extends React.Component {
 
 const ROLE_VIEWS = {
   admin: ['home', 'items', 'movements', 'requests', 'acts', 'lucy', 'recipients', 'reports', 'settings'],
-  manager: ['home', 'items', 'movements', 'requests', 'acts', 'lucy', 'recipients'],
-  director: ['home', 'items', 'movements', 'requests', 'acts', 'lucy', 'recipients', 'reports'],
-  employee: ['home', 'items', 'movements', 'requests', 'lucy'],
+  manager: ['home', 'catalog', 'movements', 'requests', 'acts', 'lucy'],
+  director: ['home', 'items', 'movements', 'requests', 'acts', 'reports'],
+  employee: ['home', 'catalog', 'movements', 'requests', 'lucy'],
 }
 
 export default function App() {
@@ -46,6 +47,7 @@ export default function App() {
   const [profile, setProfile] = useState(null)
   const [view, setView] = useState('home')
   const [assistAuto, setAssistAuto] = useState(false)
+  const [draftItems, setDraftItems] = useState(null)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session || null))
@@ -86,12 +88,13 @@ export default function App() {
   const SCREENS = {
     home: <Home data={data} profile={profile} can={can} setView={setView} />,
     items: <Items data={data} can={can} profile={profile} />,
+    catalog: <Catalog data={data} profile={profile} onRequest={(draft) => { setDraftItems(draft); setView('requests') }} />,
     movements: <Movements data={data} profile={profile} can={can} />,
     recipients: <Recipients data={data} can={can} />,
     reports: <Reports data={data} />,
     acts: <Acts data={data} profile={profile} />,
     settings: <Settings data={data} />,
-    requests: <Requests data={data} profile={profile} can={can} />,
+    requests: <Requests data={data} profile={profile} can={can} draftItems={draftItems} onDraftUsed={() => setDraftItems(null)} />,
     lucy: <Lucy data={data} profile={profile} can={can} setView={setView} autostart={assistAuto} onAutostart={() => setAssistAuto(false)} />,
   }
 
