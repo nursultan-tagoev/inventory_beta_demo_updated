@@ -29,6 +29,7 @@ export default function OperationSheet({ type, data, profile, can, onDone }) {
     product_id: '', qty: 1, recipient_id: '', branch_id: '',
     warehouse_id: warehouses[0]?.id || '', warehouse_to_id: '', location_id: '',
     supplier_id: suppliers[0]?.id || '', purpose: '', due_date: '', sz: '', condition: 'хорошее', direction_id: '', notes: '',
+    on_time: true, has_defects: false, defects: 0, delivery_comment: '',
   })
   const up = (k, v) => setF((s) => ({ ...s, [k]: v }))
   const selProd = useMemo(() => products.find((p) => p.id == f.product_id) || createdProd, [f.product_id, products, createdProd])
@@ -84,7 +85,22 @@ export default function OperationSheet({ type, data, profile, can, onDone }) {
 
   const doSave = async () => {
     setLoading(true)
-    const { error } = await saveMovement({ ...f, type, issuer_id: profile.id, branch_id: f.branch_id || selRec?.branch_id }, stockByWh)
+    // Приход с браком — оприходуем только годное
+    const defects = type === 'in' && f.has_defects ? (Number(f.defects) || 0) : 0
+    const goodQty = type === 'in' ? Math.max(0, (Number(f.qty) || 0) - defects) : f.qty
+    if (type === 'in' && goodQty <= 0) { setLoading(false); toast('Нечего приходовать — весь товар бракованный', 'error'); return }
+
+    const { error } = await saveMovement({ ...f, qty: goodQty, type, issuer_id: profile.id, branch_id: f.branch_id || selRec?.branch_id }, stockByWh)
+
+    // Оценка поставки
+    if (!error && type === 'in' && f.supplier_id) {
+      try {
+        await supabase.from('deliveries').insert({
+          supplier_id: Number(f.supplier_id), on_time: f.on_time,
+          defects, comment: f.delivery_comment || null,
+        })
+      } catch (e) {}
+    }
     setLoading(false)
     if (error) return toast(error, 'error')
     toast(TL[type] + ' сохранена')
@@ -217,6 +233,49 @@ export default function OperationSheet({ type, data, profile, can, onDone }) {
       </div>}
 
       {step === 2 && type === 'in' && <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {/* Оценка поставки */}
+        {f.supplier_id && <div className="card" style={{ padding: 14, background: 'var(--bg)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 11 }}>
+            <span style={{ fontSize: 15 }}>⭐</span>
+            <span style={{ fontSize: 12.5, fontWeight: 600 }}>Как прошла поставка</span>
+            <span style={{ marginLeft: 'auto', fontSize: 10.5, color: 'var(--tx3)' }}>необязательно</span>
+          </div>
+
+          <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', color: 'var(--tx3)', marginBottom: 6 }}>Срок</div>
+          <div style={{ display: 'flex', gap: 7, marginBottom: 12 }}>
+            {[[true, 'В срок', 'var(--gr)', 'var(--gr-l)', 'var(--gr-m)'], [false, 'С опозданием', 'var(--am)', 'var(--am-l)', 'var(--am-m)']].map(([v, l, bc, bg, cl]) => (
+              <button key={String(v)} onClick={() => up('on_time', v)} style={{
+                flex: 1, minHeight: 44, borderRadius: 11, fontSize: 12, fontWeight: f.on_time === v ? 600 : 500,
+                border: `1px solid ${f.on_time === v ? bc : 'var(--brd2)'}`,
+                background: f.on_time === v ? bg : 'var(--sur)', color: f.on_time === v ? cl : 'var(--tx2)',
+              }}>{l}</button>
+            ))}
+          </div>
+
+          <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', color: 'var(--tx3)', marginBottom: 6 }}>Качество</div>
+          <div style={{ display: 'flex', gap: 7, marginBottom: f.has_defects ? 11 : 12 }}>
+            {[[false, 'Без замечаний', 'var(--gr)', 'var(--gr-l)', 'var(--gr-m)'], [true, 'Есть брак', 'var(--rd)', 'var(--rd-l)', 'var(--rd-m)']].map(([v, l, bc, bg, cl]) => (
+              <button key={String(v)} onClick={() => up('has_defects', v)} style={{
+                flex: 1, minHeight: 44, borderRadius: 11, fontSize: 12, fontWeight: f.has_defects === v ? 600 : 500,
+                border: `1px solid ${f.has_defects === v ? bc : 'var(--brd2)'}`,
+                background: f.has_defects === v ? bg : 'var(--sur)', color: f.has_defects === v ? cl : 'var(--tx2)',
+              }}>{l}</button>
+            ))}
+          </div>
+
+          {f.has_defects && <div style={{ padding: '11px 12px', background: 'var(--rd-l)', borderRadius: 10, marginBottom: 12 }}>
+            <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', color: 'var(--rd-m)', marginBottom: 6 }}>Сколько бракованных</div>
+            <div style={{ display: 'flex', gap: 9, alignItems: 'center' }}>
+              <Input type="number" inputMode="numeric" value={f.defects} onChange={(e) => up('defects', Math.max(0, Number(e.target.value) || 0))} style={{ width: 84 }} />
+              <span style={{ fontSize: 11.5, color: 'var(--tx2)' }}>
+                из {f.qty || 0} · оприходуем <b className="mono">{Math.max(0, (Number(f.qty) || 0) - (Number(f.defects) || 0))}</b>
+              </span>
+            </div>
+          </div>}
+
+          <Field label="Комментарий"><Input value={f.delivery_comment} onChange={(e) => up('delivery_comment', e.target.value)} placeholder="Что отметить по поставке" /></Field>
+        </div>}
+
         <Field label="Примечание"><Input value={f.notes} onChange={(e) => up('notes', e.target.value)} placeholder="Необязательно" /></Field>
         <div style={{ display: 'flex', gap: 8 }}><Btn v="secondary" onClick={() => setStep(1)}>← Назад</Btn><Btn loading={loading} onClick={() => setConfirm(true)} style={{ flex: 1 }}>Сохранить приход</Btn></div>
       </div>}
