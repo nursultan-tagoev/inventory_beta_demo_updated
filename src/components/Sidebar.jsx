@@ -1,5 +1,6 @@
 const I = {
   home: <path d="M3 10.5 12 3l9 7.5M5 9.5V21h14V9.5" />,
+  catalog: <path d="M3 6h18M3 12h18M3 18h18" />,
   items: <path d="M3.5 7.5 12 3l8.5 4.5v9L12 21l-8.5-4.5v-9ZM12 12l8.5-4.5M12 12v9M12 12 3.5 7.5" />,
   movements: <path d="M7 4v12m0 0-3-3m3 3 3-3M17 20V8m0 0 3 3m-3-3-3 3" />,
   acts: <path d="M6 3h9l4 4v14H6zM15 3v4h4M9 12h7M9 16h5" />,
@@ -16,7 +17,8 @@ const Ico = ({ k, s = 18 }) => (
 // Блок 1: показываем только готовые разделы. Остальные включаются в своих блоках.
 const NAV = [
   { id: 'home', label: 'Главная', roles: ['admin', 'manager', 'employee', 'director'] },
-  { id: 'items', label: 'Товары', roles: ['admin', 'manager', 'employee', 'director'] },
+  { id: 'catalog', label: 'Каталог', roles: ['manager', 'employee'] },
+  { id: 'items', label: 'Товары', roles: ['admin', 'director'] },
   { id: 'movements', label: 'Движения', roles: ['admin', 'manager', 'employee', 'director'] },
   { id: 'requests', label: 'Заявки', roles: ['admin', 'manager', 'employee', 'director'] },
   { id: 'acts', label: 'Акты', roles: ['admin', 'manager', 'director'] },
