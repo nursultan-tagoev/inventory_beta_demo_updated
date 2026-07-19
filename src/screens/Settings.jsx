@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { supabase } from '../supabaseClient'
 import { Btn, Input, Select, Field, Badge, useToast, Confirm } from '../components/ui'
+import Suppliers from '../components/Suppliers'
 
 const NAV = [
   { id: 'hier', l: 'Иерархия', ico: '🗂' },
@@ -57,7 +58,7 @@ export default function Settings({ data }) {
           {tab === 'branches' && <Simple title="Филиалы-адресаты" hint="Куда выдаём товар. Город — для группировки в аналитике." table="branches" rows={branches} cols={[['name', 'Название'], ['city', 'Город']]} ins={ins} del={del} upd={upd} />}
           {tab === 'categories' && <Simple title="Категории" table="categories" rows={categories} cols={[['name', 'Название']]} ins={ins} del={del} upd={upd} />}
           {tab === 'appr' && <Approvals data={data} toast={toast} ins={ins} del={del} />}
-          {tab === 'suppliers' && <Simple title="Поставщики" table="suppliers" rows={suppliers} cols={[['name', 'Название']]} ins={ins} del={del} upd={upd} />}
+          {tab === 'suppliers' && <Suppliers data={data} />}
         </div>
       </div>
     </div>
