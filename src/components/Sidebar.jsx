@@ -29,7 +29,7 @@ const NAV = [
 ]
 const ROLE_RU = { admin: 'Администратор', manager: 'Менеджер', employee: 'Сотрудник', director: 'Директор' }
 
-export default function Sidebar({ view, setView, profile, onLogout, badges = {}, branchName }) {
+export default function Sidebar({ view, setView, profile, onLogout, badges = {}, branchName, onTour }) {
   const role = profile?.role || 'employee'
   const items = NAV.filter((n) => n.roles.includes(role))
   const toggleTheme = () => {
@@ -52,7 +52,7 @@ export default function Sidebar({ view, setView, profile, onLogout, badges = {},
 
         <nav style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1 }}>
           {items.map((n) => (
-            <button key={n.id} onClick={() => setView(n.id)} style={{
+            <button key={n.id} data-tour={'nav-' + n.id} onClick={() => setView(n.id)} style={{
               display: 'flex', alignItems: 'center', gap: 12, height: 40, padding: '0 12px', borderRadius: 10,
               color: view === n.id ? '#fff' : 'var(--navm)', background: view === n.id ? 'var(--nav3)' : 'transparent',
               fontSize: 13.5, fontWeight: view === n.id ? 600 : 500, textAlign: 'left', transition: 'all .15s',
@@ -77,6 +77,7 @@ export default function Sidebar({ view, setView, profile, onLogout, badges = {},
           </div>
           <div style={{ display: 'flex', gap: 6 }}>
             <button onClick={toggleTheme} style={{ flex: 1, height: 32, borderRadius: 8, color: 'var(--navm)', fontSize: 12, background: 'var(--nav2)' }}>◐ Тема</button>
+            <button onClick={onTour} title="Пройти обучение заново" style={{ height: 32, padding: '0 10px', borderRadius: 8, color: 'var(--navm)', fontSize: 12, background: 'var(--nav2)' }}>Обучение</button>
             <button onClick={onLogout} style={{ flex: 1, height: 32, borderRadius: 8, color: 'var(--navm)', fontSize: 12, background: 'var(--nav2)' }}>Выйти</button>
           </div>
         </div>
@@ -85,7 +86,7 @@ export default function Sidebar({ view, setView, profile, onLogout, badges = {},
       {/* Телефон — нижнее меню */}
       <nav className="bottom-nav">
         {items.slice(0, 5).map((n) => (
-          <button key={n.id} onClick={() => setView(n.id)}
+          <button key={n.id} data-tour={'mnav-' + n.id} onClick={() => setView(n.id)}
             style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, padding: '8px 2px', color: view === n.id ? 'var(--ink)' : 'var(--tx3)' }}>
             <div style={{ position: 'relative' }}><Ico k={n.id} s={21} />{badges[n.id] > 0 && <span style={{ position: 'absolute', top: -4, right: -8, minWidth: 15, height: 15, padding: '0 3px', borderRadius: 8, background: 'var(--ink)', color: '#fff', fontSize: 9, fontWeight: 700, display: 'grid', placeItems: 'center' }}>{badges[n.id]}</span>}</div>
             <span style={{ fontSize: 9.5, fontWeight: view === n.id ? 600 : 500 }}>{n.label}</span>
