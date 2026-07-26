@@ -9,14 +9,56 @@ export function canArchive(req, profile) {
   return req.author_id === profile?.id
 }
 
-export function canDelete(req, profile) {
+/* Удалить можно только то, чего никто не касался: нет согласований, не ушла на склад.
+   Всё остальное отменяется — след должен остаться. */
+export function canDelete(req, profile, chain) {
   const role = profile?.role
-  if (role === 'admin') return true
   if (role === 'director') return false
-  // Ушла на склад — только админ
-  if (req.sent_at) return false
-  if (role === 'manager') return true
+  const touched = (chain || []).some((a) => a.status !== 'waiting')
+  if (req.sent_at || touched) return false
+  if (role === 'admin') return true
   return req.author_id === profile?.id
+}
+
+/* Заявка уже на складе — просим отмену. Выдача замораживается до решения админа. */
+export function canRequestCancel(req, profile) {
+  if (!req.sent_at) return false
+  if (req.cancel_requested_at) return false
+  if (!['approved', 'new'].includes(req.status)) return false
+  return req.author_id === profile?.id || profile?.role === 'manager'
+}
+
+export async function requestCancel(req, profile, reason) {
+  if (!reason?.trim()) return { error: 'Укажите причину отмены' }
+  const { error } = await supabase.from('requests').update({
+    cancel_requested_at: new Date().toISOString(),
+    cancel_requested_by: profile.id,
+    cancel_reason: reason.trim(),
+  }).eq('id', req.id)
+  if (error) return { error: error.message }
+  await logAction({ profile, action: 'cancel_requested', entity: 'request', entityId: req.id, entityRef: '№' + req.id, details: reason.trim() })
+  return { error: null }
+}
+
+// Админ подтвердил отмену — заявка закрыта, резерв снят
+export async function confirmCancel(req, profile) {
+  const { error } = await supabase.from('requests').update({
+    status: 'rejected', admin_comment: 'Отменена по просьбе заявителя: ' + (req.cancel_reason || ''),
+  }).eq('id', req.id)
+  if (error) return { error: error.message }
+  await supabase.rpc('release_reservation', { p_request_id: req.id })
+  await logAction({ profile, action: 'cancel_confirmed', entity: 'request', entityId: req.id, entityRef: '№' + req.id })
+  return { error: null }
+}
+
+// Админ вернул в работу — просьба снята, заявка снова к выдаче
+export async function declineCancel(req, profile, note) {
+  const { error } = await supabase.from('requests').update({
+    cancel_requested_at: null, cancel_requested_by: null, cancel_reason: null,
+  }).eq('id', req.id)
+  if (error) return { error: error.message }
+  await logAction({ profile, action: 'cancel_declined', entity: 'request', entityId: req.id, entityRef: '№' + req.id, details: note || null })
+  return { error: null }
 }
 
 export async function archiveRequest(req, profile) {
