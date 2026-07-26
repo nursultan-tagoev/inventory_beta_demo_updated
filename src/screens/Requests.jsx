@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Btn, Badge, Sheet, useToast } from '../components/ui'
-import { chainOf, freeAll } from '../lib/data'
+import { chainOf, freeAll, AFFECTS } from '../lib/data'
 import { createRequest, updateRequest, setStatus, cancelRequest, closePartial, issueRequest, openFile } from '../lib/requests'
 import { buildApprovalChain, approversOf, currentApprover, createApprovalChain, chainComplete, sendToWarehouse, approveInSystem } from '../lib/approval'
 import { canArchive, canDelete, canRequestCancel, requestCancel, confirmCancel, declineCancel, archiveRequest, deleteRequest } from '../lib/lifecycle'
@@ -111,7 +111,7 @@ export default function Requests({ data, profile, can, draftItems, onDraftUsed }
       await push({ userId: r.author_id, kind: 'approved', action: false,
         title: `Заявку №${r.id} согласовали`, body: uName(me), entity: 'request', entityId: r.id })
     }
-    toast('Согласовано'); refresh()
+    toast('Согласовано'); invalidate(AFFECTS.approve)
   }
 
   const sendNow = async (r) => {
@@ -124,18 +124,18 @@ export default function Requests({ data, profile, can, draftItems, onDraftUsed }
       title: `Заявка №${r.id} к выдаче`, body: `${bName(r.branch_id)} · ${r.purpose || ''}`, entity: 'request', entityId: r.id })
     if (r.author_id && r.author_id !== me) await push({ userId: r.author_id, kind: 'approved', action: false,
       title: `Заявка №${r.id} отправлена на склад`, body: 'ожидает выдачи', entity: 'request', entityId: r.id })
-    toast('Отправлено на склад'); refresh()
+    toast('Отправлено на склад'); invalidate(AFFECTS.send)
   }
 
   const doArchive = async (r) => {
     const { error } = await archiveRequest(r, profile)
     if (error) return toast(error, 'error')
-    toast('В архиве'); reload()
+    toast('В архиве'); invalidate(AFFECTS.send)
   }
   const doDelete = async (r) => {
     const { error } = await deleteRequest(r, profile, null)
     if (error) return toast(error, 'error')
-    setConfirmDel(null); toast('Заявка удалена'); reload()
+    setConfirmDel(null); toast('Заявка удалена'); invalidate(AFFECTS.cancel)
   }
 
   return (
@@ -344,7 +344,7 @@ export default function Requests({ data, profile, can, draftItems, onDraftUsed }
                           if (error) { patchRequest(r.id, { status: r.status }); return toast(error, 'error') }
                           if (r.author_id) await push({ userId: r.author_id, kind: 'rejected', action: false,
                             title: `Заявка №${r.id} отменена`, body: r.cancel_reason || '', entity: 'request', entityId: r.id })
-                          toast('Отмена подтверждена'); refresh()
+                          toast('Отмена подтверждена'); invalidate(AFFECTS.cancel)
                         }} style={{ minHeight: 42, background: 'var(--rd)', borderColor: 'var(--rd)' }}>Подтвердить отмену</Btn>
                         <Btn size="sm" v="secondary" onClick={async () => {
                           patchRequest(r.id, { cancel_requested_at: null, cancel_reason: null })
@@ -352,7 +352,7 @@ export default function Requests({ data, profile, can, draftItems, onDraftUsed }
                           if (error) { patchRequest(r.id, { cancel_requested_at: r.cancel_requested_at, cancel_reason: r.cancel_reason }); return toast(error, 'error') }
                           if (r.author_id) await push({ userId: r.author_id, kind: 'approved', action: true,
                             title: `Заявка №${r.id} остаётся в работе`, body: 'Товар уже готов к выдаче', entity: 'request', entityId: r.id })
-                          toast('Возвращена в работу'); refresh()
+                          toast('Возвращена в работу'); invalidate(AFFECTS.cancel)
                         }} style={{ minHeight: 42 }}>Вернуть в работу</Btn>
                       </div>
                     )}
@@ -370,13 +370,13 @@ export default function Requests({ data, profile, can, draftItems, onDraftUsed }
                 {/* Заявитель */}
                 {r.author_id === me && (
                   <div style={{ display: 'flex', gap: 7, marginBottom: 10, flexWrap: 'wrap' }}>
-                    {['issued', 'partial'].includes(r.status) && <Btn size="sm" onClick={async () => { await setStatus(r.id, 'received'); await clearFor('request', r.id, me); toast('Получение подтверждено'); reload() }} style={{ minHeight: 44 }}>Подтвердить получение</Btn>}
-                    {r.status === 'partial' && <Btn size="sm" v="secondary" onClick={async () => { await closePartial(r.id); toast('Завершено'); reload() }} style={{ minHeight: 44 }}>Хватит, завершить</Btn>}
+                    {['issued', 'partial'].includes(r.status) && <Btn size="sm" onClick={async () => { await setStatus(r.id, 'received'); await clearFor('request', r.id, me); toast('Получение подтверждено'); invalidate(AFFECTS.send) }} style={{ minHeight: 44 }}>Подтвердить получение</Btn>}
+                    {r.status === 'partial' && <Btn size="sm" v="secondary" onClick={async () => { await closePartial(r.id); toast('Завершено'); invalidate(AFFECTS.issue) }} style={{ minHeight: 44 }}>Хватит, завершить</Btn>}
                     {['new', 'revision'].includes(r.status) && !chain.some((a) => a.status === 'approved') && (
                       <Btn size="sm" v="secondary" onClick={() => { setEditReq(r); setForm(true) }} style={{ minHeight: 44 }}>Изменить</Btn>
                     )}
                     {r.status === 'new' && !r.sent_at && !chain.some((a) => a.status === 'approved') && (
-                      <Btn size="sm" v="secondary" onClick={async () => { await cancelRequest(r.id); toast('Отменено'); reload() }} style={{ minHeight: 44 }}>Отменить</Btn>
+                      <Btn size="sm" v="secondary" onClick={async () => { await cancelRequest(r.id); toast('Отменено'); invalidate(AFFECTS.cancel) }} style={{ minHeight: 44 }}>Отменить</Btn>
                     )}
                     {canRequestCancel(r, profile) && (
                       <Btn size="sm" v="secondary" onClick={() => setCancelReq(r)} style={{ minHeight: 44, color: 'var(--rd-m)' }}>Просить отмену</Btn>
@@ -401,10 +401,10 @@ export default function Requests({ data, profile, can, draftItems, onDraftUsed }
       {/* Формы */}
       <Sheet open={form} onClose={() => { setForm(false); onDraftUsed && onDraftUsed() }} title={editReq ? 'Изменить заявку' : 'Новая заявка'}>
         {form && <RequestForm data={data} profile={profile} editReq={editReq} draftItems={draftItems}
-          onDone={() => { setForm(false); onDraftUsed && onDraftUsed(); reload() }} />}
+          onDone={() => { setForm(false); onDraftUsed && onDraftUsed(); invalidate(['requests', 'approvers', 'reservations']) }} />}
       </Sheet>
 
-      {issue && <IssueModal req={issue} data={data} profile={profile} onClose={() => setIssue(null)} onDone={() => { setIssue(null); reload() }} />}
+      {issue && <IssueModal req={issue} data={data} profile={profile} onClose={() => setIssue(null)} onDone={() => { setIssue(null); invalidate(AFFECTS.issue) }} />}
 
       <Sheet open={!!cancelReq} onClose={() => { setCancelReq(null); setCancelWhy('') }} title="Просить отмену">
         {cancelReq && (
@@ -425,13 +425,13 @@ export default function Requests({ data, profile, can, draftItems, onDraftUsed }
               if (admin) await push({ userId: admin.id, kind: 'message', action: true,
                 title: `Просят отменить заявку №${cancelReq.id}`, body: cancelWhy, entity: 'request', entityId: cancelReq.id })
               toast('Запрос отправлен — выдача остановлена')
-              setCancelReq(null); setCancelWhy(''); refresh()
+              setCancelReq(null); setCancelWhy(''); invalidate(AFFECTS.cancel)
             }} style={{ minHeight: 50 }}>Отправить запрос</Btn>
           </div>
         )}
       </Sheet>
-      {apprSheet && <ApprovalSheet req={apprSheet} data={data} profile={profile} onClose={() => setApprSheet(null)} onDone={() => { setApprSheet(null); reload() }} />}
-      {reject && <RejectModal info={reject} profile={profile} data={data} onClose={() => setReject(null)} onDone={() => { setReject(null); reload() }} />}
+      {apprSheet && <ApprovalSheet req={apprSheet} data={data} profile={profile} onClose={() => setApprSheet(null)} onDone={() => { setApprSheet(null); invalidate(AFFECTS.approve) }} />}
+      {reject && <RejectModal info={reject} profile={profile} data={data} onClose={() => setReject(null)} onDone={() => { setReject(null); invalidate(AFFECTS.cancel) }} />}
       {confirmDel && <ConfirmDelete req={confirmDel} onCancel={() => setConfirmDel(null)} onOk={() => doDelete(confirmDel)} />}
     </div>
   )
@@ -441,7 +441,7 @@ export default function Requests({ data, profile, can, draftItems, onDraftUsed }
 function RequestForm({ data, profile, editReq, draftItems, onDone }) {
   const toast = useToast()
   const { products, branches, freeByWh, stockByWh, directions, productTypes, campaigns, profiles, externals } = data
-  const { patchRequest, patchApprover, refresh } = data
+  const { patchRequest, patchApprover, invalidate } = data
   const [items, setItems] = useState(
     editReq?.items?.map((it) => ({ product_id: it.product_id, qty: it.qty }))
     || draftItems?.map((d) => ({ product_id: d.product_id, qty: d.qty }))

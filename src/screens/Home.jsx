@@ -211,7 +211,7 @@ export default function Home({ data, profile, can, setView }) {
       </div>
 
       <Sheet open={!!sheet} onClose={() => setSheet(null)} title={sheet ? TL[sheet] : ''}>
-        {sheet && <OperationSheet type={sheet} data={data} profile={profile} onDone={() => { setSheet(null); data.reload() }} />}
+        {sheet && <OperationSheet type={sheet} data={data} profile={profile} onDone={() => { setSheet(null); data.invalidate(['movements', 'stock', 'deliveries']) }} />}
       </Sheet>
     </div>
   )

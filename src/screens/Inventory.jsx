@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
 import { Btn, Badge, Sheet, useToast, Confirm } from '../components/ui'
+import { AFFECTS } from '../lib/data'
 import { printDoc } from '../lib/print'
 import { fmt } from '../lib/format'
 import {
   startInventory, saveFact, compareWithStock, applyAdjustment,
-  loadInventory, listInventories, deleteInventory,
+  loadInventory, deleteInventory,
 } from '../lib/inventory'
 import DefectSheet from '../components/DefectSheet'
 
@@ -18,12 +19,11 @@ const ST = {
 }
 
 export default function Inventory({ data, profile }) {
-  const { products, warehouses, stockByWh, reload, bumpStock } = data
-  const refreshData = data.refresh || data.reload
+  const { products, warehouses, stockByWh, inventories, invalidate, bumpStock } = data
   const { toast } = useToast()
   const isAdmin = profile?.role === 'admin'
 
-  const [list, setList] = useState([])
+  const list = inventories || []
   const [open, setOpen] = useState(null)      // { inv, items }
   const [fact, setFact] = useState({})        // product_id → введённое число
   const [busy, setBusy] = useState(false)
@@ -33,8 +33,6 @@ export default function Inventory({ data, profile }) {
   const [defect, setDefect] = useState(false)
   const printRef = useRef(null)
 
-  const refresh = async () => setList(await listInventories())
-  useEffect(() => { refresh() }, [])
 
   const pName = (id) => (products || []).find((p) => p.id === id)?.name || '—'
   const pPrice = (id) => Number((products || []).find((p) => p.id === id)?.price || 0)
@@ -62,7 +60,7 @@ export default function Inventory({ data, profile }) {
     toast('Сверка начата')
     setNewWh('')
     // Показываем сразу, не дожидаясь перечитывания реестра
-    setList((l) => [inv, ...l])
+    invalidate(AFFECTS.inventory)
     setFact({})
     setOpen({ inv, items: [] })
   }
@@ -95,7 +93,6 @@ export default function Inventory({ data, profile }) {
     toast('Сравнено — остатки не изменены')
     const inv = { ...open.inv, status: 'compared' }
     setOpen({ inv, items: upd })
-    setList((l) => l.map((x) => (x.id === inv.id ? inv : x)))
   }
 
   const doApply = async () => {
@@ -107,13 +104,12 @@ export default function Inventory({ data, profile }) {
     toast(res.moved ? `Скорректировано позиций: ${res.moved}` : 'Расхождений не было')
     const inv = { ...open.inv, status: 'done', finished_at: new Date().toISOString() }
     setOpen({ inv, items: open.items })
-    setList((l) => l.map((x) => (x.id === inv.id ? inv : x)))
     // Остаток выравниваем в интерфейсе сразу — сервер уже принял операции
     bumpStock(diffs.map((it) => ({
       product_id: it.product_id, warehouse_id: open.inv.warehouse_id,
       delta: Number(it.fact_qty) - Number(it.system_qty),
     })))
-    refreshData()
+    invalidate(AFFECTS.adjust)
   }
 
   /* ── Позиции склада для ввода факта ── */
@@ -335,14 +331,14 @@ export default function Inventory({ data, profile }) {
           onOk={async () => {
             const { error } = await deleteInventory(delInv.id)
             if (error) { setDelInv(null); return toast(error, 'error') }
-            setList((l) => l.filter((x) => x.id !== delInv.id))
+            invalidate(AFFECTS.inventory)
             if (open?.inv.id === delInv.id) setOpen(null)
             setDelInv(null)
             toast('Черновик удалён')
           }} />
       )}
 
-      {defect && <DefectSheet data={data} profile={profile} onClose={() => setDefect(false)} onDone={() => { setDefect(false); refreshData() }} />}
+      {defect && <DefectSheet data={data} profile={profile} onClose={() => setDefect(false)} onDone={() => { setDefect(false); invalidate(AFFECTS.defect) }} />}
     </div>
   )
 }

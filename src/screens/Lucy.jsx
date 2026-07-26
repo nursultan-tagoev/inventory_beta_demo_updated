@@ -136,7 +136,7 @@ export default function Lucy({ data, profile, can, setView, autostart, onAutosta
       const { error } = await saveMovement({ type: p.type, product_id: it.product_id, qty: it.quantity, recipient_id, branch_id, purpose: p.purpose, issuer_id: profile.id }, data.stock)
       if (error) { toast(it.product_name + ': ' + error, 'error') } else ok++
     }
-    setPending(null); data.reload()
+    setPending(null); data.invalidate(['movements', 'stock', 'requests'])
     if (ok) { const msg = `Готово! ${TL[p.type]} оформлена (${ok} поз.).`; push('a', msg); speak('Готово, операция сохранена.', false); toast('Операция сохранена') }
   }
 

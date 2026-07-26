@@ -7,7 +7,7 @@ import { fmt, som, TL } from '../lib/format'
 export default function Items({ data, can, profile }) {
   const toast = useToast()
   const seeStock = ['admin', 'director'].includes(profile?.role)
-  const { products, categories, suppliers, locations, stock, stockByWh, freeByWh, resvByWh, warehouses, campaigns, directions, productTypes, flows, checkouts, recipients, reload } = data
+  const { products, categories, suppliers, locations, stock, stockByWh, freeByWh, resvByWh, warehouses, campaigns, directions, productTypes, flows, checkouts, recipients, invalidate } = data
   const [q, setQ] = useState('')
   const [add, setAdd] = useState(false)
   const [sel, setSel] = useState(null)
@@ -44,7 +44,7 @@ export default function Items({ data, can, profile }) {
     const { error } = await supabase.from('products').insert({ name: nf.name.trim(), sku: nf.sku || null, category_id: nf.category_id ? Number(nf.category_id) : null, price: Number(nf.price) || 0, location_id: nf.location_id ? Number(nf.location_id) : null, supplier_id: nf.supplier_id ? Number(nf.supplier_id) : null, campaign_id: nf.campaign_id ? Number(nf.campaign_id) : null, direction_id: nf.direction_id ? Number(nf.direction_id) : null, archived: false })
     setLoading(false)
     if (error) return toast('Ошибка: ' + error.message, 'error')
-    setAdd(false); setNf({ name: '', sku: '', category_id: '', price: '', location_id: '', supplier_id: '', direction_id: '', product_type_id: '', campaign_id: '' }); toast('Товар добавлен'); reload()
+    setAdd(false); setNf({ name: '', sku: '', category_id: '', price: '', location_id: '', supplier_id: '', direction_id: '', product_type_id: '', campaign_id: '' }); toast('Товар добавлен'); invalidate(['products', 'stock'])
   }
 
   return (
@@ -139,7 +139,7 @@ export default function Items({ data, can, profile }) {
 
 function ItemModal({ p, data, can, onClose }) {
   const toast = useToast()
-  const { stock, flows, checkouts, recipients, campaigns, directions, productTypes, categories, suppliers, reload } = data
+  const { stock, flows, checkouts, recipients, campaigns, directions, productTypes, categories, suppliers, invalidate } = data
   const [confirmDel, setConfirmDel] = useState(false)
   const [tab, setTab] = useState('info')
   const [hist, setHist] = useState(null)
@@ -164,7 +164,7 @@ function ItemModal({ p, data, can, onClose }) {
       direction_id: ef.direction_id ? Number(ef.direction_id) : null,
     }).eq('id', p.id)
     if (error) return toast('Ошибка: ' + error.message, 'error')
-    toast('Сохранено'); setEditing(false); reload(); onClose()
+    toast('Сохранено'); setEditing(false); invalidate(['products', 'stock']); onClose()
   }
   const s = stock[p.id] || 0
   const fl = flows[p.id] || { in: 0, out: 0, return: 0, writeoff: 0 }
@@ -182,12 +182,12 @@ function ItemModal({ p, data, can, onClose }) {
       // есть движения — архивируем (мягко скрываем)
       const { error } = await supabase.from('products').update({ archived: true }).eq('id', p.id)
       if (error) return toast('Ошибка: ' + error.message, 'error')
-      toast('Товар архивирован'); reload(); onClose()
+      toast('Товар архивирован'); invalidate(['products', 'stock']); onClose()
     } else {
       // нет движений — можно удалить полностью
       const { error } = await supabase.from('products').delete().eq('id', p.id)
       if (error) return toast(error.message.includes('foreign key') ? 'Есть связанные записи — товар архивирован' : 'Ошибка: ' + error.message, 'error')
-      toast('Товар удалён'); reload(); onClose()
+      toast('Товар удалён'); invalidate(['products', 'stock']); onClose()
     }
   }
   return (
