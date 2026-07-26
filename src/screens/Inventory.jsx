@@ -18,7 +18,8 @@ const ST = {
 }
 
 export default function Inventory({ data, profile }) {
-  const { products, warehouses, stockByWh, reload } = data
+  const { products, warehouses, stockByWh, reload, bumpStock } = data
+  const refreshData = data.refresh || data.reload
   const { toast } = useToast()
   const isAdmin = profile?.role === 'admin'
 
@@ -107,7 +108,12 @@ export default function Inventory({ data, profile }) {
     const inv = { ...open.inv, status: 'done', finished_at: new Date().toISOString() }
     setOpen({ inv, items: open.items })
     setList((l) => l.map((x) => (x.id === inv.id ? inv : x)))
-    reload()   // тяжёлый перечёт остатков — идёт фоном, экран его не ждёт
+    // Остаток выравниваем в интерфейсе сразу — сервер уже принял операции
+    bumpStock(diffs.map((it) => ({
+      product_id: it.product_id, warehouse_id: open.inv.warehouse_id,
+      delta: Number(it.fact_qty) - Number(it.system_qty),
+    })))
+    refreshData()
   }
 
   /* ── Позиции склада для ввода факта ── */
@@ -336,7 +342,7 @@ export default function Inventory({ data, profile }) {
           }} />
       )}
 
-      {defect && <DefectSheet data={data} profile={profile} onClose={() => setDefect(false)} onDone={() => { setDefect(false); reload() }} />}
+      {defect && <DefectSheet data={data} profile={profile} onClose={() => setDefect(false)} onDone={() => { setDefect(false); refreshData() }} />}
     </div>
   )
 }

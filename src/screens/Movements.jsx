@@ -225,7 +225,7 @@ export default function Movements({ data, profile, can }) {
       ))}
 
       <Sheet open={!!sheet} onClose={() => setSheet(null)} title={sheet ? TL[sheet] : ''}>
-        {sheet && <OperationSheet type={sheet} data={data} profile={profile} onDone={() => { setSheet(null); data.reload() }} />}
+        {sheet && <OperationSheet type={sheet} data={data} profile={profile} onDone={() => { setSheet(null); (data.refresh || data.reload)() }} />}
       </Sheet>
     </div>
   )

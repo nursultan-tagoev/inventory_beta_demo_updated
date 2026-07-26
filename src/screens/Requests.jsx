@@ -95,8 +95,10 @@ export default function Requests({ data, profile, can, draftItems, onDraftUsed }
 
   /* ── Действия ── */
   const approveNow = async (r, appr) => {
+    // Отмечаем сразу — согласование уже состоялось, ждать ответа незачем
+    patchApprover(appr.id, { status: 'approved', approved_at: new Date().toISOString(), user_id: profile.id })
     const { error } = await approveInSystem(appr, profile.id, r.id)
-    if (error) return toast(error, 'error')
+    if (error) { patchApprover(appr.id, { status: 'waiting', approved_at: null }); return toast(error, 'error') }
     await clearFor('request', r.id, me)
     // уведомляем следующего
     const chain = approversOf(reqApprovers, r.id)
@@ -109,18 +111,20 @@ export default function Requests({ data, profile, can, draftItems, onDraftUsed }
       await push({ userId: r.author_id, kind: 'approved', action: false,
         title: `Заявку №${r.id} согласовали`, body: uName(me), entity: 'request', entityId: r.id })
     }
-    toast('Согласовано'); reload()
+    toast('Согласовано'); refresh()
   }
 
   const sendNow = async (r) => {
+    const at = new Date().toISOString()
+    patchRequest(r.id, { sent_at: at, sent_by: profile.id, status: 'approved' })
     const { error } = await sendToWarehouse(r.id, profile.id)
-    if (error) return toast(error, 'error')
+    if (error) { patchRequest(r.id, { sent_at: null, sent_by: null, status: r.status }); return toast(error, 'error') }
     const admin = profiles.find((p) => p.role === 'admin')
     if (admin) await push({ userId: admin.id, kind: 'to_issue', action: true,
       title: `Заявка №${r.id} к выдаче`, body: `${bName(r.branch_id)} · ${r.purpose || ''}`, entity: 'request', entityId: r.id })
     if (r.author_id && r.author_id !== me) await push({ userId: r.author_id, kind: 'approved', action: false,
       title: `Заявка №${r.id} отправлена на склад`, body: 'ожидает выдачи', entity: 'request', entityId: r.id })
-    toast('Отправлено на склад'); reload()
+    toast('Отправлено на склад'); refresh()
   }
 
   const doArchive = async (r) => {
@@ -335,18 +339,20 @@ export default function Requests({ data, profile, can, draftItems, onDraftUsed }
                     {isAdmin && (
                       <div style={{ display: 'flex', gap: 7, marginTop: 10, flexWrap: 'wrap' }}>
                         <Btn size="sm" onClick={async () => {
+                          patchRequest(r.id, { status: 'rejected' })
                           const { error } = await confirmCancel(r, profile)
-                          if (error) return toast(error, 'error')
+                          if (error) { patchRequest(r.id, { status: r.status }); return toast(error, 'error') }
                           if (r.author_id) await push({ userId: r.author_id, kind: 'rejected', action: false,
                             title: `Заявка №${r.id} отменена`, body: r.cancel_reason || '', entity: 'request', entityId: r.id })
-                          toast('Отмена подтверждена'); reload()
+                          toast('Отмена подтверждена'); refresh()
                         }} style={{ minHeight: 42, background: 'var(--rd)', borderColor: 'var(--rd)' }}>Подтвердить отмену</Btn>
                         <Btn size="sm" v="secondary" onClick={async () => {
+                          patchRequest(r.id, { cancel_requested_at: null, cancel_reason: null })
                           const { error } = await declineCancel(r, profile)
-                          if (error) return toast(error, 'error')
+                          if (error) { patchRequest(r.id, { cancel_requested_at: r.cancel_requested_at, cancel_reason: r.cancel_reason }); return toast(error, 'error') }
                           if (r.author_id) await push({ userId: r.author_id, kind: 'approved', action: true,
                             title: `Заявка №${r.id} остаётся в работе`, body: 'Товар уже готов к выдаче', entity: 'request', entityId: r.id })
-                          toast('Возвращена в работу'); reload()
+                          toast('Возвращена в работу'); refresh()
                         }} style={{ minHeight: 42 }}>Вернуть в работу</Btn>
                       </div>
                     )}
@@ -412,13 +418,14 @@ export default function Requests({ data, profile, can, draftItems, onDraftUsed }
                 style={{ width: '100%', minHeight: 46, padding: '0 13px', border: '1.5px solid var(--brd)', borderRadius: 12, background: 'var(--sur)', fontSize: 13.5, color: 'var(--tx)' }} />
             </div>
             <Btn size="lg" onClick={async () => {
+              patchRequest(cancelReq.id, { cancel_requested_at: new Date().toISOString(), cancel_reason: cancelWhy })
               const { error } = await requestCancel(cancelReq, profile, cancelWhy)
-              if (error) return toast(error, 'error')
+              if (error) { patchRequest(cancelReq.id, { cancel_requested_at: null, cancel_reason: null }); return toast(error, 'error') }
               const admin = (data.profiles || []).find((p) => p.role === 'admin' && p.is_active !== false)
               if (admin) await push({ userId: admin.id, kind: 'message', action: true,
                 title: `Просят отменить заявку №${cancelReq.id}`, body: cancelWhy, entity: 'request', entityId: cancelReq.id })
               toast('Запрос отправлен — выдача остановлена')
-              setCancelReq(null); setCancelWhy(''); reload()
+              setCancelReq(null); setCancelWhy(''); refresh()
             }} style={{ minHeight: 50 }}>Отправить запрос</Btn>
           </div>
         )}
@@ -434,6 +441,7 @@ export default function Requests({ data, profile, can, draftItems, onDraftUsed }
 function RequestForm({ data, profile, editReq, draftItems, onDone }) {
   const toast = useToast()
   const { products, branches, freeByWh, stockByWh, directions, productTypes, campaigns, profiles, externals } = data
+  const { patchRequest, patchApprover, refresh } = data
   const [items, setItems] = useState(
     editReq?.items?.map((it) => ({ product_id: it.product_id, qty: it.qty }))
     || draftItems?.map((d) => ({ product_id: d.product_id, qty: d.qty }))
