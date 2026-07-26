@@ -42,7 +42,7 @@ export default function RequestChat({ req, data, profile, compact }) {
       await push({ userId: uid, kind: 'message', action: true,
         title: `Вопрос по заявке №${req.id}`, body, entity: 'request', entityId: req.id })
     }
-    data.reload()
+    data.invalidate('messages')
   }
 
   return (

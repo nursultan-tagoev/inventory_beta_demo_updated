@@ -39,7 +39,7 @@ function Credentials({ login, password, onClose }) {
 
 export default function Users({ data }) {
   const toast = useToast()
-  const { profiles, branches, reload } = data
+  const { profiles, branches, invalidate } = data
   const [add, setAdd] = useState(false)
   const [busy, setBusy] = useState(false)
   const [cred, setCred] = useState(null)
@@ -70,7 +70,7 @@ export default function Users({ data }) {
     if (error) return toast(error, 'error')
     setCred({ login: d.email, password: d.password })
     setF({ full_name: '', role: 'employee', branch_id: '', manager_id: '', position: '' })
-    setAdd(false); reload()
+    setAdd(false); invalidate('profiles')
   }
 
   const doReset = async (p) => {
@@ -81,7 +81,7 @@ export default function Users({ data }) {
   const doToggle = async (p) => {
     const { error } = await setActive(p.id, p.is_active === false)
     if (error) return toast(error, 'error')
-    toast(p.is_active === false ? 'Доступ включён' : 'Доступ отключён'); reload()
+    toast(p.is_active === false ? 'Доступ включён' : 'Доступ отключён'); invalidate('profiles')
   }
 
   return (
