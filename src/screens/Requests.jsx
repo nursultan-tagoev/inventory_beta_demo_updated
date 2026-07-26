@@ -3,7 +3,7 @@ import { Btn, Badge, Sheet, useToast } from '../components/ui'
 import { chainOf, freeAll } from '../lib/data'
 import { createRequest, updateRequest, setStatus, sendDirect, cancelRequest, closePartial, issueRequest, openFile } from '../lib/requests'
 import { buildApprovalChain, approversOf, currentApprover, createApprovalChain, chainComplete, sendToWarehouse, approveInSystem } from '../lib/approval'
-import { canArchive, canDelete, archiveRequest, deleteRequest } from '../lib/lifecycle'
+import { canArchive, canDelete, canRequestCancel, requestCancel, confirmCancel, declineCancel, archiveRequest, deleteRequest } from '../lib/lifecycle'
 import { push, clearFor } from '../lib/notify'
 import ApprovalSheet from '../components/ApprovalSheet'
 import RequestChat from '../components/RequestChat'
@@ -32,6 +32,8 @@ export default function Requests({ data, profile, can, draftItems, onDraftUsed }
   const [apprSheet, setApprSheet] = useState(null)
   const [reject, setReject] = useState(null)
   const [confirmDel, setConfirmDel] = useState(null)
+  const [cancelReq, setCancelReq] = useState(null)
+  const [cancelWhy, setCancelWhy] = useState('')
 
   // черновик из каталога
   useEffect(() => { if (draftItems?.length) { setEditReq(null); setForm(true) } }, [draftItems])
@@ -314,8 +316,39 @@ export default function Requests({ data, profile, can, draftItems, onDraftUsed }
                   </div>
                 )}
 
+                {/* Просьба об отмене — заявка заморожена */}
+                {r.cancel_requested_at && (
+                  <div style={{ padding: '12px 14px', background: 'var(--rd-l)', borderRadius: 11, marginBottom: 10, border: '1px solid var(--rd)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                      <span style={{ fontSize: 15 }}>⏸</span>
+                      <span style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--rd-m)' }}>Заявитель просит отменить — выдача остановлена</span>
+                    </div>
+                    <div style={{ fontSize: 11.5, color: 'var(--tx2)', lineHeight: 1.5 }}>
+                      «{r.cancel_reason}» · {new Date(r.cancel_requested_at).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                    </div>
+                    {isAdmin && (
+                      <div style={{ display: 'flex', gap: 7, marginTop: 10, flexWrap: 'wrap' }}>
+                        <Btn size="sm" onClick={async () => {
+                          const { error } = await confirmCancel(r, profile)
+                          if (error) return toast(error, 'error')
+                          if (r.author_id) await push({ userId: r.author_id, kind: 'rejected', action: false,
+                            title: `Заявка №${r.id} отменена`, body: r.cancel_reason || '', entity: 'request', entityId: r.id })
+                          toast('Отмена подтверждена'); reload()
+                        }} style={{ minHeight: 42, background: 'var(--rd)', borderColor: 'var(--rd)' }}>Подтвердить отмену</Btn>
+                        <Btn size="sm" v="secondary" onClick={async () => {
+                          const { error } = await declineCancel(r, profile)
+                          if (error) return toast(error, 'error')
+                          if (r.author_id) await push({ userId: r.author_id, kind: 'approved', action: true,
+                            title: `Заявка №${r.id} остаётся в работе`, body: 'Товар уже готов к выдаче', entity: 'request', entityId: r.id })
+                          toast('Возвращена в работу'); reload()
+                        }} style={{ minHeight: 42 }}>Вернуть в работу</Btn>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Админ: выдать */}
-                {isAdmin && r.status === 'approved' && r.sent_at && (
+                {isAdmin && r.status === 'approved' && r.sent_at && !r.cancel_requested_at && (
                   <div style={{ display: 'flex', gap: 7, marginBottom: 10, flexWrap: 'wrap' }}>
                     <Btn onClick={() => setIssue(r)} style={{ flex: 1, minWidth: 150, minHeight: 46 }}>📤 Выдать — оформить акт</Btn>
                     <Btn v="secondary" onClick={() => setReject({ req: r, mode: 'reject' })} style={{ minHeight: 46 }}>Отклонить</Btn>
@@ -330,8 +363,11 @@ export default function Requests({ data, profile, can, draftItems, onDraftUsed }
                     {['new', 'revision'].includes(r.status) && !chain.some((a) => a.status === 'approved') && (
                       <Btn size="sm" v="secondary" onClick={() => { setEditReq(r); setForm(true) }} style={{ minHeight: 44 }}>Изменить</Btn>
                     )}
-                    {r.status === 'new' && !chain.some((a) => a.status === 'approved') && (
+                    {r.status === 'new' && !r.sent_at && !chain.some((a) => a.status === 'approved') && (
                       <Btn size="sm" v="secondary" onClick={async () => { await cancelRequest(r.id); toast('Отменено'); reload() }} style={{ minHeight: 44 }}>Отменить</Btn>
+                    )}
+                    {canRequestCancel(r, profile) && (
+                      <Btn size="sm" v="secondary" onClick={() => setCancelReq(r)} style={{ minHeight: 44, color: 'var(--rd-m)' }}>Просить отмену</Btn>
                     )}
                   </div>
                 )}
@@ -342,7 +378,7 @@ export default function Requests({ data, profile, can, draftItems, onDraftUsed }
                 {/* Архив и удаление */}
                 <div style={{ display: 'flex', gap: 7, marginTop: 10, flexWrap: 'wrap' }}>
                   {canArchive(r, profile) && !r.archived && <button onClick={() => doArchive(r)} style={{ fontSize: 11.5, color: 'var(--tx3)', minHeight: 38, padding: '0 10px' }}>В архив</button>}
-                  {canDelete(r, profile) && <button onClick={() => setConfirmDel(r)} style={{ fontSize: 11.5, color: 'var(--rd-m)', minHeight: 38, padding: '0 10px' }}>Удалить</button>}
+                  {canDelete(r, profile, chain) && <button onClick={() => setConfirmDel(r)} style={{ fontSize: 11.5, color: 'var(--rd-m)', minHeight: 38, padding: '0 10px' }}>Удалить</button>}
                 </div>
               </div>
             )}
@@ -357,6 +393,30 @@ export default function Requests({ data, profile, can, draftItems, onDraftUsed }
       </Sheet>
 
       {issue && <IssueModal req={issue} data={data} profile={profile} onClose={() => setIssue(null)} onDone={() => { setIssue(null); reload() }} />}
+
+      <Sheet open={!!cancelReq} onClose={() => { setCancelReq(null); setCancelWhy('') }} title="Просить отмену">
+        {cancelReq && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ padding: '11px 13px', background: 'var(--am-l)', borderRadius: 11, fontSize: 12, color: 'var(--am-m)', lineHeight: 1.55 }}>
+              Заявка №{cancelReq.id} уже на складе. Выдача остановится сразу, но отменит её админ — товар мог быть отложен под вас.
+            </div>
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.04em', color: 'var(--tx3)', marginBottom: 6 }}>Причина <span style={{ color: 'var(--rd)' }}>*</span></div>
+              <input value={cancelWhy} onChange={(e) => setCancelWhy(e.target.value)} placeholder="Мероприятие отменилось…"
+                style={{ width: '100%', minHeight: 46, padding: '0 13px', border: '1.5px solid var(--brd)', borderRadius: 12, background: 'var(--sur)', fontSize: 13.5, color: 'var(--tx)' }} />
+            </div>
+            <Btn size="lg" onClick={async () => {
+              const { error } = await requestCancel(cancelReq, profile, cancelWhy)
+              if (error) return toast(error, 'error')
+              const admin = (data.profiles || []).find((p) => p.role === 'admin' && p.is_active !== false)
+              if (admin) await push({ userId: admin.id, kind: 'message', action: true,
+                title: `Просят отменить заявку №${cancelReq.id}`, body: cancelWhy, entity: 'request', entityId: cancelReq.id })
+              toast('Запрос отправлен — выдача остановлена')
+              setCancelReq(null); setCancelWhy(''); reload()
+            }} style={{ minHeight: 50 }}>Отправить запрос</Btn>
+          </div>
+        )}
+      </Sheet>
       {apprSheet && <ApprovalSheet req={apprSheet} data={data} profile={profile} onClose={() => setApprSheet(null)} onDone={() => { setApprSheet(null); reload() }} />}
       {reject && <RejectModal info={reject} profile={profile} data={data} onClose={() => setReject(null)} onDone={() => { setReject(null); reload() }} />}
       {confirmDel && <ConfirmDelete req={confirmDel} onCancel={() => setConfirmDel(null)} onOk={() => doDelete(confirmDel)} />}
