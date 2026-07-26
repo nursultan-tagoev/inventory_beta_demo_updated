@@ -29,7 +29,14 @@ export default function Suppliers({ data, toast: t }) {
       const ok = d.on_time, clean = (d.defects || 0) === 0
       return a + (ok && clean ? 5 : ok || clean ? 3.5 : 2)
     }, 0) / list.length
-    return { count: list.length, onTime, withDef, totalDef, score: Math.round(score * 10) / 10 }
+    // Что и сколько привезли — из приходов, привязанных к поставкам
+    const ids = new Set(list.map((d) => d.id))
+    const mv = (movements || []).filter((m) => m.type === 'in' && (ids.has(m.delivery_id) || (!m.delivery_id && m.supplier_id === sid)))
+    const units = mv.reduce((a, m) => a + (m.qty || 0), 0)
+    const skus = new Set(mv.map((m) => m.product_id)).size
+    const defRate = units + totalDef > 0 ? Math.round((totalDef / (units + totalDef)) * 1000) / 10 : 0
+    const lastAt = list[0]?.created_at || null
+    return { count: list.length, onTime, withDef, totalDef, units, skus, defRate, lastAt, score: Math.round(score * 10) / 10 }
   }
 
   const stars = (n) => {
@@ -56,6 +63,9 @@ export default function Suppliers({ data, toast: t }) {
 
   // Поставки конкретного поставщика
   const supDeliveries = (sid) => deliveries.filter((d) => d.supplier_id === sid).slice(0, 8)
+  const pName = (id) => (products || []).find((p) => p.id === id)?.name || 'товар'
+  // Что привезли в рамках одной поставки
+  const dlvItems = (dlvId) => (movements || []).filter((m) => m.type === 'in' && m.delivery_id === dlvId)
 
   const lbl = (t) => <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', color: 'var(--tx3)', marginBottom: 5 }}>{t}</div>
 
@@ -128,7 +138,9 @@ export default function Suppliers({ data, toast: t }) {
                   {st && (
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 8, marginBottom: 11 }}>
                       {[['Поставок', st.count, ''], ['В срок', `${st.onTime} из ${st.count}`, 'var(--gr-m)'],
-                        ['С браком', `${st.withDef}`, st.withDef ? 'var(--am-m)' : ''], ['Брака всего', `${st.totalDef} шт`, st.totalDef ? 'var(--rd-m)' : '']].map(([l, v, c]) => (
+                        ['Привезено', `${fmt(st.units)} шт`, 'var(--gr-m)'], ['Наименований', `${st.skus}`, ''],
+                        ['Брака всего', `${st.totalDef} шт`, st.totalDef ? 'var(--rd-m)' : ''],
+                        ['Доля брака', `${st.defRate}%`, st.defRate > 5 ? 'var(--rd-m)' : st.defRate > 0 ? 'var(--am-m)' : 'var(--gr-m)']].map(([l, v, c]) => (
                         <div key={l} style={{ background: 'var(--bg)', borderRadius: 10, padding: '9px 11px' }}>
                           <div style={{ fontSize: 9.5, color: 'var(--tx3)' }}>{l}</div>
                           <div className="mono" style={{ fontSize: 14, fontWeight: 600, color: c || 'var(--tx)' }}>{v}</div>
@@ -162,6 +174,15 @@ export default function Suppliers({ data, toast: t }) {
                               </span>
                               {(d.defects || 0) > 0 && <span style={{ fontSize: 9.5, padding: '2px 8px', borderRadius: 20, background: 'var(--rd-l)', color: 'var(--rd-m)' }}>брак {d.defects}</span>}
                             </div>
+                            {dlvItems(d.id).length > 0 && (
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 5 }}>
+                                {dlvItems(d.id).map((m) => (
+                                  <span key={m.id} style={{ fontSize: 10, padding: '2px 8px', borderRadius: 7, background: 'var(--bg)', border: '1px solid var(--brd)', color: 'var(--tx2)' }}>
+                                    {pName(m.product_id)} · <b className="mono">{m.qty}</b>
+                                  </span>
+                                ))}
+                              </div>
+                            )}
                             {d.comment && <div style={{ fontSize: 10.5, color: 'var(--tx3)', marginTop: 4, fontStyle: 'italic' }}>«{d.comment}»</div>}
                           </div>
                         ))}

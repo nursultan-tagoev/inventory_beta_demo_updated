@@ -3,6 +3,15 @@ import { supabase } from '../supabaseClient'
 import { push, clearFor } from '../lib/notify'
 import { Btn } from './ui'
 
+/* Цвет собеседника по роли — чтобы различать не только по имени */
+const ROLE_CLR = {
+  admin:    ['#EFE9FB', '#5B3FBF', 'Склад'],
+  manager:  ['#E3F0FB', '#1D5FA8', 'Руководитель'],
+  employee: ['#E4F2E9', '#22694A', 'Специалист'],
+  director: ['#FBEEE0', '#96560E', 'Директор'],
+}
+const initials = (n) => (n || '?').replace(/@.*$/, '').split(/[\s.]+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase()
+
 /* Чат уточнения внутри заявки — пишут все участники */
 export default function RequestChat({ req, data, profile, compact }) {
   const [text, setText] = useState('')
@@ -46,15 +55,27 @@ export default function RequestChat({ req, data, profile, compact }) {
 
       {msgs.map((m) => {
         const me = m.author_id === profile.id
+        const who = (data.profiles || []).find((p) => p.id === m.author_id)
+        const [bg, fg, roleLabel] = ROLE_CLR[who?.role] || ['var(--sur2)', 'var(--tx3)', '']
+        const name = who?.full_name || m.author_name
         return (
-          <div key={m.id} style={{ display: 'flex', justifyContent: me ? 'flex-end' : 'flex-start', marginBottom: 9 }}>
-            <div style={{ maxWidth: '84%' }}>
-              <div style={{ fontSize: 9.5, color: 'var(--tx3)', marginBottom: 3, textAlign: me ? 'right' : 'left' }}>
-                {m.author_name} · {new Date(m.created_at).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+          <div key={m.id} style={{ display: 'flex', justifyContent: me ? 'flex-end' : 'flex-start', marginBottom: 10 }}>
+            <div style={{ display: 'flex', gap: 8, maxWidth: '88%', flexDirection: me ? 'row-reverse' : 'row' }}>
+              <div style={{ width: 28, height: 28, borderRadius: '50%', flexShrink: 0, marginTop: 15,
+                background: bg, color: fg, display: 'grid', placeItems: 'center', fontSize: 10, fontWeight: 700 }}>
+                {initials(name)}
               </div>
-              <div style={{ padding: '9px 12px', borderRadius: me ? '13px 13px 4px 13px' : '13px 13px 13px 4px',
-                background: me ? 'var(--ink-l)' : 'var(--sur)', border: me ? 'none' : '1px solid var(--brd)',
-                fontSize: 12.5, lineHeight: 1.55 }}>{m.body}</div>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3, flexDirection: me ? 'row-reverse' : 'row' }}>
+                  <span style={{ fontSize: 10.5, fontWeight: 600, color: fg }}>{me ? 'Вы' : (name || '').replace(/@.*$/, '')}</span>
+                  {roleLabel && <span style={{ fontSize: 8.5, padding: '1px 6px', borderRadius: 20, background: bg, color: fg, whiteSpace: 'nowrap' }}>{roleLabel}</span>}
+                  <span style={{ fontSize: 9.5, color: 'var(--tx3)' }}>{new Date(m.created_at).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+                </div>
+                <div style={{ padding: '9px 12px', borderRadius: me ? '13px 4px 13px 13px' : '4px 13px 13px 13px',
+                  background: me ? 'var(--ink-l)' : bg, border: `1px solid ${me ? 'transparent' : bg}`,
+                  borderLeft: me ? 'none' : `2.5px solid ${fg}`,
+                  fontSize: 12.5, lineHeight: 1.55, color: 'var(--tx)' }}>{m.body}</div>
+              </div>
             </div>
           </div>
         )

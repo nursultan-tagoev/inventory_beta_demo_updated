@@ -42,7 +42,7 @@ export default function ApprovalSheet({ req, data, profile, onClose, onDone }) {
   const cur = currentApprover(chain)
   const isMyTurn = cur && cur.in_system && cur.user_id === profile.id
   const prevInSystem = cur ? chain.filter((a) => a.order_no < cur.order_no && a.in_system).slice(-1)[0] : null
-  const isExternal = cur && !cur.in_system && ((prevInSystem && prevInSystem.user_id === profile.id) || req.author_id === profile.id || profile.role === 'admin')
+  const isExternal = false  // зампред подписывает бумажную СЗ вне системы — в цепочке его нет
   const mineDone = chain.find((a) => a.user_id === profile.id && a.status === 'approved')
   const pName = (id) => products.find((p) => p.id === id)?.name || '—'
   const rName = (id) => recipients.find((r) => r.id === id)?.name || ''
@@ -107,7 +107,7 @@ export default function ApprovalSheet({ req, data, profile, onClose, onDone }) {
             <div><div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase' }}>Получатель</div>{rName(req.recipient_id) || '—'}</div>
             <div><div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase' }}>Цель</div>{req.purpose || '—'}</div>
           </div>
-          {req.basis_type === 'sz' && <div style={{ fontSize: 12, marginBottom: 8 }}>Основание: {req.sz_number} от {req.sz_date ? new Date(req.sz_date).toLocaleDateString('ru-RU') : '—'}{req.sz_approvers ? ` · согласовали: ${req.sz_approvers}` : ''}</div>}
+          {req.basis_type === 'sz' && <div style={{ fontSize: 12, marginBottom: 8 }}>Основание: {req.sz_number} от {req.sz_date ? new Date(req.sz_date).toLocaleDateString('ru-RU') : '—'}</div>}
           <table className="act-tbl"><thead><tr><th style={{ width: 26 }}>№</th><th>Наименование</th><th style={{ width: 60, textAlign: 'right' }}>Кол-во</th><th style={{ width: 80, textAlign: 'right' }}>Цена</th><th style={{ width: 90, textAlign: 'right' }}>Сумма</th></tr></thead>
             <tbody>{req.items.map((it, i) => {
               const pr = products.find((x) => x.id === it.product_id)
@@ -157,7 +157,6 @@ export default function ApprovalSheet({ req, data, profile, onClose, onDone }) {
         {req.basis_type === 'sz' && (
           <div style={{ padding: '10px 12px', background: 'var(--bg)', borderRadius: 10, fontSize: 11.5, marginBottom: 12 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}><span style={{ color: 'var(--tx3)' }}>Документ:</span><span className="mono">{req.sz_number}</span></div>
-            {req.sz_approvers && <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 7 }}><span style={{ color: 'var(--tx3)' }}>Согласовали:</span><span style={{ textAlign: 'right' }}>{req.sz_approvers}</span></div>}
             {req.sz_scan_path && <button onClick={async () => { const { error } = await openFile(req.sz_scan_path); if (error) toast(error, 'error') }}
               style={{ display: 'block', width: '100%', textAlign: 'center', minHeight: 42, border: '1px solid var(--ink)', borderRadius: 9, background: 'var(--ink-l)', color: 'var(--ink)', fontSize: 12.5, fontWeight: 600 }}>📄 Открыть служебную записку</button>}
           </div>

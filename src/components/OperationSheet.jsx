@@ -90,17 +90,20 @@ export default function OperationSheet({ type, data, profile, can, onDone }) {
     const goodQty = type === 'in' ? Math.max(0, (Number(f.qty) || 0) - defects) : f.qty
     if (type === 'in' && goodQty <= 0) { setLoading(false); toast('Нечего приходовать — весь товар бракованный', 'error'); return }
 
-    const { error } = await saveMovement({ ...f, qty: goodQty, type, issuer_id: profile.id, branch_id: f.branch_id || selRec?.branch_id }, stockByWh)
-
-    // Оценка поставки
-    if (!error && type === 'in' && f.supplier_id) {
+    // Поставка создаётся первой — приход ссылается на неё, чтобы был виден состав
+    let deliveryId = null
+    if (type === 'in' && f.supplier_id) {
       try {
-        await supabase.from('deliveries').insert({
+        const { data: dlv } = await supabase.from('deliveries').insert({
           supplier_id: Number(f.supplier_id), on_time: f.on_time,
           defects, comment: f.delivery_comment || null,
-        })
+          warehouse_id: Number(f.warehouse_id) || null,
+        }).select().single()
+        deliveryId = dlv?.id || null
       } catch (e) {}
     }
+
+    const { error } = await saveMovement({ ...f, qty: goodQty, type, delivery_id: deliveryId, issuer_id: profile.id, branch_id: f.branch_id || selRec?.branch_id }, stockByWh)
     setLoading(false)
     if (error) return toast(error, 'error')
     toast(TL[type] + ' сохранена')
@@ -266,9 +269,13 @@ export default function OperationSheet({ type, data, profile, can, onDone }) {
           {f.has_defects && <div style={{ padding: '11px 12px', background: 'var(--rd-l)', borderRadius: 10, marginBottom: 12 }}>
             <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', color: 'var(--rd-m)', marginBottom: 6 }}>Сколько бракованных</div>
             <div style={{ display: 'flex', gap: 9, alignItems: 'center' }}>
-              <Input type="number" inputMode="numeric" value={f.defects} onChange={(e) => up('defects', Math.max(0, Number(e.target.value) || 0))} style={{ width: 84 }} />
+              <Input type="number" inputMode="numeric" min={0} max={Number(f.qty) || 0}
+                value={f.defects}
+                onChange={(e) => up('defects', Math.min(Number(f.qty) || 0, Math.max(0, Number(e.target.value) || 0)))}
+                style={{ width: 84 }} />
               <span style={{ fontSize: 11.5, color: 'var(--tx2)' }}>
                 из {f.qty || 0} · оприходуем <b className="mono">{Math.max(0, (Number(f.qty) || 0) - (Number(f.defects) || 0))}</b>
+                {Number(f.defects) >= Number(f.qty) && Number(f.qty) > 0 && <span style={{ color: 'var(--rd-m)' }}> · вся партия бракованная</span>}
               </span>
             </div>
           </div>}
