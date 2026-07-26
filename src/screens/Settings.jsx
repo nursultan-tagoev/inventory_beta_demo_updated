@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { supabase } from '../supabaseClient'
 import { Btn, Input, Select, Field, Badge, useToast, Confirm } from '../components/ui'
 import Suppliers from '../components/Suppliers'
+import Users from '../components/Users'
 
 const NAV = [
   { id: 'hier', l: 'Иерархия', ico: '🗂' },
@@ -11,6 +12,7 @@ const NAV = [
   { id: 'categories', l: 'Категории', ico: '🏷' },
   { id: 'suppliers', l: 'Поставщики', ico: '🚚' },
   { id: 'appr', l: 'Согласование', ico: '🧭' },
+  { id: 'users', l: 'Пользователи', ico: '👥' },
 ]
 
 export default function Settings({ data }) {
@@ -59,6 +61,7 @@ export default function Settings({ data }) {
           {tab === 'categories' && <Simple title="Категории" table="categories" rows={categories} cols={[['name', 'Название']]} ins={ins} del={del} upd={upd} />}
           {tab === 'appr' && <Approvals data={data} toast={toast} ins={ins} del={del} />}
           {tab === 'suppliers' && <Suppliers data={data} />}
+          {tab === 'users' && <Users data={data} />}
         </div>
       </div>
     </div>
@@ -175,10 +178,9 @@ function Approvals({ data, toast, ins, del }) {
   const [ext, setExt] = useState({ full_name: '', position: '' })
 
   const LV = [
-    ['1', 'Специалист', 'создаёт заявку, подписывает первым', 'var(--ink-l)', 'var(--ink)'],
-    ['2', 'Руководитель филиала', 'подписывает за свой филиал', 'var(--gr-l)', 'var(--gr-m)'],
-    ['3', 'Согласующие вне системы', 'зампред — склад приложит скан подписи', 'var(--am-l)', 'var(--am-m)'],
-    ['4', 'Склад · МОЛ', 'подписывает последним — это выдача', 'var(--sur2)', 'var(--tx2)'],
+    ['1', 'Специалист', 'создаёт заявку по согласованной СЗ', 'var(--ink-l)', 'var(--ink)'],
+    ['2', 'Руководитель филиала', 'согласует и отправляет на склад', 'var(--gr-l)', 'var(--gr-m)'],
+    ['3', 'Склад · МОЛ', 'выдаёт по отправленной заявке', 'var(--sur2)', 'var(--tx2)'],
   ]
   const ROLE = { admin: 'Склад · администратор', director: 'Директор', manager: 'Руководитель филиала', employee: 'Специалист' }
 
