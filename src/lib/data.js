@@ -114,7 +114,42 @@ export function useAppData(profile) {
     return () => { supabase.removeChannel(ch) }
   }, [profile?.id, bump])
 
-  return { ...state, reload: load }
+  /* Мгновенный отклик: показываем результат сразу, сервер догоняет.
+     Человек уже знает, что сделал, — ждать ответа, чтобы это отрисовать, незачем. */
+
+  // Поправить остаток по дельтам: [{ product_id, warehouse_id, delta }]
+  const bumpStock = useCallback((deltas) => setState((s) => {
+    const stockByWh = { ...s.stockByWh }, stock = { ...s.stock }, freeByWh = { ...s.freeByWh }
+    for (const d of deltas || []) {
+      const pid = Number(d.product_id), wid = Number(d.warehouse_id), n = Number(d.delta) || 0
+      if (!pid || !wid || !n) continue
+      stockByWh[pid] = { ...(stockByWh[pid] || {}) }
+      stockByWh[pid][wid] = (stockByWh[pid][wid] || 0) + n
+      stock[pid] = (stock[pid] || 0) + n
+      if (freeByWh[pid]) {
+        freeByWh[pid] = { ...freeByWh[pid] }
+        freeByWh[pid][wid] = (freeByWh[pid][wid] || 0) + n
+      }
+    }
+    return { ...s, stockByWh, stock, freeByWh }
+  }), [])
+
+  // Обновить одну заявку в списке, не перечитывая всё
+  const patchRequest = useCallback((id, fields) => setState((s) => ({
+    ...s, requests: s.requests.map((r) => (r.id === id ? { ...r, ...fields } : r)),
+  })), [])
+
+  // Обновить согласующего в цепочке
+  const patchApprover = useCallback((id, fields) => setState((s) => ({
+    ...s, reqApprovers: s.reqApprovers.map((a) => (a.id === id ? { ...a, ...fields } : a)),
+  })), [])
+
+  // Подмешать свежее движение в журнал
+  const addMovements = useCallback((rows) => setState((s) => ({
+    ...s, movements: [...(rows || []), ...s.movements],
+  })), [])
+
+  return { ...state, reload: load, refresh: () => load({ silent: true }), bumpStock, patchRequest, patchApprover, addMovements }
 }
 
 function buildRequests(reqs, items) {
