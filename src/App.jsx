@@ -46,6 +46,7 @@ const ROLE_VIEWS = {
 export default function App() {
   const [session, setSession] = useState(undefined)
   const [profile, setProfile] = useState(null)
+  const [profErr, setProfErr] = useState(null)
   const [view, setView] = useState('home')
   const [assistAuto, setAssistAuto] = useState(false)
   const [draftItems, setDraftItems] = useState(null)
@@ -63,9 +64,19 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    if (!session) { setProfile(null); return }
-    supabase.from('profiles').select('*').eq('id', session.user.id).single()
-      .then(({ data }) => setProfile(data || { id: session.user.id, email: session.user.email, role: 'employee' }))
+    if (!session) { setProfile(null); setProfErr(null); return }
+    let alive = true
+    // Профиль НИКОГДА не выдумываем: не прочитали — значит ошибка, а не «специалист».
+    // Иначе сбой сети молча понижает админа в правах.
+    const load = async (attempt = 0) => {
+      const { data, error } = await supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle()
+      if (!alive) return
+      if (data) { setProfile(data); setProfErr(null); return }
+      if (attempt < 2) { setTimeout(() => load(attempt + 1), 700); return }
+      setProfErr(error?.message || 'Профиль не найден в базе')
+    }
+    load()
+    return () => { alive = false }
   }, [session])
 
   const data = useAppData(profile)
@@ -81,6 +92,23 @@ export default function App() {
 
   if (session === undefined) return <div style={{ height: '100vh', display: 'grid', placeItems: 'center', background: 'var(--bg)' }}><Spin s={28} /></div>
   if (!session) return <Login />
+  if (profErr) return (
+    <div style={{ height: '100vh', display: 'grid', placeItems: 'center', background: 'var(--bg)', padding: 20 }}>
+      <div className="card" style={{ maxWidth: 400, padding: 26, textAlign: 'center' }}>
+        <div style={{ fontSize: 30, marginBottom: 10 }}>⚠️</div>
+        <div className="ff" style={{ fontSize: 18, fontWeight: 600, marginBottom: 8 }}>Не удалось загрузить профиль</div>
+        <div style={{ fontSize: 13, color: 'var(--tx2)', lineHeight: 1.6, marginBottom: 16 }}>
+          Права не определены, поэтому вход остановлен. Проверьте связь и повторите.
+        </div>
+        <div style={{ fontSize: 11, color: 'var(--tx3)', marginBottom: 16, wordBreak: 'break-word' }}>{profErr}</div>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+          <button onClick={() => { setProfErr(null); setSession((s) => (s ? { ...s } : s)) }}
+            style={{ padding: '10px 16px', borderRadius: 9, background: 'var(--ink)', color: '#fff', fontWeight: 600 }}>Повторить</button>
+          <button onClick={logout} style={{ padding: '10px 16px', borderRadius: 9, background: 'var(--sur2)', color: 'var(--tx2)', fontWeight: 600 }}>Выйти</button>
+        </div>
+      </div>
+    </div>
+  )
   if (!profile) return <div style={{ height: '100vh', display: 'grid', placeItems: 'center', background: 'var(--bg)' }}><Spin s={28} /></div>
   // Отключённого не пускаем, даже если сессия ещё жива
   if (profile.is_active === false) return (
