@@ -103,6 +103,14 @@ export async function updateRequest(id, r) {
   return { error: null }
 }
 
+// Заявка без согласования (её подал руководитель или админ) — сразу на склад
+export async function sendDirect(id, profileId) {
+  const { error } = await supabase.from('requests').update({
+    status: 'approved', sent_at: new Date().toISOString(), sent_by: profileId,
+  }).eq('id', id)
+  return { error: error ? error.message : null }
+}
+
 export async function setStatus(id, status, adminComment) {
   const patch = { status }
   if (adminComment != null) patch.admin_comment = adminComment

@@ -31,6 +31,7 @@ export async function saveMovement(a, stockByWh) {
     recipient_id: a.recipient_id ? Number(a.recipient_id) : null,
     branch_id: a.branch_id ? Number(a.branch_id) : null,          // филиал-адресат (куда выдали)
     supplier_id: a.type === 'in' && a.supplier_id ? Number(a.supplier_id) : null,
+    delivery_id: a.delivery_id ? Number(a.delivery_id) : null,
     location_id: a.location_id ? Number(a.location_id) : null,    // место хранения (полка)
     direction_id: a.direction_id ? Number(a.direction_id) : null,
     issuer_id: a.issuer_id || null,
