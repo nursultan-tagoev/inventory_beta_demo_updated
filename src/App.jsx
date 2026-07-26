@@ -40,7 +40,7 @@ class ErrorBoundary extends React.Component {
 
 const ROLE_VIEWS = {
   admin: ['home', 'items', 'movements', 'requests', 'acts', 'inventory', 'lucy', 'recipients', 'reports', 'settings'],
-  manager: ['home', 'catalog', 'movements', 'requests', 'acts', 'lucy'],
+  manager: ['home', 'catalog', 'movements', 'requests', 'acts', 'reports', 'lucy'],
   director: ['home', 'items', 'movements', 'requests', 'acts', 'inventory', 'reports'],
   employee: ['home', 'catalog', 'movements', 'requests', 'lucy'],
 }
@@ -153,7 +153,7 @@ export default function App() {
     catalog: <Catalog data={data} profile={profile} onRequest={(draft) => { setDraftItems(draft); setView('requests') }} />,
     movements: <Movements data={data} profile={profile} can={can} />,
     recipients: <Recipients data={data} can={can} />,
-    reports: <Reports data={data} />,
+    reports: <Reports data={data} profile={profile} />,
     acts: <Acts data={data} profile={profile} />,
     settings: <Settings data={data} />,
     inventory: <Inventory data={data} profile={profile} />,
