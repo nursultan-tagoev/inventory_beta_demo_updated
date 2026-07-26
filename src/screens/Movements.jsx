@@ -41,20 +41,34 @@ export default function Movements({ data, profile, can }) {
     return i >= 0 ? PALETTE[i % PALETTE.length] : ['var(--sur2)', 'var(--tx3)']
   }
 
-  // Номер заявки по движению (через акт или примечание)
+  // Номер заявки: прямой связкой, для старых записей — через акт в примечании
   const reqNo = (m) => {
+    if (m.request_id) return m.request_id
     if (!m.notes) return null
     const byAct = (data.acts || []).find((a) => m.notes.includes(a.number))
     return byAct?.request_id || null
+  }
+  // Кто получил: профиль пользователя, для старых записей — справочник
+  const personName = (m) => {
+    const p = (profiles || []).find((x) => x.id === m.recipient_profile_id)
+    if (p) return p.full_name || p.email
+    return rName(m.recipient_id)
+  }
+  // Кто инициировал заявку, по которой прошло движение
+  const initiator = (m) => {
+    const rn = reqNo(m)
+    if (!rn) return null
+    const rq = (requests || []).find((r) => r.id === rn)
+    const p = rq && (profiles || []).find((x) => x.id === rq.author_id)
+    return p ? (p.full_name || p.email) : null
   }
 
   /* Область видимости */
   const visible = movements.filter((m) => {
     if (seeAll) return true
     if (isManager) return m.branch_id === profile?.branch_id
-    // специалист — только где он получатель
-    const rec = recipients.find((r) => r.id === m.recipient_id)
-    return rec && (rec.name === profile?.full_name || rec.name === profile?.email)
+    // специалист — только то, что получил лично он
+    return m.recipient_profile_id === profile?.id
   })
 
   const TYPES = seeAll
@@ -65,7 +79,7 @@ export default function Movements({ data, profile, can }) {
     if (f !== 'all' && m.type !== f) return false
     if (wh && m.warehouse_id != wh && m.warehouse_to_id != wh) return false
     if (q) {
-      const s = (pName(m.product_id) + ' ' + rName(m.recipient_id) + ' ' + bName(m.branch_id) + ' ' + (m.purpose || '') + ' ' + (m.notes || '')).toLowerCase()
+      const s = (pName(m.product_id) + ' ' + (personName(m) || '') + ' ' + bName(m.branch_id) + ' ' + (m.purpose || '') + ' ' + (m.notes || '')).toLowerCase()
       if (!s.includes(q.toLowerCase())) return false
     }
     return true
@@ -92,7 +106,7 @@ export default function Movements({ data, profile, can }) {
   const persons = useMemo(() => {
     const g = {}
     for (const m of list) {
-      const name = rName(m.recipient_id) || '— без получателя —'
+      const name = personName(m) || '— без получателя —'
       ;(g[name] || (g[name] = [])).push(m)
     }
     return Object.entries(g).sort((a, b) => b[1].length - a[1].length)
@@ -111,8 +125,8 @@ export default function Movements({ data, profile, can }) {
           <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pName(m.product_id)}</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 3 }}>
             {bc && seeAll && <span style={{ fontSize: 9.5, padding: '2px 8px', borderRadius: 20, background: bc[0], color: bc[1], whiteSpace: 'nowrap' }}>{bName(m.branch_id)}</span>}
-            {m.recipient_id && !isManager && <span style={{ fontSize: 10.5, color: 'var(--tx3)' }}>{rName(m.recipient_id)}</span>}
-            {isManager && m.recipient_id && <span style={{ fontSize: 10.5, color: 'var(--tx3)' }}>{rName(m.recipient_id)}</span>}
+            {personName(m) && <span style={{ fontSize: 10.5, color: 'var(--tx3)' }}>{personName(m)}</span>}
+            {isManager && initiator(m) && <span style={{ fontSize: 9.5, padding: '2px 8px', borderRadius: 20, background: 'var(--sur2)', color: 'var(--tx3)', whiteSpace: 'nowrap' }}>заявку подал: {initiator(m)}</span>}
             {m.type === 'transfer' && <span style={{ fontSize: 10.5, color: 'var(--tx3)' }}>{whName(m.warehouse_id)} → {whName(m.warehouse_to_id)}</span>}
             {rn && <span className="mono" style={{ fontSize: 10, color: SEC }}>заявка №{rn}</span>}
             {m.annul_of_act && <span style={{ fontSize: 9.5, padding: '1px 7px', borderRadius: 20, background: 'var(--rd-l)', color: 'var(--rd-m)' }}>аннулирование</span>}

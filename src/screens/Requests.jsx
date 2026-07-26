@@ -224,9 +224,6 @@ export default function Requests({ data, profile, can, draftItems, onDraftUsed }
                       <span style={{ color: 'var(--tx3)' }}>Записка:</span>
                       <span className="mono">{r.sz_number}{r.sz_date ? ' от ' + new Date(r.sz_date).toLocaleDateString('ru-RU') : ''}</span>
                     </div>
-                    {r.sz_approvers && <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 7 }}>
-                      <span style={{ color: 'var(--tx3)' }}>Согласовали:</span><span style={{ textAlign: 'right' }}>{r.sz_approvers}</span>
-                    </div>}
                     {r.sz_scan_path && <button onClick={async () => { const { error } = await openFile(r.sz_scan_path); if (error) toast(error, 'error') }}
                       style={{ width: '100%', minHeight: 38, border: `1px solid ${SEC}`, borderRadius: 9, background: SEC_L, color: SEC, fontSize: 12, fontWeight: 600 }}>
                       📄 Открыть записку
@@ -378,7 +375,7 @@ function RequestForm({ data, profile, editReq, draftItems, onDone }) {
   )
   const [f, setF] = useState({
     purpose: editReq?.purpose || '', sz_number: editReq?.sz_number || '', sz_date: editReq?.sz_date || '',
-    sz_approvers: editReq?.sz_approvers || '', priority: editReq?.priority || 'normal',
+    priority: editReq?.priority || 'normal',
     urgent_reason: editReq?.urgent_reason || '', urgent_due: editReq?.urgent_due || '',
   })
   const [scanFile, setScan] = useState(null)
@@ -393,7 +390,6 @@ function RequestForm({ data, profile, editReq, draftItems, onDone }) {
   }).filter(Boolean)
 
   const author = profiles.find((p) => p.id === profile.id) || profile
-  const route = [...buildApprovalChain({ author, profiles, externals, branchId: profile.branch_id }), { name: 'Склад', role: 'исполнение' }]
 
   const submit = async () => {
     if (shortage.length) return toast(`Свободно только ${shortage[0].free} — ${shortage[0].name}`, 'error')
@@ -403,11 +399,19 @@ function RequestForm({ data, profile, editReq, draftItems, onDone }) {
     if (res.error) { setLoading(false); return toast(res.error, 'error') }
     const reqId = res.data?.id || editReq?.id
     if (reqId && !editReq) {
-      const chain = buildApprovalChain({ author, profiles, externals, branchId: profile.branch_id })
-      await createApprovalChain(reqId, chain)
-      const first = chain[0]
-      if (first?.user_id) await push({ userId: first.user_id, kind: 'to_approve', action: true,
-        title: `Заявка №${reqId} ждёт согласования`, body: f.purpose || '', entity: 'request', entityId: reqId })
+      const chain = buildApprovalChain({ author, profiles, branchId: profile.branch_id })
+      if (chain.length) {
+        await createApprovalChain(reqId, chain)
+        const first = chain[0]
+        if (first?.user_id) await push({ userId: first.user_id, kind: 'to_approve', action: true,
+          title: `Заявка №${reqId} ждёт согласования`, body: f.purpose || '', entity: 'request', entityId: reqId })
+      } else {
+        // Согласовывать некому — заявка идёт прямо на склад
+        await setStatus(reqId, 'approved')
+        const admin = (profiles || []).find((p) => p.role === 'admin' && p.is_active !== false)
+        if (admin) await push({ userId: admin.id, kind: 'to_issue', action: true,
+          title: `Заявка №${reqId} на складе`, body: f.purpose || '', entity: 'request', entityId: reqId })
+      }
     }
     setLoading(false)
     toast(editReq ? 'Обновлено' : 'Заявка отправлена'); onDone()
@@ -443,17 +447,16 @@ function RequestForm({ data, profile, editReq, draftItems, onDone }) {
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '10px 12px', background: SEC_L, borderRadius: 11, fontSize: 11.5, color: SEC }}>
         <span style={{ fontSize: 15 }}>📄</span>
-        <span>Заявка оформляется <b>по служебной записке</b> — заполните реквизиты</span>
+        <span>Заявка оформляется <b>по служебной записке</b> — заполните пожалуйста детали и приложите согласованную служебную записку</span>
       </div>
 
       <div className="card" style={{ padding: 14, background: 'var(--bg)', display: 'flex', flexDirection: 'column', gap: 11 }}>
         <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 10 }}>
-          <div>{lbl('Номер', true)}<input value={f.sz_number} onChange={(e) => up('sz_number', e.target.value)} placeholder="СЗ-2026-0142" style={inp} /></div>
-          <div>{lbl('Дата', true)}<input type="date" value={f.sz_date} onChange={(e) => up('sz_date', e.target.value)} style={inp} /></div>
+          <div>{lbl('Номер служебной записки', true)}<input value={f.sz_number} onChange={(e) => up('sz_number', e.target.value)} placeholder="СЗ-2026-0142" style={inp} /></div>
+          <div>{lbl('Дата согласования', true)}<input type="date" value={f.sz_date} onChange={(e) => up('sz_date', e.target.value)} style={inp} /></div>
         </div>
-        <div>{lbl('Кто согласовал', true)}<input value={f.sz_approvers} onChange={(e) => up('sz_approvers', e.target.value)} placeholder="ФИО и должности" style={inp} /></div>
         <div>
-          {lbl('Скан записки', true)}
+          {lbl('Согласованная служебная записка', true)}
           <label style={{ display: 'flex', alignItems: 'center', gap: 10, minHeight: 50, padding: '0 13px', border: `1px dashed ${scanFile ? 'var(--gr)' : SEC}`, borderRadius: 12, background: scanFile ? 'var(--gr-l)' : SEC_L, cursor: 'pointer' }}>
             <span style={{ fontSize: 17 }}>{scanFile ? '✓' : '📎'}</span>
             <span style={{ fontSize: 12.5, fontWeight: 600, color: scanFile ? 'var(--gr-m)' : SEC, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{scanFile ? scanFile.name : 'Приложить документ'}</span>
@@ -484,24 +487,6 @@ function RequestForm({ data, profile, editReq, draftItems, onDone }) {
       )}
 
       <div>{lbl('Цель')}<input value={f.purpose} onChange={(e) => up('purpose', e.target.value)} placeholder="Конференция, акция…" style={inp} /></div>
-
-      {/* Маршрут */}
-      {route.length > 0 && (
-        <div style={{ padding: '11px 13px', background: SEC_L, borderRadius: 11 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8 }}>
-            <span style={{ fontSize: 14 }}>🧭</span>
-            <span style={{ fontSize: 11.5, fontWeight: 600, color: SEC }}>Пойдёт на согласование</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 5, fontSize: 11.5 }}>
-            {route.map((r, i) => (
-              <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                <span title={r.role} style={{ padding: '3px 9px', borderRadius: 20, background: 'var(--sur)', border: '1px solid var(--brd)' }}>{(r.name || '').split(' ')[0]}</span>
-                {i < route.length - 1 && <span style={{ color: 'var(--tx3)' }}>→</span>}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
 
       <Btn onClick={submit} loading={loading} disabled={shortage.length > 0} size="lg" style={{ minHeight: 50 }}>
         {editReq ? 'Сохранить' : 'Отправить заявку'}
