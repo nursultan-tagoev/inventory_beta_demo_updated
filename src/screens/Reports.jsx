@@ -28,7 +28,7 @@ function BarChart({ rows, series, height = 170 }) {
   const step = max / 3
   const ticks = [0, step, step * 2, max]
   return (
-    <div style={{ padding: '14px 14px 10px' }}>
+    <div className="chart-x" style={{ padding: '14px 14px 10px' }}>
       <div style={{ display: 'flex', gap: 10 }}>
         {/* Ось значений */}
         <div style={{ display: 'flex', flexDirection: 'column-reverse', justifyContent: 'space-between', height, paddingBottom: 20 }}>
@@ -219,14 +219,14 @@ export default function Reports({ data, profile }) {
         <span className="ff" style={{ fontSize: 21, fontWeight: 600 }}>Аналитика</span>
         {isManager && <span style={{ fontSize: 11, padding: '3px 9px', borderRadius: 20, background: 'var(--gr-l)', color: 'var(--gr-m)' }}>ваш филиал</span>}
         {role === 'director' && <span style={{ fontSize: 11, padding: '3px 9px', borderRadius: 20, background: 'var(--sur2)', color: 'var(--tx3)' }}>только чтение</span>}
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 7 }}>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 7, flexShrink: 0 }}>
           <button onClick={toXlsx} style={{ height: 38, padding: '0 13px', borderRadius: 9, background: 'var(--gr)', color: '#fff', fontSize: 12.5, fontWeight: 600 }}>↓ XLSX</button>
           <button onClick={() => printDoc(printRef.current)} style={{ height: 38, padding: '0 13px', borderRadius: 9, background: 'var(--sur2)', color: 'var(--tx2)', fontSize: 12.5, fontWeight: 600 }}>↓ PDF</button>
         </div>
       </div>
 
       {/* Период */}
-      <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
+      <div className="scroll-x" style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
         {PERIODS.map(([k, l]) => (
           <button key={k} onClick={() => setPk(k)} style={{ padding: '7px 14px', minHeight: 38, borderRadius: 9, border: `1px solid ${pk === k ? 'var(--ink)' : 'var(--brd)'}`, fontSize: 12.5, fontWeight: pk === k ? 600 : 400, background: pk === k ? 'var(--ink-l)' : 'var(--sur)', color: pk === k ? 'var(--ink)' : 'var(--tx2)' }}>{l}</button>
         ))}
@@ -249,7 +249,7 @@ export default function Reports({ data, profile }) {
 
       <div ref={printRef}>
         {/* KPI */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(170px,1fr))', gap: 10, marginBottom: 14 }}>
+        <div className="kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(170px,1fr))', gap: 10, marginBottom: 14 }}>
           {!isManager && (
             <Kpi label="Закупки за период" value={som(Math.round(now.buyVal))}
               sub={`${gBuy >= 0 ? '+' : ''}${gBuy}% к прошлому`} tone={gBuy > 0 ? 'down' : 'up'}
@@ -269,7 +269,7 @@ export default function Reports({ data, profile }) {
         </div>
 
         {/* Вкладки */}
-        <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
+        <div className="scroll-x" style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
           {TABS.map(([t, l]) => (
             <button key={t} onClick={() => setTab(t)} style={{ padding: '7px 15px', minHeight: 38, borderRadius: 9, border: `1px solid ${activeTab === t ? 'var(--ink)' : 'var(--brd)'}`, fontSize: 13, fontWeight: activeTab === t ? 600 : 400, background: activeTab === t ? 'var(--ink-l)' : 'var(--sur)', color: activeTab === t ? 'var(--ink)' : 'var(--tx2)' }}>{l}</button>
           ))}
@@ -430,7 +430,7 @@ export default function Reports({ data, profile }) {
         {/* ── Процесс ── */}
         {activeTab === 'proc' && (
           <>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 10, marginBottom: 14 }}>
+            <div className="kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 10, marginBottom: 14 }}>
               <Kpi label="Согласование" value={proc.avgApprove != null ? proc.avgApprove + ' дн' : '—'} sub="от подачи до визы" />
               <Kpi label="До склада" value={proc.avgSend != null ? proc.avgSend + ' дн' : '—'} sub="от визы до отправки" />
               <Kpi label="Выдача" value={proc.avgIssue != null ? proc.avgIssue + ' дн' : '—'} sub="от склада до рук" />

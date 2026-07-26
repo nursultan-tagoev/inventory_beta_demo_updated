@@ -4,6 +4,7 @@ import { signersOf, currentSigner } from '../lib/signing'
 import { approversOf, currentApprover } from '../lib/approval'
 import { fmt, som, TL } from '../lib/format'
 import OperationSheet from '../components/OperationSheet'
+import { InstallCard } from '../components/InstallPrompt'
 
 export default function Home({ data, profile, can, setView }) {
   const { products, movements, stock, stockByWh, warehouses, checkouts, recipients, branches, requests, acts, actSigners, reqApprovers } = data
@@ -121,6 +122,8 @@ export default function Home({ data, profile, can, setView }) {
           ))}
         </div>
       })()}
+
+      <InstallCard />
 
       {/* Заявителям — одно действие */}
       {['employee', 'manager'].includes(role) && (
