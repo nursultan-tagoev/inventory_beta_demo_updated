@@ -4,9 +4,9 @@ import { TL } from '../lib/format'
 import OperationSheet from '../components/OperationSheet'
 
 const SEC = 'var(--sec-mov)', SEC_L = 'var(--sec-mov-l)'
-const ICO = { in: '📥', out: '📤', return: '🔄', writeoff: '🗑', transfer: '⇄' }
-const CLR = { in: 'var(--gr)', out: 'var(--ink)', return: 'var(--pu)', writeoff: 'var(--rd)', transfer: 'var(--am)' }
-const BG = { in: 'var(--gr-l)', out: 'var(--ink-l)', return: 'var(--pu-l)', writeoff: 'var(--rd-l)', transfer: 'var(--am-l)' }
+const ICO = { in: '📥', out: '📤', return: '🔄', writeoff: '🗑', transfer: '⇄', defect: '⚠️', adjust_up: '📈', adjust_down: '📉' }
+const CLR = { in: 'var(--gr)', out: 'var(--ink)', return: 'var(--pu)', writeoff: 'var(--rd)', transfer: 'var(--am)', defect: 'var(--rd)', adjust_up: 'var(--bl, #2F6FB3)', adjust_down: 'var(--bl, #2F6FB3)' }
+const BG = { in: 'var(--gr-l)', out: 'var(--ink-l)', return: 'var(--pu-l)', writeoff: 'var(--rd-l)', transfer: 'var(--am-l)', defect: 'var(--rd-l)', adjust_up: 'var(--sur2)', adjust_down: 'var(--sur2)' }
 
 /* Цвета филиалов — назначаются автоматически по порядку */
 const PALETTE = [
@@ -72,11 +72,13 @@ export default function Movements({ data, profile, can }) {
   })
 
   const TYPES = seeAll
-    ? [['all', 'Все'], ['in', 'Приход'], ['out', 'Выдача'], ['return', 'Возврат'], ['writeoff', 'Списание'], ['transfer', 'Перемещение']]
+    ? [['all', 'Все'], ['in', 'Приход'], ['out', 'Выдача'], ['return', 'Возврат'], ['writeoff', 'Списание'], ['transfer', 'Перемещение'], ['defect', 'Брак'], ['adjust', 'Корректировка']]
     : [['all', 'Всё'], ['out', 'Получено'], ['return', 'Возвращено']]
 
   const list = visible.filter((m) => {
-    if (f !== 'all' && m.type !== f) return false
+    // «Корректировка» объединяет обе стороны расхождения
+    if (f === 'adjust') { if (!['adjust_up', 'adjust_down'].includes(m.type)) return false }
+    else if (f !== 'all' && m.type !== f) return false
     if (wh && m.warehouse_id != wh && m.warehouse_to_id != wh) return false
     if (q) {
       const s = (pName(m.product_id) + ' ' + (personName(m) || '') + ' ' + bName(m.branch_id) + ' ' + (m.purpose || '') + ' ' + (m.notes || '')).toLowerCase()
@@ -135,7 +137,7 @@ export default function Movements({ data, profile, can }) {
         <div style={{ textAlign: 'right', flexShrink: 0 }}>
           {(() => {
             // Склад отдал — минус. Тот, кто получил, видит плюс.
-            const plus = seeAll ? ['in', 'return'].includes(m.type) : m.type === 'out'
+            const plus = seeAll ? ['in', 'return', 'adjust_up'].includes(m.type) : m.type === 'out'
             const sign = m.type === 'transfer' ? '~' : plus ? '+' : '−'
             const clr = seeAll ? CLR[m.type] : (plus ? 'var(--gr)' : 'var(--pu)')
             return <div className="mono" style={{ fontSize: 14, fontWeight: 600, color: clr }}>{sign}{m.qty}</div>
