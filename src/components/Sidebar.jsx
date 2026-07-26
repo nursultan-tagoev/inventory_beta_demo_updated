@@ -1,3 +1,4 @@
+import { useState } from 'react'
 const I = {
   home: <path d="M3 10.5 12 3l9 7.5M5 9.5V21h14V9.5" />,
   catalog: <path d="M3 6h18M3 12h18M3 18h18" />,
@@ -15,6 +16,14 @@ const Ico = ({ k, s = 18 }) => (
 )
 
 // Блок 1: показываем только готовые разделы. Остальные включаются в своих блоках.
+/* Что выносим в нижнее меню телефона: то, чем пользуются каждый день */
+const MAIN = {
+  admin:    ['home', 'requests', 'movements', 'items'],
+  manager:  ['home', 'requests', 'movements', 'reports'],
+  employee: ['home', 'requests', 'catalog', 'movements'],
+  director: ['home', 'reports', 'movements', 'requests'],
+}
+
 const NAV = [
   { id: 'home', label: 'Главная', roles: ['admin', 'manager', 'employee', 'director'] },
   { id: 'catalog', label: 'Каталог', roles: ['manager', 'employee'] },
@@ -29,11 +38,19 @@ const NAV = [
   // Блок 2: { id: 'requests', label: 'Заявки' }, { id: 'acts', label: 'Акты' }, { id: 'recipients', label: 'Получатели' }
   // Блок 3: { id: 'reports', label: 'Аналитика' }, { id: 'inventory', label: 'Инвентаризация' }
 ]
+import { Sheet } from './ui'
+
 const ROLE_RU = { admin: 'Администратор', manager: 'Менеджер', employee: 'Сотрудник', director: 'Директор' }
 
 export default function Sidebar({ view, setView, profile, onLogout, badges = {}, branchName, onTour }) {
+  const [more, setMore] = useState(false)
   const role = profile?.role || 'employee'
   const items = NAV.filter((n) => n.roles.includes(role))
+  // Четвёрка для нижнего меню и всё остальное — в «Ещё»
+  const mainIds = MAIN[role] || MAIN.employee
+  const mainItems = mainIds.map((id) => items.find((n) => n.id === id)).filter(Boolean)
+  const restItems = items.filter((n) => !mainIds.includes(n.id))
+  const restBadge = restItems.reduce((a, n) => a + (badges[n.id] || 0), 0)
   const toggleTheme = () => {
     const c = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'
     document.documentElement.setAttribute('data-theme', c)
@@ -85,16 +102,57 @@ export default function Sidebar({ view, setView, profile, onLogout, badges = {},
         </div>
       </aside>
 
-      {/* Телефон — нижнее меню */}
+      {/* Телефон — нижнее меню: четыре главных плюс «Ещё» */}
       <nav className="bottom-nav">
-        {items.slice(0, 5).map((n) => (
+        {mainItems.map((n) => (
           <button key={n.id} data-tour={'mnav-' + n.id} onClick={() => setView(n.id)}
             style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, padding: '8px 2px', color: view === n.id ? 'var(--ink)' : 'var(--tx3)' }}>
             <div style={{ position: 'relative' }}><Ico k={n.id} s={21} />{badges[n.id] > 0 && <span style={{ position: 'absolute', top: -4, right: -8, minWidth: 15, height: 15, padding: '0 3px', borderRadius: 8, background: 'var(--ink)', color: '#fff', fontSize: 9, fontWeight: 700, display: 'grid', placeItems: 'center' }}>{badges[n.id]}</span>}</div>
             <span style={{ fontSize: 9.5, fontWeight: view === n.id ? 600 : 500 }}>{n.label}</span>
           </button>
         ))}
+        <button onClick={() => setMore(true)} data-tour="mnav-more"
+          style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, padding: '8px 2px', color: more ? 'var(--ink)' : 'var(--tx3)' }}>
+          <div style={{ position: 'relative', width: 21, height: 21, display: 'grid', placeItems: 'center' }}>
+            <span style={{ fontSize: 17, lineHeight: 1 }}>⋯</span>
+            {restBadge > 0 && <span style={{ position: 'absolute', top: -4, right: -8, minWidth: 15, height: 15, padding: '0 3px', borderRadius: 8, background: 'var(--ink)', color: '#fff', fontSize: 9, fontWeight: 700, display: 'grid', placeItems: 'center' }}>{restBadge}</span>}
+          </div>
+          <span style={{ fontSize: 9.5, fontWeight: more ? 600 : 500 }}>Ещё</span>
+        </button>
       </nav>
+
+      {/* Шторка «Ещё»: остальные разделы и профиль */}
+      <Sheet open={more} onClose={() => setMore(false)} title="Ещё">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {restItems.length > 0 && (
+            <div style={{ border: '1px solid var(--brd)', borderRadius: 12, overflow: 'hidden' }}>
+              {restItems.map((n, i) => (
+                <button key={n.id} onClick={() => { setView(n.id); setMore(false) }}
+                  style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '13px 14px', minHeight: 52,
+                    borderTop: i ? '1px solid var(--brd)' : 'none', color: view === n.id ? 'var(--ink)' : 'var(--tx)', textAlign: 'left' }}>
+                  <Ico k={n.id} s={20} />
+                  <span style={{ fontSize: 14, fontWeight: view === n.id ? 600 : 500, flex: 1 }}>{n.label}</span>
+                  {badges[n.id] > 0 && <span style={{ minWidth: 18, height: 18, padding: '0 5px', borderRadius: 9, background: 'var(--ink)', color: '#fff', fontSize: 10, fontWeight: 700, display: 'grid', placeItems: 'center' }}>{badges[n.id]}</span>}
+                  <span style={{ color: 'var(--tx3)', fontSize: 16 }}>›</span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div style={{ padding: '13px 14px', border: '1px solid var(--brd)', borderRadius: 12 }}>
+            <div style={{ fontSize: 14, fontWeight: 600 }}>{profile?.full_name || profile?.email}</div>
+            <div style={{ fontSize: 11.5, color: 'var(--tx3)', marginTop: 2 }}>
+              {ROLE_RU[profile?.role] || profile?.role}{branchName ? ' · ' + branchName : ''}
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button onClick={toggleTheme} style={{ flex: 1, minWidth: 100, minHeight: 46, borderRadius: 11, background: 'var(--sur2)', color: 'var(--tx2)', fontSize: 13, fontWeight: 600 }}>◐ Тема</button>
+            <button onClick={() => { setMore(false); onTour && onTour() }} style={{ flex: 1, minWidth: 100, minHeight: 46, borderRadius: 11, background: 'var(--sur2)', color: 'var(--tx2)', fontSize: 13, fontWeight: 600 }}>Обучение</button>
+          </div>
+          <button onClick={onLogout} style={{ width: '100%', minHeight: 48, borderRadius: 11, background: 'var(--rd-l)', color: 'var(--rd-m)', fontSize: 13.5, fontWeight: 600 }}>Выйти из аккаунта</button>
+        </div>
+      </Sheet>
     </>
   )
 }
