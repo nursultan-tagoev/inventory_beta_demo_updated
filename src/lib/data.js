@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../supabaseClient'
 
 export function useAppData(profile) {
@@ -9,8 +9,14 @@ export function useAppData(profile) {
     stock: {}, stockByWh: {}, freeByWh: {}, resvByWh: {}, flows: {}, checkouts: [], loading: true, error: null,
   })
 
-  const load = useCallback(async () => {
-    setState((s) => ({ ...s, loading: true }))
+  // Номер загрузки: ответы приходят вразнобой, и устаревший не должен
+  // затирать свежий — иначе экран откатывается к состоянию до действия.
+  const seq = useRef(0)
+  const timer = useRef(null)
+
+  const load = useCallback(async (opts = {}) => {
+    const my = ++seq.current
+    if (!opts.silent) setState((s) => ({ ...s, loading: true }))
     try {
       const q = (t, order = 'id') => supabase.from(t).select('*').order(order)
       const [products, movements, recipients, branches, suppliers, categories, directions, productTypes, locations, warehouses, campaigns, stockRows, requestsRes, reqItemsRes, freeRes, resvRes, profilesRes, actsRes, signersRes, extRes, reqApprRes, msgRes] = await Promise.all([
@@ -69,6 +75,7 @@ export function useAppData(profile) {
       }
       const checkouts = Object.values(grp).filter((g) => g.remaining > 0)
 
+      if (my !== seq.current) return   // пока считали, стартовала новая загрузка
       setState({
         products: products.data || [], movements: mv, recipients: recipients.data || [],
         branches: branches.data || [], suppliers: suppliers.data || [], categories: categories.data || [],
@@ -80,26 +87,32 @@ export function useAppData(profile) {
         stock, stockByWh, freeByWh, resvByWh, flows, checkouts, loading: false, error: err ? err.message : null,
       })
     } catch (e) {
+      if (my !== seq.current) return
       setState((s) => ({ ...s, loading: false, error: e.message }))
     }
   }, [])
 
-  useEffect(() => { if (profile) load() }, [profile, load])
+  // Изменения сыплются пачками — собираем их в одну тихую перезагрузку
+  const bump = useCallback(() => {
+    clearTimeout(timer.current)
+    timer.current = setTimeout(() => load({ silent: true }), 350)
+  }, [load])
+
+  // Зависим от id, а не от объекта: новая ссылка на профиль — не повод перечитывать всё
+  useEffect(() => { if (profile?.id) load() }, [profile?.id, load])
+  useEffect(() => () => clearTimeout(timer.current), [])
 
   // Realtime: заявки обновляются у всех сразу
   useEffect(() => {
     if (!profile) return
     const ch = supabase.channel('requests-live')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'requests' }, () => load())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'request_items' }, () => load())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'acts' }, () => load())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'act_signers' }, () => load())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'reservations' }, () => load())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'request_approvers' }, () => load())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'request_messages' }, () => load())
-      .subscribe()
+    for (const t of ['requests', 'request_items', 'acts', 'act_signers', 'reservations',
+                     'request_approvers', 'request_messages', 'movements']) {
+      ch.on('postgres_changes', { event: '*', schema: 'public', table: t }, bump)
+    }
+    ch.subscribe()
     return () => { supabase.removeChannel(ch) }
-  }, [profile, load])
+  }, [profile?.id, bump])
 
   return { ...state, reload: load }
 }
