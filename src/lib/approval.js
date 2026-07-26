@@ -82,12 +82,14 @@ export async function declineApproval(appr, reason, requestId) {
 }
 
 // Все ли согласовали
-export const chainComplete = (chain) => (chain || []).length > 0 && chain.every((a) => a.status === 'approved')
+// Согласования собраны. Пустая цепочка (заявка руководителя) — согласовывать нечего,
+// но отправить на склад всё равно нужно вручную.
+export const chainComplete = (chain) => (chain || []).every((a) => a.status === 'approved')
 
 // Отправить на склад — явное действие того, кто собрал подписи
 export async function sendToWarehouse(requestId, profileId) {
   const { data } = await supabase.from('request_approvers').select('status').eq('request_id', requestId)
-  if (!(data || []).length || !(data || []).every((a) => a.status === 'approved')) {
+  if (!(data || []).every((a) => a.status === 'approved')) {
     return { error: 'Ещё не все согласовали' }
   }
   const { error } = await supabase.from('requests').update({
