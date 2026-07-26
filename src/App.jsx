@@ -6,6 +6,7 @@ import Login from './components/Login'
 import FirstPassword from './components/FirstPassword'
 import Tour from './components/Tour'
 import Inventory from './screens/Inventory'
+import InstallPrompt from './components/InstallPrompt'
 import Sidebar from './components/Sidebar'
 import Notifications from './components/Notifications'
 import Home from './screens/Home'
@@ -186,6 +187,7 @@ export default function App() {
             <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v6a3 3 0 0 0 3 3ZM6 11a6 6 0 0 0 12 0M12 19v3" /></svg>
           </button>
         )}
+        <InstallPrompt />
         {tour && <Tour role={role} setView={setView} onClose={() => setTour(false)} onFinish={finishTour} />}
       </div>
     </ToastProvider>

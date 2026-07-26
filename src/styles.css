@@ -121,3 +121,29 @@ button:active { transform: scale(.97); }
 @media (min-width: 861px) { .login-mark { align-items: flex-start !important; } .login-mark > div:last-child { text-align: left !important; } }
 /* Шапка с колокольчиком — на десктопе компактнее */
 @media (min-width: 861px) { .top-bar { justify-content: flex-end; } .top-bar > div:first-child { display: none; } }
+
+/* ── Телефон: аналитика и прочие плотные экраны ── */
+@media (max-width: 700px) {
+  /* Вкладки и фильтры не переносятся, а прокручиваются вбок */
+  .scroll-x {
+    flex-wrap: nowrap !important;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 2px;
+  }
+  .scroll-x::-webkit-scrollbar { display: none; }
+  .scroll-x > * { flex-shrink: 0; }
+
+  /* Диаграмма не сплющивается — прокручиваем её саму */
+  .chart-x { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .chart-x > * { min-width: 430px; }
+
+  /* Плитки в две колонки вместо четырёх */
+  .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+}
+
+/* Нижнее меню не должно налезать на контент и на плашку установки */
+@media (max-width: 860px) {
+  .bottom-nav { padding-bottom: env(safe-area-inset-bottom, 0px); }
+}
