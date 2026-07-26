@@ -104,6 +104,16 @@ export default function OperationSheet({ type, data, profile, can, onDone }) {
     }
 
     const { error } = await saveMovement({ ...f, qty: goodQty, type, delivery_id: deliveryId, issuer_id: profile.id, branch_id: f.branch_id || selRec?.branch_id }, stockByWh)
+
+    // Остаток на экране меняем сразу, не дожидаясь перечитывания представления
+    if (!error && data.bumpStock) {
+      const sign = ['in', 'return'].includes(type) ? 1 : -1
+      const d = [{ product_id: Number(f.product_id), warehouse_id: Number(f.warehouse_id), delta: sign * goodQty }]
+      if (type === 'transfer' && f.warehouse_to_id) {
+        d.push({ product_id: Number(f.product_id), warehouse_id: Number(f.warehouse_to_id), delta: goodQty })
+      }
+      data.bumpStock(d)
+    }
     setLoading(false)
     if (error) return toast(error, 'error')
     toast(TL[type] + ' сохранена')

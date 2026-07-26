@@ -55,6 +55,7 @@ export default function DefectSheet({ data, profile, onClose, onDone }) {
     })
     setBusy(false)
     if (error) return toast(error, 'error')
+    if (data.bumpStock) data.bumpStock([{ product_id: Number(productId), warehouse_id: Number(dlv?.warehouse_id), delta: -Number(qty) }])
     toast('Брак списан, рейтинг поставщика обновлён')
     onDone()
   }
