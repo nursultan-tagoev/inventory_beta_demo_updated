@@ -29,6 +29,21 @@ export default function Home({ data, profile, can, setView }) {
     return true
   })
   const myHands = myCheckouts.reduce((a, c) => a + c.remaining, 0)
+  // Получено: выдачи минус возвраты по товару (в области видимости роли)
+  const receivedList = (() => {
+    const g = {}
+    for (const m of movements) {
+      if (!['out', 'return'].includes(m.type)) continue
+      if (role === 'manager') { if (m.branch_id !== profile?.branch_id) continue }
+      else if (role === 'employee') { if (m.recipient_profile_id !== profile?.id) continue }
+      else continue
+      const k = m.product_id
+      if (!g[k]) g[k] = { product_id: m.product_id, qty: 0, last: m.created_at, who: m.recipient_profile_id }
+      g[k].qty += m.type === 'out' ? m.qty : -m.qty
+      if (m.created_at > g[k].last) g[k].last = m.created_at
+    }
+    return Object.values(g).filter((x) => x.qty > 0).sort((a, b) => (a.last < b.last ? 1 : -1))
+  })()
   const myOverdue = myCheckouts.filter((c) => c.due_date && c.due_date < today).length
 
   const hr = new Date().getHours()
@@ -39,8 +54,7 @@ export default function Home({ data, profile, can, setView }) {
   const visibleMoves = movements.filter((m) => {
     if (['admin', 'director'].includes(role)) return true
     if (role === 'manager') return m.branch_id === profile?.branch_id
-    const rec = recipients.find((r) => r.id === m.recipient_id)
-    return rec && rec.name === profile?.full_name
+    return m.recipient_profile_id === profile?.id
   })
   const recent = visibleMoves.slice(0, 6)
   const pName = (id) => products.find((p) => p.id === id)?.name || '—'
@@ -157,33 +171,31 @@ export default function Home({ data, profile, can, setView }) {
                 <div style={{ fontSize: 13.5, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pName(m.product_id)}</div>
                 {sub(m) && <div style={{ fontSize: 11, color: 'var(--tx3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sub(m)}</div>}
               </div>
-              <span className="mono" style={{ fontWeight: 600, color: m.type === 'in' || m.type === 'return' ? 'var(--gr)' : m.type === 'transfer' ? 'var(--am-m)' : 'var(--tx)' }}>
-                {m.type === 'in' || m.type === 'return' ? '+' : m.type === 'transfer' ? '~' : '−'}{m.qty}
-              </span>
+              {(() => {
+                const seeAll = ['admin', 'director'].includes(role)
+                const plus = seeAll ? ['in', 'return'].includes(m.type) : m.type === 'out'
+                const sign = m.type === 'transfer' ? '~' : plus ? '+' : '−'
+                const clr = m.type === 'transfer' ? 'var(--am-m)' : plus ? 'var(--gr)' : seeAll ? 'var(--tx)' : 'var(--pu)'
+                return <span className="mono" style={{ fontWeight: 600, color: clr }}>{sign}{m.qty}</span>
+              })()}
             </div>
           ))}
         </div>
 
         {!['admin', 'director'].includes(role) && <div className="card" style={{ overflow: 'hidden' }}>
           <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--brd)', fontWeight: 600, fontSize: 14.5 }}>
-            {role === 'manager' ? 'На руках у филиала' : 'Что у меня на руках'}
+            {role === 'manager' ? 'Получено филиалом' : 'Что я получил'}
           </div>
-          {myCheckouts.length === 0 && <div style={{ padding: 30, textAlign: 'center', color: 'var(--tx3)', fontSize: 13 }}>Ничего не числится</div>}
-          {myCheckouts.slice(0, 8).map((c, i, arr) => {
-            const overdueItem = c.due_date && c.due_date < today
-            return (
-              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, padding: '11px 18px', borderBottom: i < arr.length - 1 ? '1px solid var(--brd)' : 'none' }}>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pName(c.product_id)}</div>
-                  <div style={{ fontSize: 11, color: overdueItem ? 'var(--rd-m)' : 'var(--tx3)' }}>
-                    {recipients.find((r) => r.id === c.recipient_id)?.name || ''}
-                    {c.due_date ? ` · до ${new Date(c.due_date).toLocaleDateString('ru-RU')}` : ''}
-                  </div>
-                </div>
-                <Badge color={overdueItem ? 'red' : 'slate'}>{c.remaining} шт</Badge>
+          {receivedList.length === 0 && <div style={{ padding: 30, textAlign: 'center', color: 'var(--tx3)', fontSize: 13 }}>Пока ничего не получено</div>}
+          {receivedList.slice(0, 8).map((c, i, arr) => (
+            <div key={c.product_id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, padding: '11px 18px', borderBottom: i < arr.length - 1 ? '1px solid var(--brd)' : 'none' }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pName(c.product_id)}</div>
+                <div style={{ fontSize: 11, color: 'var(--tx3)' }}>{new Date(c.last).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}</div>
               </div>
-            )
-          })}
+              <Badge color="green">+{c.qty} шт</Badge>
+            </div>
+          ))}
         </div>}
 
         {['admin', 'director'].includes(role) && <div className="card" style={{ overflow: 'hidden' }}>

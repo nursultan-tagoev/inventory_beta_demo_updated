@@ -133,9 +133,13 @@ export default function Movements({ data, profile, can }) {
           </div>
         </div>
         <div style={{ textAlign: 'right', flexShrink: 0 }}>
-          <div className="mono" style={{ fontSize: 14, fontWeight: 600, color: CLR[m.type] }}>
-            {m.type === 'in' || m.type === 'return' ? '+' : m.type === 'transfer' ? '~' : '−'}{m.qty}
-          </div>
+          {(() => {
+            // Склад отдал — минус. Тот, кто получил, видит плюс.
+            const plus = seeAll ? ['in', 'return'].includes(m.type) : m.type === 'out'
+            const sign = m.type === 'transfer' ? '~' : plus ? '+' : '−'
+            const clr = seeAll ? CLR[m.type] : (plus ? 'var(--gr)' : 'var(--pu)')
+            return <div className="mono" style={{ fontSize: 14, fontWeight: 600, color: clr }}>{sign}{m.qty}</div>
+          })()}
           <div style={{ fontSize: 10, color: 'var(--tx3)' }}>
             {new Date(m.created_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
           </div>

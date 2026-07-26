@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Btn, Badge, Sheet, useToast } from '../components/ui'
 import { chainOf, freeAll } from '../lib/data'
-import { createRequest, updateRequest, setStatus, cancelRequest, closePartial, issueRequest, openFile } from '../lib/requests'
+import { createRequest, updateRequest, setStatus, sendDirect, cancelRequest, closePartial, issueRequest, openFile } from '../lib/requests'
 import { buildApprovalChain, approversOf, currentApprover, createApprovalChain, chainComplete, sendToWarehouse, approveInSystem } from '../lib/approval'
 import { canArchive, canDelete, archiveRequest, deleteRequest } from '../lib/lifecycle'
 import { push, clearFor } from '../lib/notify'
@@ -407,7 +407,7 @@ function RequestForm({ data, profile, editReq, draftItems, onDone }) {
           title: `Заявка №${reqId} ждёт согласования`, body: f.purpose || '', entity: 'request', entityId: reqId })
       } else {
         // Согласовывать некому — заявка идёт прямо на склад
-        await setStatus(reqId, 'approved')
+        await sendDirect(reqId, profile.id)
         const admin = (profiles || []).find((p) => p.role === 'admin' && p.is_active !== false)
         if (admin) await push({ userId: admin.id, kind: 'to_issue', action: true,
           title: `Заявка №${reqId} на складе`, body: f.purpose || '', entity: 'request', entityId: reqId })
