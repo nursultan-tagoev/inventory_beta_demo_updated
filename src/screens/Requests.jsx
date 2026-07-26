@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Btn, Badge, Sheet, useToast } from '../components/ui'
 import { chainOf, freeAll } from '../lib/data'
-import { createRequest, updateRequest, setStatus, sendDirect, cancelRequest, closePartial, issueRequest, openFile } from '../lib/requests'
+import { createRequest, updateRequest, setStatus, cancelRequest, closePartial, issueRequest, openFile } from '../lib/requests'
 import { buildApprovalChain, approversOf, currentApprover, createApprovalChain, chainComplete, sendToWarehouse, approveInSystem } from '../lib/approval'
 import { canArchive, canDelete, canRequestCancel, requestCancel, confirmCancel, declineCancel, archiveRequest, deleteRequest } from '../lib/lifecycle'
 import { push, clearFor } from '../lib/notify'
@@ -48,7 +48,10 @@ export default function Requests({ data, profile, can, draftItems, onDraftUsed }
     const a = profiles.find((p) => p.id === r.author_id)
     return a && a.branch_id === profile?.branch_id
   })
-  const scopeAll = isAdmin || role === 'director' ? requests : isManager ? branchReq : mine
+  // Склад видит заявку только после того, как её отправили кнопкой
+  const scopeAll = isAdmin ? requests.filter((r) => r.sent_at || r.author_id === me)
+    : role === 'director' ? requests
+    : isManager ? branchReq : mine
   const scope = scopeAll.filter((r) => !r.archived)
 
   // Требует действия
@@ -308,7 +311,8 @@ export default function Requests({ data, profile, can, draftItems, onDraftUsed }
                     )}
                     <div style={{ border: canSend ? `1.5px solid ${SEC}` : '1px solid var(--brd)', borderRadius: 11, padding: 12, opacity: canSend || r.sent_at ? 1 : .55 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: canSend ? 9 : 0 }}>
-                        <span className="mono" style={{ width: 21, height: 21, borderRadius: 6, display: 'grid', placeItems: 'center', fontSize: 10.5, fontWeight: 700, background: SEC_L, color: SEC }}>3</span>
+                        <span className="mono" style={{ width: 21, height: 21, borderRadius: 6, display: 'grid', placeItems: 'center', fontSize: 10.5, fontWeight: 700,
+                          background: r.sent_at ? 'var(--gr-l)' : SEC_L, color: r.sent_at ? 'var(--gr-m)' : SEC }}>{r.sent_at ? '✓' : (myTurn || mySigned) ? '2' : '1'}</span>
                         <span style={{ fontSize: 12, fontWeight: 600 }}>Отправка на склад</span>
                       </div>
                       {canSend && <Btn onClick={() => sendNow(r)} style={{ width: '100%', minHeight: 46 }}>📤 Отправить на склад</Btn>}
@@ -465,13 +469,9 @@ function RequestForm({ data, profile, editReq, draftItems, onDone }) {
         const first = chain[0]
         if (first?.user_id) await push({ userId: first.user_id, kind: 'to_approve', action: true,
           title: `Заявка №${reqId} ждёт согласования`, body: f.purpose || '', entity: 'request', entityId: reqId })
-      } else {
-        // Согласовывать некому — заявка идёт прямо на склад
-        await sendDirect(reqId, profile.id)
-        const admin = (profiles || []).find((p) => p.role === 'admin' && p.is_active !== false)
-        if (admin) await push({ userId: admin.id, kind: 'to_issue', action: true,
-          title: `Заявка №${reqId} на складе`, body: f.purpose || '', entity: 'request', entityId: reqId })
       }
+      // Цепочка пустая (заявка руководителя) — согласовывать нечего,
+      // но на склад её отправляет автор кнопкой «Отправить на склад».
     }
     setLoading(false)
     toast(editReq ? 'Обновлено' : 'Заявка отправлена'); onDone()
