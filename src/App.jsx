@@ -5,6 +5,7 @@ import { Spin, ToastProvider } from './components/ui'
 import Login from './components/Login'
 import FirstPassword from './components/FirstPassword'
 import Tour from './components/Tour'
+import Inventory from './screens/Inventory'
 import Sidebar from './components/Sidebar'
 import Notifications from './components/Notifications'
 import Home from './screens/Home'
@@ -38,9 +39,9 @@ class ErrorBoundary extends React.Component {
 }
 
 const ROLE_VIEWS = {
-  admin: ['home', 'items', 'movements', 'requests', 'acts', 'lucy', 'recipients', 'reports', 'settings'],
+  admin: ['home', 'items', 'movements', 'requests', 'acts', 'inventory', 'lucy', 'recipients', 'reports', 'settings'],
   manager: ['home', 'catalog', 'movements', 'requests', 'acts', 'lucy'],
-  director: ['home', 'items', 'movements', 'requests', 'acts', 'reports'],
+  director: ['home', 'items', 'movements', 'requests', 'acts', 'inventory', 'reports'],
   employee: ['home', 'catalog', 'movements', 'requests', 'lucy'],
 }
 
@@ -155,6 +156,7 @@ export default function App() {
     reports: <Reports data={data} />,
     acts: <Acts data={data} profile={profile} />,
     settings: <Settings data={data} />,
+    inventory: <Inventory data={data} profile={profile} />,
     requests: <Requests data={data} profile={profile} can={can} draftItems={draftItems} onDraftUsed={() => setDraftItems(null)} />,
     lucy: <Lucy data={data} profile={profile} can={can} setView={setView} autostart={assistAuto} onAutostart={() => setAssistAuto(false)} />,
   }
