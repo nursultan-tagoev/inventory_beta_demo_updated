@@ -183,8 +183,8 @@ export function processStats(data, period, opts = {}) {
   const legs = { approve: [], send: [], issue: [], total: [] }
   for (const r of reqs) {
     const born = new Date(r.created_at).getTime()
-    const appr = (reqApprovers || []).filter((a) => a.request_id === r.id && a.status === 'approved' && a.approved_at)
-    const lastAppr = appr.length ? Math.max(...appr.map((a) => new Date(a.approved_at).getTime())) : null
+    const appr = (reqApprovers || []).filter((a) => a.request_id === r.id && a.status === 'approved' && a.acted_at)
+    const lastAppr = appr.length ? Math.max(...appr.map((a) => new Date(a.acted_at).getTime())) : null
     const sent = r.sent_at ? new Date(r.sent_at).getTime() : null
     const got = issuedAt[r.id] || null
 
@@ -245,11 +245,11 @@ export function processStats(data, period, opts = {}) {
 /* Сколько в среднем согласует конкретный человек */
 export function myApprovalSpeed(data, profileId) {
   const { reqApprovers, requests } = data
-  const mine = (reqApprovers || []).filter((a) => a.user_id === profileId && a.status === 'approved' && a.approved_at)
+  const mine = (reqApprovers || []).filter((a) => a.user_id === profileId && a.status === 'approved' && a.acted_at)
   const spans = mine.map((a) => {
     const r = (requests || []).find((x) => x.id === a.request_id)
     if (!r) return null
-    return new Date(a.approved_at).getTime() - new Date(r.created_at).getTime()
+    return new Date(a.acted_at).getTime() - new Date(r.created_at).getTime()
   }).filter(Boolean)
   const waiting = (reqApprovers || []).filter((a) => a.user_id === profileId && a.status === 'waiting').length
   return {
@@ -334,4 +334,55 @@ export function sparkline(data, weeks = 12, type = 'out', opts = {}) {
     out.push(v)
   }
   return out
+}
+
+/* Стоимость товаров в разрезах.
+   mode 'stock'    — что лежит на складах (для склада и директора)
+   mode 'received' — что получил филиал за период (для руководителя) */
+export function valueBreakdown(data, { mode = 'stock', period, branchId } = {}) {
+  const { products, stock, movements } = data
+  const price = (id) => num(products.find((p) => p.id === id)?.price)
+
+  let rows = []
+  if (mode === 'stock') {
+    rows = (products || []).filter((p) => !p.archived)
+      .map((p) => ({ product: p, qty: num(stock[p.id]) }))
+      .filter((r) => r.qty > 0)
+  } else {
+    const agg = {}
+    for (const m of movements || []) {
+      if (m.type !== 'out') continue
+      if (period && !inRange(m.created_at, period)) continue
+      if (branchId && m.branch_id !== branchId) continue
+      agg[m.product_id] = (agg[m.product_id] || 0) + num(m.qty)
+    }
+    rows = Object.entries(agg).map(([pid, qty]) => ({
+      product: (products || []).find((p) => p.id === Number(pid)), qty,
+    })).filter((r) => r.product)
+  }
+
+  const byProduct = [], byDir = {}, byType = {}
+  let total = 0
+  for (const r of rows) {
+    const val = r.qty * price(r.product.id)
+    total += val
+    byProduct.push({ id: r.product.id, name: r.product.name, qty: r.qty, val })
+
+    const { dir, type } = hierOf(r.product, data)
+    const dk = dir?.id || 0
+    const d = byDir[dk] || (byDir[dk] = { id: dk, name: dir?.name || 'Без направления', qty: 0, val: 0 })
+    d.qty += r.qty; d.val += val
+
+    const tk = type?.id || 0
+    const t = byType[tk] || (byType[tk] = { id: tk, name: type?.name || 'Без типа', dir: dir?.name || '—', qty: 0, val: 0 })
+    t.qty += r.qty; t.val += val
+  }
+
+  const srt = (a) => a.sort((x, y) => y.val - x.val)
+  return {
+    total,
+    byProduct: srt(byProduct),
+    byDir: srt(Object.values(byDir)),
+    byType: srt(Object.values(byType)),
+  }
 }
