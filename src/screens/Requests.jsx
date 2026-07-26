@@ -139,7 +139,9 @@ export default function Requests({ data, profile, can, draftItems, onDraftUsed }
       <div style={{ display: 'flex', alignItems: 'center', gap: 11, marginBottom: 13, flexWrap: 'wrap' }}>
         <span className="ff" style={{ fontSize: 20, fontWeight: 600 }}>Заявки</span>
         {!isAdmin && role !== 'director' && (
-          <Btn size="sm" onClick={() => { setEditReq(null); setForm(true) }} style={{ marginLeft: 'auto', minHeight: 40 }}>＋ Новая</Btn>
+          <span data-tour="new-request" style={{ marginLeft: 'auto' }}>
+            <Btn size="sm" onClick={() => { setEditReq(null); setForm(true) }} style={{ minHeight: 40 }}>＋ Новая</Btn>
+          </span>
         )}
       </div>
 

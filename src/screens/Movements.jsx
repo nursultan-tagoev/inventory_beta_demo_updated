@@ -154,7 +154,7 @@ export default function Movements({ data, profile, can }) {
         <span className="ff" style={{ fontSize: 20, fontWeight: 600 }}>{title}</span>
         {isManager && profile?.branch_id && (() => { const bc = bColor(profile.branch_id)
           return <span style={{ fontSize: 10, padding: '3px 10px', borderRadius: 20, background: bc[0], color: bc[1] }}>{bName(profile.branch_id)}</span> })()}
-        {isAdmin && <Btn size="sm" onClick={() => setSheet('in')} style={{ marginLeft: 'auto', minHeight: 40 }}>＋ Операция</Btn>}
+        {isAdmin && <span data-tour="new-op" style={{ marginLeft: 'auto' }}><Btn size="sm" onClick={() => setSheet('in')} style={{ minHeight: 40 }}>＋ Операция</Btn></span>}
       </div>
 
       {/* Пилюли типов */}
