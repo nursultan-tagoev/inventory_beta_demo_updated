@@ -28,6 +28,7 @@ export default function Inventory({ data, profile }) {
   const [busy, setBusy] = useState(false)
   const [newWh, setNewWh] = useState('')
   const [confirm, setConfirm] = useState(null)
+  const [delInv, setDelInv] = useState(null)
   const [defect, setDefect] = useState(false)
   const printRef = useRef(null)
 
@@ -59,8 +60,10 @@ export default function Inventory({ data, profile }) {
     if (error) return toast(error, 'error')
     toast('Сверка начата')
     setNewWh('')
-    await refresh()
-    openOne(inv.id)
+    // Показываем сразу, не дожидаясь перечитывания реестра
+    setList((l) => [inv, ...l])
+    setFact({})
+    setOpen({ inv, items: [] })
   }
 
   const openOne = async (id) => {
@@ -85,12 +88,13 @@ export default function Inventory({ data, profile }) {
   const doCompare = async () => {
     setBusy(true)
     await saveFact(open.inv.id, Object.entries(fact).map(([pid, q]) => ({ product_id: Number(pid), fact_qty: q })))
-    const { error } = await compareWithStock(open.inv, stockByWh, profile)
+    const { data: upd, error } = await compareWithStock(open.inv, stockByWh, profile)
     setBusy(false)
     if (error) return toast(error, 'error')
     toast('Сравнено — остатки не изменены')
-    openOne(open.inv.id)
-    refresh()
+    const inv = { ...open.inv, status: 'compared' }
+    setOpen({ inv, items: upd })
+    setList((l) => l.map((x) => (x.id === inv.id ? inv : x)))
   }
 
   const doApply = async () => {
@@ -100,9 +104,10 @@ export default function Inventory({ data, profile }) {
     setConfirm(null)
     if (error) return toast(error, 'error')
     toast(res.moved ? `Скорректировано позиций: ${res.moved}` : 'Расхождений не было')
-    await refresh()
-    await openOne(open.inv.id)
-    reload()
+    const inv = { ...open.inv, status: 'done', finished_at: new Date().toISOString() }
+    setOpen({ inv, items: open.items })
+    setList((l) => l.map((x) => (x.id === inv.id ? inv : x)))
+    reload()   // тяжёлый перечёт остатков — идёт фоном, экран его не ждёт
   }
 
   /* ── Позиции склада для ввода факта ── */
@@ -158,7 +163,7 @@ export default function Inventory({ data, profile }) {
           <option value="">Склад для сверки…</option>
           {(warehouses || []).map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
         </select>
-        <Btn onClick={create} disabled={busy} style={{ minHeight: 44 }}>Начать сверку</Btn>
+        <Btn onClick={create} disabled={busy} style={{ minHeight: 44 }}>{busy ? 'Создаём…' : 'Начать сверку'}</Btn>
       </div>
 
       {/* Реестр */}
@@ -176,6 +181,10 @@ export default function Inventory({ data, profile }) {
               </div>
             </div>
             <Badge color={ST[i.status]?.[1] || 'slate'}>{ST[i.status]?.[0] || i.status}</Badge>
+            {i.status === 'draft' && (
+              <button onClick={(e) => { e.stopPropagation(); setDelInv(i) }} title="Удалить черновик"
+                style={{ color: 'var(--rd-m)', fontSize: 15, padding: '4px 6px', minHeight: 36 }}>🗑</button>
+            )}
           </div>
         ))}
       </div>
@@ -191,6 +200,9 @@ export default function Inventory({ data, profile }) {
               </span>
               {open.inv.status === 'done' && (
                 <Btn size="sm" v="secondary" onClick={() => printDoc(printRef.current)} style={{ marginLeft: 'auto', minHeight: 38 }}>Печать ведомости</Btn>
+              )}
+              {open.inv.status === 'draft' && (
+                <Btn size="sm" v="secondary" onClick={() => setDelInv(open.inv)} style={{ marginLeft: 'auto', minHeight: 38, color: 'var(--rd-m)' }}>Удалить</Btn>
               )}
             </div>
 
@@ -248,8 +260,8 @@ export default function Inventory({ data, profile }) {
             {/* Действия */}
             {open.inv.status === 'draft' && (
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <Btn v="secondary" onClick={doSaveFact} disabled={busy} style={{ minHeight: 46 }}>Сохранить черновик</Btn>
-                <Btn onClick={doCompare} disabled={busy} style={{ flex: 1, minWidth: 150, minHeight: 46 }}>Сравнить с учётом</Btn>
+                <Btn v="secondary" onClick={doSaveFact} disabled={busy} style={{ minHeight: 46 }}>{busy ? 'Сохраняем…' : 'Сохранить черновик'}</Btn>
+                <Btn onClick={doCompare} disabled={busy} style={{ flex: 1, minWidth: 150, minHeight: 46 }}>{busy ? 'Считаем…' : 'Сравнить с учётом'}</Btn>
               </div>
             )}
             {open.inv.status === 'compared' && (
@@ -257,7 +269,7 @@ export default function Inventory({ data, profile }) {
                 <div style={{ padding: '10px 13px', background: 'var(--bg)', borderRadius: 11, fontSize: 11.5, color: 'var(--tx2)', lineHeight: 1.55 }}>
                   Остатки пока не тронуты. Корректировка выровняет учёт по факту и запишет отдельные операции в журнал.
                 </div>
-                <Btn onClick={() => setConfirm(true)} disabled={busy} style={{ minHeight: 48 }}>Провести корректировку</Btn>
+                <Btn onClick={() => setConfirm(true)} disabled={busy} style={{ minHeight: 48 }}>{busy ? 'Проводим…' : 'Провести корректировку'}</Btn>
               </>
             )}
             {open.inv.status === 'done' && (
@@ -308,6 +320,20 @@ export default function Inventory({ data, profile }) {
       {confirm && (
         <Confirm title="Провести корректировку?" onOk={doApply} onCancel={() => setConfirm(null)}
           message={`Остатки будут выровнены по факту. Позиций с расхождением: ${diffs.length}. Операции появятся в журнале, отменить их можно только новой корректировкой.`} />
+      )}
+
+      {delInv && (
+        <Confirm title="Удалить черновик?" danger
+          message={`Сверка №${delInv.id} по складу «${whName(delInv.warehouse_id)}» будет удалена вместе с внесёнными цифрами. Остатки не изменятся.`}
+          onCancel={() => setDelInv(null)}
+          onOk={async () => {
+            const { error } = await deleteInventory(delInv.id)
+            if (error) { setDelInv(null); return toast(error, 'error') }
+            setList((l) => l.filter((x) => x.id !== delInv.id))
+            if (open?.inv.id === delInv.id) setOpen(null)
+            setDelInv(null)
+            toast('Черновик удалён')
+          }} />
       )}
 
       {defect && <DefectSheet data={data} profile={profile} onClose={() => setDefect(false)} onDone={() => { setDefect(false); reload() }} />}
