@@ -4,6 +4,7 @@ import { useAppData } from './lib/data'
 import { Spin, ToastProvider } from './components/ui'
 import Login from './components/Login'
 import FirstPassword from './components/FirstPassword'
+import Tour from './components/Tour'
 import Sidebar from './components/Sidebar'
 import Notifications from './components/Notifications'
 import Home from './screens/Home'
@@ -47,6 +48,7 @@ export default function App() {
   const [session, setSession] = useState(undefined)
   const [profile, setProfile] = useState(null)
   const [profErr, setProfErr] = useState(null)
+  const [tour, setTour] = useState(false)
   const [view, setView] = useState('home')
   const [assistAuto, setAssistAuto] = useState(false)
   const [draftItems, setDraftItems] = useState(null)
@@ -78,6 +80,20 @@ export default function App() {
     load()
     return () => { alive = false }
   }, [session])
+
+  // Первый вход: показываем обучение один раз, после смены пароля
+  useEffect(() => {
+    if (profile && !profile.onboarded_at && !profile.must_change_password) setTour(true)
+  }, [profile?.id, profile?.must_change_password, profile?.onboarded_at])
+
+  const finishTour = async () => {
+    setTour(false)
+    if (profile && !profile.onboarded_at) {
+      const at = new Date().toISOString()
+      await supabase.from('profiles').update({ onboarded_at: at }).eq('id', profile.id)
+      setProfile((p) => (p ? { ...p, onboarded_at: at } : p))
+    }
+  }
 
   const data = useAppData(profile)
   const logout = async () => { await supabase.auth.signOut(); setView('home') }
@@ -146,7 +162,7 @@ export default function App() {
   return (
     <ToastProvider>
       <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
-        <Sidebar view={safeView} setView={setView} profile={profile} onLogout={logout} branchName={(data.branches || []).find((b) => b.id === profile?.branch_id)?.name} badges={{ requests: (data.requests || []).filter((r) => r.status === 'new' && (role === 'admin' || r.author_id === profile.id)).length }} />
+        <Sidebar view={safeView} setView={setView} profile={profile} onLogout={logout} onTour={() => setTour(true)} branchName={(data.branches || []).find((b) => b.id === profile?.branch_id)?.name} badges={{ requests: (data.requests || []).filter((r) => r.status === 'new' && (role === 'admin' || r.author_id === profile.id)).length }} />
         <main style={{ flex: 1, overflow: 'auto', position: 'relative' }}>
           <div className="top-bar" style={{ position: 'sticky', top: 0, zIndex: 40, display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', background: 'var(--bg)', borderBottom: '1px solid var(--brd)' }}>
             <div style={{ flex: 1, minWidth: 0 }}>
@@ -168,6 +184,7 @@ export default function App() {
             <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v6a3 3 0 0 0 3 3ZM6 11a6 6 0 0 0 12 0M12 19v3" /></svg>
           </button>
         )}
+        {tour && <Tour role={role} setView={setView} onClose={() => setTour(false)} onFinish={finishTour} />}
       </div>
     </ToastProvider>
   )
