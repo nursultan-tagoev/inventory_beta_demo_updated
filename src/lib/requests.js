@@ -40,8 +40,7 @@ export async function createRequest(r, authorId) {
   if (r.basis_type === 'sz') {
     if (!r.sz_number?.trim()) return { error: 'Укажите номер служебной записки' }
     if (!r.sz_date) return { error: 'Укажите дату согласования' }
-    if (!r.sz_approvers?.trim()) return { error: 'Укажите, кто согласовал' }
-    if (!r.scanFile && !r.sz_scan_path) return { error: 'Приложите скан с визами' }
+    if (!r.scanFile && !r.sz_scan_path) return { error: 'Приложите согласованную служебную записку' }
   } else {
     if (!r.no_sz_reason?.trim()) return { error: 'Укажите причину' }
   }
@@ -174,6 +173,7 @@ export async function issueRequest(req, warehouseId, approvedQty, freeByWh, prof
     const { error: mErr } = await supabase.from('movements').insert({
       type: 'out', product_id: it.product_id, qty: it.give, warehouse_id: wid,
       branch_id: req.branch_id, recipient_id: req.recipient_id,
+      request_id: req.id, recipient_profile_id: req.author_id,
       issuer_id: profile.id, purpose: req.purpose, sz: req.sz_number, notes: 'По акту ' + number,
     })
     if (mErr) return { error: 'Движение: ' + mErr.message }

@@ -6,18 +6,19 @@ import { uploadFile } from './requests'
    Специалист → руководитель его филиала → внешние (зампред)
    Руководитель филиала → внешние (зампред)
    Админ в цепочке НЕ участвует — он исполняет после согласования. */
-export function buildApprovalChain({ author, profiles, externals, branchId }) {
+export function buildApprovalChain({ author, profiles, branchId }) {
   const chain = []
-  const add = (c) => { if (c && (c.user_id || c.name) && chain.length < 4) chain.push(c) }
-
+  // Специалист → руководитель его филиала. Зампред подписал бумажную СЗ — в системе его нет.
   if (author?.role === 'employee') {
-    const bid = branchId || author.branch_id
-    const head = (profiles || []).find((p) => p.role === 'manager' && p.branch_id === bid)
-    if (head) add({ user_id: head.id, name: head.full_name || head.email, role: 'Руководитель филиала' })
+    const list = (profiles || []).filter((p) => p.is_active !== false)
+    let head = author.manager_id ? list.find((p) => p.id === author.manager_id) : null
+    if (!head) {
+      const bid = branchId || author.branch_id
+      head = list.find((p) => p.role === 'manager' && p.branch_id === bid)
+    }
+    if (head) chain.push({ user_id: head.id, name: head.full_name || head.email, role: 'Руководитель филиала' })
   }
-  for (const e of (externals || []).filter((x) => x.is_active !== false).sort((a, b) => (a.level || 0) - (b.level || 0))) {
-    add({ user_id: null, name: e.full_name, role: e.position || 'Согласующий' })
-  }
+  // Руководитель и админ согласования не требуют — заявка идёт сразу на склад.
   return chain
 }
 
