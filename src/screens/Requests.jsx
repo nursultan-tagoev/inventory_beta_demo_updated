@@ -96,9 +96,9 @@ export default function Requests({ data, profile, can, draftItems, onDraftUsed }
   /* ── Действия ── */
   const approveNow = async (r, appr) => {
     // Отмечаем сразу — согласование уже состоялось, ждать ответа незачем
-    patchApprover(appr.id, { status: 'approved', approved_at: new Date().toISOString(), user_id: profile.id })
+    patchApprover(appr.id, { status: 'approved', acted_at: new Date().toISOString(), user_id: profile.id })
     const { error } = await approveInSystem(appr, profile.id, r.id)
-    if (error) { patchApprover(appr.id, { status: 'waiting', approved_at: null }); return toast(error, 'error') }
+    if (error) { patchApprover(appr.id, { status: 'waiting', acted_at: null }); return toast(error, 'error') }
     await clearFor('request', r.id, me)
     // уведомляем следующего
     const chain = approversOf(reqApprovers, r.id)

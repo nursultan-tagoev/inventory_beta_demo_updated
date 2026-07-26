@@ -4,7 +4,7 @@ import { printDoc } from '../lib/print'
 import { exportXlsx } from '../lib/xlsx'
 import {
   periodOf, prevPeriod, money, growth, purchases, spending,
-  stockHealth, processStats, myApprovalSpeed, monthly, byCity, overdue, sparkline,
+  stockHealth, processStats, myApprovalSpeed, monthly, byCity, overdue, sparkline, valueBreakdown,
 } from '../lib/analytics'
 
 const PERIODS = [['month', 'Месяц'], ['quarter', 'Квартал'], ['year', 'Год'], ['custom', 'Период']]
@@ -19,6 +19,61 @@ function Spark({ points, color = 'var(--ink)', w = 92, h = 26 }) {
     <svg width={w} height={h} style={{ display: 'block' }}>
       <path d={d} fill="none" stroke={color} strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round" opacity=".75" />
     </svg>
+  )
+}
+
+/* Столбчатая диаграмма: сетка, значения и легенда — чтобы читалась без наведения */
+function BarChart({ rows, series, height = 170 }) {
+  const max = Math.max(...rows.flatMap((r) => series.map((s) => r[s.key] || 0)), 1)
+  const step = max / 3
+  const ticks = [0, step, step * 2, max]
+  return (
+    <div style={{ padding: '14px 14px 10px' }}>
+      <div style={{ display: 'flex', gap: 10 }}>
+        {/* Ось значений */}
+        <div style={{ display: 'flex', flexDirection: 'column-reverse', justifyContent: 'space-between', height, paddingBottom: 20 }}>
+          {ticks.map((t, i) => (
+            <span key={i} className="mono" style={{ fontSize: 9, color: 'var(--tx3)', lineHeight: 1 }}>{fmt(Math.round(t))}</span>
+          ))}
+        </div>
+        <div style={{ flex: 1, position: 'relative' }}>
+          {/* Сетка */}
+          <div style={{ position: 'absolute', inset: `0 0 20px 0`, display: 'flex', flexDirection: 'column-reverse', justifyContent: 'space-between' }}>
+            {ticks.map((_, i) => <div key={i} style={{ borderTop: '1px dashed var(--brd)', height: 0 }} />)}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height, position: 'relative' }}>
+            {rows.map((r) => (
+              <div key={r.label} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', height: '100%', justifyContent: 'flex-end' }}>
+                <div style={{ display: 'flex', gap: 3, alignItems: 'flex-end', height: '100%', width: '100%', justifyContent: 'center' }}>
+                  {series.map((sr) => {
+                    const v = r[sr.key] || 0
+                    return (
+                      <div key={sr.key} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', height: '100%' }}>
+                        <span className="mono" style={{ fontSize: 9, fontWeight: 700, color: sr.color, marginBottom: 3, whiteSpace: 'nowrap' }}>
+                          {v ? fmt(Math.round(v)) : ''}
+                        </span>
+                        <div title={`${sr.label}: ${fmt(Math.round(v))}`}
+                          style={{ width: 16, height: `${(v / max) * (height - 34)}px`, minHeight: v ? 3 : 0, background: sr.color, borderRadius: '3px 3px 0 0' }} />
+                      </div>
+                    )
+                  })}
+                </div>
+                <span style={{ fontSize: 10, color: 'var(--tx3)', marginTop: 5, height: 15 }}>{r.label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+      {/* Легенда */}
+      <div style={{ display: 'flex', gap: 16, justifyContent: 'center', marginTop: 8, flexWrap: 'wrap' }}>
+        {series.map((sr) => (
+          <span key={sr.key} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--tx2)' }}>
+            <i style={{ width: 10, height: 10, borderRadius: 3, background: sr.color, display: 'inline-block' }} />
+            {sr.label}
+          </span>
+        ))}
+      </div>
+    </div>
   )
 }
 
@@ -96,6 +151,9 @@ export default function Reports({ data, profile }) {
   const buy = useMemo(() => purchases(scoped, period), [scoped, period])
   const spend = useMemo(() => spending(scoped, period, opts), [scoped, period, branchId])
   const health = useMemo(() => stockHealth(scoped), [scoped])
+  const value = useMemo(() => valueBreakdown(scoped, isManager
+    ? { mode: 'received', period, branchId }
+    : { mode: 'stock' }), [scoped, period, branchId, isManager])
   const proc = useMemo(() => processStats(scoped, period, opts), [scoped, period, branchId])
   const cities = useMemo(() => byCity(scoped, period, opts), [scoped, period, branchId])
   const late = useMemo(() => overdue(scoped, opts), [scoped, branchId])
@@ -106,33 +164,40 @@ export default function Reports({ data, profile }) {
   const gOut = growth(now.outVal, was.outVal)
 
   const TABS = isManager
-    ? [['spend', 'Расход филиала'], ['stock', 'Запасы'], ['proc', 'Процесс']]
-    : [['buy', 'Закупки'], ['spend', 'Расход'], ['stock', 'Запасы'], ['proc', 'Процесс']]
+    ? [['value', 'Стоимость товаров'], ['spend', 'Кто берёт'], ['proc', 'Процесс']]
+    : [['buy', 'Закупки'], ['spend', 'Расход'], ['value', 'Стоимость товаров'], ['stock', 'Запасы'], ['proc', 'Процесс']]
   const activeTab = TABS.some(([t]) => t === tab) ? tab : TABS[0][0]
 
   const periodLabel = `${period.from.toLocaleDateString('ru-RU')} — ${period.to.toLocaleDateString('ru-RU')}`
 
   const toXlsx = () => {
     const sheets = [
-      { name: 'Сводка', rows: [{
+      { name: 'Сводка', rows: [isManager ? {
+        Период: periodLabel, Филиал: (data.branches || []).find((b) => b.id === branchId)?.name || '—',
+        'Выдано, сом': Math.round(now.outVal), 'Выдано, шт': now.outQty,
+        'Заявок за период': proc.total, 'Весь путь, дней': proc.avgTotal ?? '—',
+      } : {
         Период: periodLabel,
         'Закупки, сом': Math.round(now.buyVal), 'Закуплено, шт': now.buyQty,
         'Выдано, сом': Math.round(now.outVal), 'Выдано, шт': now.outQty,
         'Потери, сом': Math.round(now.lossVal), Операций: now.ops,
       }] },
-      { name: 'Поставщики', rows: buy.bySupplier.map((s) => ({
+      ...(isManager ? [] : [{ name: 'Поставщики', rows: buy.bySupplier.map((s) => ({
         Поставщик: s.name, 'Сумма, сом': Math.round(s.val), 'Количество, шт': s.qty,
         Поставок: s.dlvCount || 0, 'С опозданием': s.late || 0, 'Брак, шт': s.defects || 0, 'Доля брака, %': s.defectRate || 0,
-      })) },
-      { name: 'Направления', rows: buy.byDir.flatMap((d) => d.types.map((t) => ({
+      })) }]),
+      ...(isManager ? [] : [{ name: 'Направления', rows: buy.byDir.flatMap((d) => d.types.map((t) => ({
         Направление: d.name, Тип: t.name, 'Сумма, сом': Math.round(t.val), 'Количество, шт': t.qty,
-      }))) },
+      }))) }]),
       { name: 'Филиалы', rows: spend.byBranch.map((b) => ({ Филиал: b.name, 'Сумма, сом': Math.round(b.val), 'Количество, шт': b.qty })) },
       { name: 'Города', rows: cities.flatMap((c) => c.branches.map((b) => ({ Город: c.city, Филиал: b.name, 'Сумма, сом': Math.round(b.val), 'Количество, шт': b.qty }))) },
       { name: 'Сотрудники', rows: spend.byPerson.map((p) => ({ Сотрудник: p.name, 'Сумма, сом': Math.round(p.val), 'Количество, шт': p.qty })) },
       { name: 'Товары', rows: spend.byProduct.map((p) => ({ Товар: p.name, 'Сумма, сом': Math.round(p.val), 'Количество, шт': p.qty })) },
-      { name: 'Заканчивается', rows: health.ending.map((r) => ({ Товар: r.name, Остаток: r.qty, 'Расход в день': r.rate, 'Хватит на дней': r.days ?? '—' })) },
-      { name: 'Залежалось', rows: health.dead.map((r) => ({ Товар: r.name, Остаток: r.qty, 'Сумма, сом': Math.round(r.val), 'Последняя выдача': r.last ? new Date(r.last).toLocaleDateString('ru-RU') : 'не выдавался' })) },
+      { name: 'Стоимость по направлениям', rows: value.byDir.map((d) => ({ Направление: d.name, 'Количество, шт': d.qty, 'Стоимость, сом': Math.round(d.val) })) },
+      { name: 'Стоимость по типам', rows: value.byType.map((t) => ({ Направление: t.dir, Тип: t.name, 'Количество, шт': t.qty, 'Стоимость, сом': Math.round(t.val) })) },
+      { name: 'Стоимость по товарам', rows: value.byProduct.map((p) => ({ Товар: p.name, 'Количество, шт': p.qty, 'Стоимость, сом': Math.round(p.val) })) },
+      ...(isManager ? [] : [{ name: 'Заканчивается', rows: health.ending.map((r) => ({ Товар: r.name, Остаток: r.qty, 'Расход в день': r.rate, 'Хватит на дней': r.days ?? '—' })) }]),
+
       { name: 'Просрочки', rows: late.map((r) => ({ Товар: r.product, Получатель: r.person, Филиал: r.branch, 'Срок до': r.due_date, 'Дней просрочки': r.days, Количество: r.remaining })) },
       { name: 'Процесс', rows: [{
         'Заявок за период': proc.total,
@@ -193,8 +258,14 @@ export default function Reports({ data, profile }) {
           <Kpi label="Выдано филиалам" value={som(Math.round(now.outVal))}
             sub={`${gOut >= 0 ? '+' : ''}${gOut}% · ${fmt(now.outQty)} шт`} tone={gOut > 0 ? 'down' : 'up'}
             spark={sparkline(scoped, 12, 'out', opts)} />
-          <Kpi label="Потери" value={som(Math.round(now.lossVal))} sub={`${fmt(now.lossQty)} шт · брак и списания`} tone={now.lossVal ? 'down' : null} />
-          <Kpi label="Залежалось" value={som(Math.round(health.deadVal))} sub={`${health.dead.length} позиций без движения`} tone={health.deadVal ? 'down' : null} />
+          {!isManager && (
+            <Kpi label="Потери" value={som(Math.round(now.lossVal))} sub={`${fmt(now.lossQty)} шт · брак и списания`} tone={now.lossVal ? 'down' : null} />
+          )}
+          <Kpi label={isManager ? 'Стоимость полученного' : 'Стоимость товаров на складах'}
+            value={som(Math.round(value.total))} sub={`${value.byProduct.length} наименований`} />
+          {isManager && (
+            <Kpi label="Заявок за период" value={fmt(proc.total)} sub={proc.avgTotal != null ? `путь ${proc.avgTotal} дн в среднем` : 'путь пока не посчитан'} />
+          )}
         </div>
 
         {/* Вкладки */}
@@ -241,25 +312,11 @@ export default function Reports({ data, profile }) {
               ))}
             </Card>
 
-            <Card title="Динамика по месяцам">
-              <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, padding: '14px 14px 12px', height: 130 }}>
-                {dyn.map((m) => {
-                  const max = Math.max(...dyn.map((x) => Math.max(x.buy, x.spend)), 1)
-                  return (
-                    <div key={m.label} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5 }}>
-                      <div style={{ display: 'flex', gap: 2, alignItems: 'flex-end', height: 80 }}>
-                        <div title={`закупки ${fmt(Math.round(m.buy))}`} style={{ width: 11, height: `${(m.buy / max) * 100}%`, minHeight: 2, background: 'var(--gr)', borderRadius: '3px 3px 0 0' }} />
-                        <div title={`расход ${fmt(Math.round(m.spend))}`} style={{ width: 11, height: `${(m.spend / max) * 100}%`, minHeight: 2, background: 'var(--ink)', borderRadius: '3px 3px 0 0' }} />
-                      </div>
-                      <span style={{ fontSize: 10, color: 'var(--tx3)' }}>{m.label}</span>
-                    </div>
-                  )
-                })}
-              </div>
-              <div style={{ display: 'flex', gap: 14, padding: '0 14px 12px', fontSize: 10.5, color: 'var(--tx3)' }}>
-                <span><b style={{ color: 'var(--gr-m)' }}>▮</b> закупки</span>
-                <span><b style={{ color: 'var(--ink)' }}>▮</b> расход</span>
-              </div>
+            <Card title="Динамика по месяцам" extra="сомы">
+              <BarChart rows={dyn} series={[
+                { key: 'buy', label: 'Закупки', color: 'var(--gr)' },
+                { key: 'spend', label: 'Расход', color: 'var(--ink)' },
+              ]} />
             </Card>
           </>
         )}
@@ -285,7 +342,7 @@ export default function Reports({ data, profile }) {
               </Card>
             )}
 
-            <Card title={isManager ? 'Кто берёт в филиале' : 'Кто берёт'}>
+            <Card title={isManager ? 'Кто берёт в филиале' : 'Кто берёт'} extra={som(Math.round(now.outVal))}>
               {spend.byPerson.length === 0 && <div style={{ padding: 26, textAlign: 'center', color: 'var(--tx3)', fontSize: 12.5 }}>Нет данных</div>}
               {spend.byPerson.slice(0, 15).map((p) => (
                 <Bar key={p.id} name={p.name} val={p.val} qty={p.qty} max={spend.byPerson[0]?.val || 1} />
@@ -314,6 +371,38 @@ export default function Reports({ data, profile }) {
           </>
         )}
 
+        {/* ── Стоимость товаров ── */}
+        {activeTab === 'value' && (
+          <>
+            <Card title={isManager ? 'По направлениям' : 'По направлениям'} extra={som(Math.round(value.total))}>
+              {value.byDir.length === 0 && <div style={{ padding: 26, textAlign: 'center', color: 'var(--tx3)', fontSize: 12.5 }}>Нет данных за период</div>}
+              {value.byDir.map((d) => (
+                <Bar key={d.id} name={d.name} val={d.val} qty={d.qty} max={value.byDir[0]?.val || 1} />
+              ))}
+            </Card>
+
+            <Card title="По типам">
+              {value.byType.map((t) => (
+                <div key={t.id}>
+                  <Bar name={t.name} val={t.val} qty={t.qty} max={value.byType[0]?.val || 1} />
+                  <div style={{ padding: '0 13px 7px 13px', fontSize: 10, color: 'var(--tx3)' }}>{t.dir}</div>
+                </div>
+              ))}
+            </Card>
+
+            <Card title="По товарам" extra={`${value.byProduct.length} наименований`}>
+              {value.byProduct.slice(0, 25).map((p) => (
+                <Bar key={p.id} name={p.name} val={p.val} qty={p.qty} max={value.byProduct[0]?.val || 1} />
+              ))}
+            </Card>
+
+            <Card title="Структура стоимости" extra="направления">
+              <BarChart height={150} rows={value.byDir.slice(0, 6).map((d) => ({ label: d.name.length > 9 ? d.name.slice(0, 8) + '…' : d.name, val: d.val }))}
+                series={[{ key: 'val', label: 'Стоимость, сом', color: 'var(--pu)' }]} />
+            </Card>
+          </>
+        )}
+
         {/* ── Запасы ── */}
         {activeTab === 'stock' && (
           <>
@@ -334,20 +423,7 @@ export default function Reports({ data, profile }) {
               ))}
             </Card>
 
-            <Card title="Залежалось" extra={`без движения 90+ дней · ${som(Math.round(health.deadVal))}`}>
-              {health.dead.length === 0 && <div style={{ padding: 26, textAlign: 'center', color: 'var(--gr-m)', fontSize: 12.5 }}>Всё двигается</div>}
-              {health.dead.slice(0, 20).map((r) => (
-                <div key={r.id} style={{ padding: '9px 13px', borderTop: '1px solid var(--brd)', display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 12.5, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</div>
-                    <div style={{ fontSize: 10.5, color: 'var(--tx3)' }}>
-                      {r.qty} шт · {r.last ? 'последняя выдача ' + new Date(r.last).toLocaleDateString('ru-RU') : 'ни разу не выдавался'}
-                    </div>
-                  </div>
-                  <span className="mono" style={{ fontSize: 12.5, fontWeight: 600 }}>{fmt(Math.round(r.val))}</span>
-                </div>
-              ))}
-            </Card>
+
           </>
         )}
 
