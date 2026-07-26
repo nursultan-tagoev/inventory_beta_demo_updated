@@ -22,6 +22,7 @@ const NAV = [
   { id: 'movements', label: 'Движения', roles: ['admin', 'manager', 'employee', 'director'] },
   { id: 'requests', label: 'Заявки', roles: ['admin', 'manager', 'employee', 'director'] },
   { id: 'acts', label: 'Акты', roles: ['admin', 'manager', 'director'] },
+  { id: 'inventory', label: 'Инвентаризация', roles: ['admin', 'director'] },
   { id: 'lucy', label: 'Люси', roles: ['admin', 'manager', 'employee', 'director'] },
   { id: 'settings', label: 'Справочники', roles: ['admin'] },
   // Блок 2: { id: 'requests', label: 'Заявки' }, { id: 'acts', label: 'Акты' }, { id: 'recipients', label: 'Получатели' }
