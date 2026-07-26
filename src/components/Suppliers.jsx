@@ -66,6 +66,15 @@ export default function Suppliers({ data, toast: t }) {
   const pName = (id) => (products || []).find((p) => p.id === id)?.name || 'товар'
   // Что привезли в рамках одной поставки
   const dlvItems = (dlvId) => (movements || []).filter((m) => m.type === 'in' && m.delivery_id === dlvId)
+  // Цифры поставки: принято — из приходов, отправлено — принято плюс брак
+  const dlvNums = (d) => {
+    const items = dlvItems(d.id)
+    const accepted = items.reduce((a, m) => a + (m.qty || 0), 0)
+    const defects = d.defects || 0
+    const sent = accepted + defects
+    const rate = sent > 0 ? Math.round((defects / sent) * 1000) / 10 : 0
+    return { accepted, defects, sent, rate, known: items.length > 0 }
+  }
 
   const lbl = (t) => <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', color: 'var(--tx3)', marginBottom: 5 }}>{t}</div>
 
@@ -166,14 +175,35 @@ export default function Suppliers({ data, toast: t }) {
                         {supDeliveries(s.id).map((d, j, a) => (
                           <div key={d.id} style={{ padding: '9px 12px', borderBottom: j < a.length - 1 ? '1px solid var(--brd)' : 'none' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                              <span className="mono" style={{ fontSize: 10.5, color: 'var(--tx3)' }}>
-                                {new Date(d.created_at).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}
+                              <span className="mono" style={{ fontSize: 10.5, color: 'var(--tx2)', fontWeight: 600 }}>
+                                {new Date(d.created_at).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit' })}
+                              </span>
+                              <span className="mono" style={{ fontSize: 10, color: 'var(--tx3)' }}>
+                                {new Date(d.created_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
                               </span>
                               <span style={{ fontSize: 9.5, padding: '2px 8px', borderRadius: 20, background: d.on_time ? 'var(--gr-l)' : 'var(--am-l)', color: d.on_time ? 'var(--gr-m)' : 'var(--am-m)' }}>
                                 {d.on_time ? 'в срок' : 'опоздание'}
                               </span>
-                              {(d.defects || 0) > 0 && <span style={{ fontSize: 9.5, padding: '2px 8px', borderRadius: 20, background: 'var(--rd-l)', color: 'var(--rd-m)' }}>брак {d.defects}</span>}
                             </div>
+                            {(() => {
+                              const n = dlvNums(d)
+                              const cells = [
+                                ['Отправлено', n.known ? n.sent : '—', 'var(--tx2)'],
+                                ['Принято', n.known ? n.accepted : '—', 'var(--gr-m)'],
+                                ['Брак', n.defects, n.defects ? 'var(--rd-m)' : 'var(--tx3)'],
+                                ['Доля брака', n.known ? n.rate + '%' : '—', n.rate > 5 ? 'var(--rd-m)' : n.rate > 0 ? 'var(--am-m)' : 'var(--gr-m)'],
+                              ]
+                              return (
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 6, marginTop: 7 }}>
+                                  {cells.map(([l, v, c]) => (
+                                    <div key={l} style={{ background: 'var(--bg)', borderRadius: 8, padding: '6px 8px', textAlign: 'center' }}>
+                                      <div style={{ fontSize: 8.5, color: 'var(--tx3)', textTransform: 'uppercase', letterSpacing: '.03em' }}>{l}</div>
+                                      <div className="mono" style={{ fontSize: 12.5, fontWeight: 600, color: c }}>{v}</div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )
+                            })()}
                             {dlvItems(d.id).length > 0 && (
                               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 5 }}>
                                 {dlvItems(d.id).map((m) => (
