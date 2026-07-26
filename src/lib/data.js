@@ -1,123 +1,251 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../supabaseClient'
 
-export function useAppData(profile) {
-  const [state, setState] = useState({
-    products: [], movements: [], recipients: [], branches: [], suppliers: [],
-    categories: [], directions: [], productTypes: [], locations: [],
-    warehouses: [], campaigns: [], requests: [], reservations: [], profiles: [], acts: [], actSigners: [], externals: [], reqApprovers: [], reqMessages: [],
-    stock: {}, stockByWh: {}, freeByWh: {}, resvByWh: {}, flows: {}, checkouts: [], loading: true, error: null,
-  })
+/* Данные разложены по ресурсам. После действия перечитывается не всё,
+   а только затронутое — см. карту AFFECTS. */
 
-  // Номер загрузки: ответы приходят вразнобой, и устаревший не должен
-  // затирать свежий — иначе экран откатывается к состоянию до действия.
-  const seq = useRef(0)
-  const timer = useRef(null)
+const EMPTY = {
+  products: [], movements: [], recipients: [], branches: [], suppliers: [],
+  categories: [], directions: [], productTypes: [], locations: [],
+  warehouses: [], campaigns: [], requests: [], reservations: [], profiles: [],
+  acts: [], actSigners: [], externals: [], reqApprovers: [], reqMessages: [],
+  deliveries: [], inventories: [],
+  stock: {}, stockByWh: {}, freeByWh: {}, resvByWh: {}, flows: {}, checkouts: [],
+  loading: true, error: null,
+}
 
-  const load = useCallback(async (opts = {}) => {
-    const my = ++seq.current
-    if (!opts.silent) setState((s) => ({ ...s, loading: true }))
-    try {
-      const q = (t, order = 'id') => supabase.from(t).select('*').order(order)
-      const [products, movements, recipients, branches, suppliers, categories, directions, productTypes, locations, warehouses, campaigns, stockRows, requestsRes, reqItemsRes, freeRes, resvRes, profilesRes, actsRes, signersRes, extRes, reqApprRes, msgRes] = await Promise.all([
-        supabase.from('products').select('*').order('name'),
-        supabase.from('movements').select('*').order('created_at', { ascending: false }).limit(5000),
+/* Какое действие какие ресурсы портит */
+export const AFFECTS = {
+  approve:   ['requests', 'approvers'],
+  send:      ['requests'],
+  cancel:    ['requests'],
+  issue:     ['requests', 'movements', 'stock', 'acts', 'reservations'],
+  receive:   ['movements', 'stock', 'deliveries'],
+  writeoff:  ['movements', 'stock'],
+  defect:    ['movements', 'stock', 'deliveries'],
+  adjust:    ['movements', 'stock', 'inventories'],
+  inventory: ['inventories'],
+  act:       ['acts', 'requests'],
+  chat:      ['messages'],
+  users:     ['profiles'],
+  refs:      ['refs', 'products'],
+  catalog:   ['products', 'stock'],
+}
+
+const q = (t, order = 'id') => supabase.from(t).select('*').order(order)
+
+function buildRequests(reqs, items) {
+  const byReq = {}
+  for (const it of items || []) (byReq[it.request_id] || (byReq[it.request_id] = [])).push(it)
+  return (reqs || []).map((r) => ({ ...r, items: byReq[r.id] || [] }))
+}
+
+// Производные от движений: обороты и «на руках»
+function deriveFromMovements(mv) {
+  const flows = {}
+  for (const m of mv) {
+    const f = flows[m.product_id] || (flows[m.product_id] = { in: 0, out: 0, return: 0, writeoff: 0, transfer: 0, defect: 0 })
+    if (f[m.type] != null) f[m.type] += m.qty
+  }
+  const grp = {}
+  for (const m of [...mv].reverse()) {
+    if (m.type !== 'out' && m.type !== 'return') continue
+    if (!m.recipient_id) continue
+    const k = m.product_id + '|' + m.recipient_id + '|' + (m.branch_id || 0)
+    const g = grp[k] || (grp[k] = { product_id: m.product_id, recipient_id: m.recipient_id, branch_id: m.branch_id, remaining: 0, due_date: null, sz: null, created_at: m.created_at })
+    if (m.type === 'out') { g.remaining += m.qty; if (m.due_date && !g.due_date) g.due_date = m.due_date; if (m.sz && !g.sz) g.sz = m.sz }
+    else g.remaining -= m.qty
+  }
+  return { flows, checkouts: Object.values(grp).filter((g) => g.remaining > 0) }
+}
+
+/* Загрузчики: каждый возвращает свой кусок состояния */
+const FETCH = {
+  async refs() {
+    const [branches, suppliers, categories, directions, productTypes, locations, warehouses, campaigns, recipients, externals] =
+      await Promise.all([
+        q('branches'), q('suppliers'), q('categories'), q('directions'), q('product_types'),
+        q('locations'), q('warehouses'), q('campaigns'),
         supabase.from('recipients').select('*').order('name'),
-        q('branches'), q('suppliers'), q('categories'), q('directions'), q('product_types'), q('locations'),
-        q('warehouses'), q('campaigns'),
-        supabase.from('stock_by_warehouse').select('*'),
-        supabase.from('requests').select('*').order('created_at', { ascending: false }).limit(1000),
-        supabase.from('request_items').select('*'),
-        supabase.from('stock_free').select('*'),
-        supabase.from('reservations').select('*').eq('active', true),
-        supabase.from('profiles').select('*'),
-        supabase.from('acts').select('*').order('created_at', { ascending: false }).limit(1000),
-        supabase.from('act_signers').select('*').order('order_no'),
-        supabase.from('external_approvers').select('*').order('level'),
-        supabase.from('request_approvers').select('*').order('order_no'),
-        supabase.from('request_messages').select('*').order('created_at'),
+        q('external_approvers', 'level'),
       ])
-      const err = [products, movements, recipients, branches, suppliers, categories, directions, productTypes, locations, warehouses, campaigns, stockRows].find((r) => r.error)?.error
-      const mv = movements.data || []
-
-      // Остатки берём из представления (оно учитывает перемещения)
-      const stockByWh = {}, stock = {}
-      for (const r of stockRows.data || []) {
-        const pid = Number(r.product_id), wid = Number(r.warehouse_id), qty = Number(r.qty) || 0
-        if (!stockByWh[pid]) stockByWh[pid] = {}
-        stockByWh[pid][wid] = qty
-        stock[pid] = (stock[pid] || 0) + qty
-      }
-      // Свободный остаток (минус активные резервы)
-      const freeByWh = {}, resvByWh = {}
-      for (const r of freeRes?.data || []) {
-        const pid = Number(r.product_id), wid = Number(r.warehouse_id)
-        if (!freeByWh[pid]) { freeByWh[pid] = {}; resvByWh[pid] = {} }
-        freeByWh[pid][wid] = Number(r.qty_free) || 0
-        resvByWh[pid][wid] = Number(r.qty_reserved) || 0
-      }
-
-      const flows = {}
-      for (const m of mv) {
-        const f = flows[m.product_id] || (flows[m.product_id] = { in: 0, out: 0, return: 0, writeoff: 0, transfer: 0 })
-        if (f[m.type] != null) f[m.type] += m.qty
-      }
-
-      // «на руках»: out минус return по (товар|получатель|филиал)
-      const grp = {}
-      for (const m of [...mv].reverse()) {
-        if (m.type !== 'out' && m.type !== 'return') continue
-        if (!m.recipient_id) continue
-        const k = m.product_id + '|' + m.recipient_id + '|' + (m.branch_id || 0)
-        const g = grp[k] || (grp[k] = { product_id: m.product_id, recipient_id: m.recipient_id, branch_id: m.branch_id, remaining: 0, due_date: null, sz: null, created_at: m.created_at })
-        if (m.type === 'out') { g.remaining += m.qty; if (m.due_date && !g.due_date) g.due_date = m.due_date; if (m.sz && !g.sz) g.sz = m.sz }
-        else g.remaining -= m.qty
-      }
-      const checkouts = Object.values(grp).filter((g) => g.remaining > 0)
-
-      if (my !== seq.current) return   // пока считали, стартовала новая загрузка
-      setState({
-        products: products.data || [], movements: mv, recipients: recipients.data || [],
-        branches: branches.data || [], suppliers: suppliers.data || [], categories: categories.data || [],
-        directions: directions.data || [], productTypes: productTypes.data || [], locations: locations.data || [],
-        warehouses: warehouses.data || [], campaigns: campaigns.data || [],
-        requests: buildRequests(requestsRes?.data, reqItemsRes?.data),
-        reservations: resvRes?.data || [], profiles: profilesRes?.data || [],
-        acts: actsRes?.data || [], actSigners: signersRes?.data || [], externals: extRes?.data || [], reqApprovers: reqApprRes?.data || [], reqMessages: msgRes?.data || [],
-        stock, stockByWh, freeByWh, resvByWh, flows, checkouts, loading: false, error: err ? err.message : null,
-      })
-    } catch (e) {
-      if (my !== seq.current) return
-      setState((s) => ({ ...s, loading: false, error: e.message }))
+    return {
+      branches: branches.data || [], suppliers: suppliers.data || [], categories: categories.data || [],
+      directions: directions.data || [], productTypes: productTypes.data || [], locations: locations.data || [],
+      warehouses: warehouses.data || [], campaigns: campaigns.data || [],
+      recipients: recipients.data || [], externals: externals.data || [],
     }
+  },
+
+  async products() {
+    const { data } = await supabase.from('products').select('*').order('name')
+    return { products: data || [] }
+  },
+
+  async movements() {
+    const { data } = await supabase.from('movements').select('*')
+      .order('created_at', { ascending: false }).limit(2000)
+    const mv = data || []
+    return { movements: mv, ...deriveFromMovements(mv) }
+  },
+
+  async stock() {
+    const [rows, free] = await Promise.all([
+      supabase.from('stock_by_warehouse').select('*'),
+      supabase.from('stock_free').select('*'),
+    ])
+    const stockByWh = {}, stock = {}
+    for (const r of rows.data || []) {
+      const pid = Number(r.product_id), wid = Number(r.warehouse_id), qty = Number(r.qty) || 0
+      if (!stockByWh[pid]) stockByWh[pid] = {}
+      stockByWh[pid][wid] = qty
+      stock[pid] = (stock[pid] || 0) + qty
+    }
+    const freeByWh = {}, resvByWh = {}
+    for (const r of free.data || []) {
+      const pid = Number(r.product_id), wid = Number(r.warehouse_id)
+      if (!freeByWh[pid]) { freeByWh[pid] = {}; resvByWh[pid] = {} }
+      freeByWh[pid][wid] = Number(r.qty_free) || 0
+      resvByWh[pid][wid] = Number(r.qty_reserved) || 0
+    }
+    return { stock, stockByWh, freeByWh, resvByWh }
+  },
+
+  async requests() {
+    const [reqs, items] = await Promise.all([
+      supabase.from('requests').select('*').order('created_at', { ascending: false }).limit(1000),
+      supabase.from('request_items').select('*'),
+    ])
+    return { requests: buildRequests(reqs.data, items.data) }
+  },
+
+  async approvers() {
+    const { data } = await q('request_approvers', 'order_no')
+    return { reqApprovers: data || [] }
+  },
+
+  async messages() {
+    const { data } = await q('request_messages', 'created_at')
+    return { reqMessages: data || [] }
+  },
+
+  async acts() {
+    const [acts, signers] = await Promise.all([
+      supabase.from('acts').select('*').order('created_at', { ascending: false }).limit(1000),
+      q('act_signers', 'order_no'),
+    ])
+    return { acts: acts.data || [], actSigners: signers.data || [] }
+  },
+
+  async profiles() {
+    const { data } = await supabase.from('profiles').select('*')
+    return { profiles: data || [] }
+  },
+
+  async reservations() {
+    const { data } = await supabase.from('reservations').select('*').eq('active', true)
+    return { reservations: data || [] }
+  },
+
+  async deliveries() {
+    const { data } = await supabase.from('deliveries').select('*').order('created_at', { ascending: false }).limit(300)
+    return { deliveries: data || [] }
+  },
+
+  async inventories() {
+    const { data } = await supabase.from('inventories').select('*').order('started_at', { ascending: false })
+    return { inventories: data || [] }
+  },
+}
+
+const ALL = Object.keys(FETCH)
+
+export function useAppData(profile) {
+  const [state, setState] = useState(EMPTY)
+
+  // Номер на каждый ресурс: устаревший ответ не затирает свежий
+  const seq = useRef({})
+  const timer = useRef(null)
+  const dirty = useRef(new Set())
+
+  /* Перечитать конкретные ресурсы */
+  const invalidate = useCallback(async (keys, opts = {}) => {
+    const list = (Array.isArray(keys) ? keys : [keys]).filter((k) => FETCH[k])
+    if (!list.length) return
+    if (!opts.silent) setState((s) => ({ ...s, loading: true }))
+
+    const mine = {}
+    for (const k of list) mine[k] = (seq.current[k] = (seq.current[k] || 0) + 1)
+
+    const parts = await Promise.all(list.map(async (k) => {
+      try {
+        const part = await FETCH[k]()
+        return mine[k] === seq.current[k] ? part : null   // пока грузили, стартовала новая
+      } catch (e) {
+        return { error: e.message }
+      }
+    }))
+
+    setState((s) => Object.assign({}, s, ...parts.filter(Boolean), { loading: false }))
   }, [])
 
-  // Изменения сыплются пачками — собираем их в одну тихую перезагрузку
-  const bump = useCallback(() => {
-    clearTimeout(timer.current)
-    timer.current = setTimeout(() => load({ silent: true }), 350)
-  }, [load])
+  const load = useCallback((opts = {}) => invalidate(ALL, opts), [invalidate])
+  const refresh = useCallback(() => invalidate(ALL, { silent: true }), [invalidate])
 
-  // Зависим от id, а не от объекта: новая ссылка на профиль — не повод перечитывать всё
+  /* События сыплются пачками — копим ключи и обновляем одним заходом */
+  const bump = useCallback((keys) => {
+    for (const k of (Array.isArray(keys) ? keys : [keys])) dirty.current.add(k)
+    clearTimeout(timer.current)
+    timer.current = setTimeout(() => {
+      const list = [...dirty.current]
+      dirty.current.clear()
+      invalidate(list, { silent: true })
+    }, 300)
+  }, [invalidate])
+
   useEffect(() => { if (profile?.id) load() }, [profile?.id, load])
   useEffect(() => () => clearTimeout(timer.current), [])
 
-  // Realtime: заявки обновляются у всех сразу
+  /* Realtime: событие не несёт данные, а лишь помечает ресурс устаревшим */
   useEffect(() => {
-    if (!profile) return
-    const ch = supabase.channel('requests-live')
-    for (const t of ['requests', 'request_items', 'acts', 'act_signers', 'reservations',
-                     'request_approvers', 'request_messages', 'movements']) {
-      ch.on('postgres_changes', { event: '*', schema: 'public', table: t }, bump)
+    if (!profile?.id) return
+    const MAP = {
+      requests: ['requests'], request_items: ['requests'],
+      request_approvers: ['approvers'], request_messages: ['messages'],
+      acts: ['acts'], act_signers: ['acts'],
+      reservations: ['reservations', 'stock'],
+      movements: ['movements', 'stock'],
+      deliveries: ['deliveries'],
+      inventories: ['inventories'], inventory_items: ['inventories'],
+      products: ['products', 'stock'], profiles: ['profiles'],
     }
-    ch.subscribe()
+    const ch = supabase.channel('app-live')
+    for (const [table, keys] of Object.entries(MAP)) {
+      ch.on('postgres_changes', { event: '*', schema: 'public', table }, () => bump(keys))
+    }
+    ch.subscribe((st) => { if (st !== 'SUBSCRIBED') console.warn('[realtime]', st) })
     return () => { supabase.removeChannel(ch) }
   }, [profile?.id, bump])
 
-  /* Мгновенный отклик: показываем результат сразу, сервер догоняет.
-     Человек уже знает, что сделал, — ждать ответа, чтобы это отрисовать, незачем. */
+  /* Подстраховка, если вебсокет не проходит */
+  useEffect(() => {
+    if (!profile?.id) return
+    const hot = ['requests', 'approvers', 'movements', 'stock', 'acts']
+    const tick = () => { if (document.visibilityState === 'visible') invalidate(hot, { silent: true }) }
+    const iv = setInterval(tick, 25000)
+    const onBack = () => { if (document.visibilityState === 'visible') refresh() }
+    document.addEventListener('visibilitychange', onBack)
+    window.addEventListener('focus', onBack)
+    window.addEventListener('online', onBack)
+    return () => {
+      clearInterval(iv)
+      document.removeEventListener('visibilitychange', onBack)
+      window.removeEventListener('focus', onBack)
+      window.removeEventListener('online', onBack)
+    }
+  }, [profile?.id, invalidate, refresh])
 
-  // Поправить остаток по дельтам: [{ product_id, warehouse_id, delta }]
+  /* Мгновенный отклик до ответа сервера */
   const bumpStock = useCallback((deltas) => setState((s) => {
     const stockByWh = { ...s.stockByWh }, stock = { ...s.stock }, freeByWh = { ...s.freeByWh }
     for (const d of deltas || []) {
@@ -126,36 +254,25 @@ export function useAppData(profile) {
       stockByWh[pid] = { ...(stockByWh[pid] || {}) }
       stockByWh[pid][wid] = (stockByWh[pid][wid] || 0) + n
       stock[pid] = (stock[pid] || 0) + n
-      if (freeByWh[pid]) {
-        freeByWh[pid] = { ...freeByWh[pid] }
-        freeByWh[pid][wid] = (freeByWh[pid][wid] || 0) + n
-      }
+      if (freeByWh[pid]) { freeByWh[pid] = { ...freeByWh[pid] }; freeByWh[pid][wid] = (freeByWh[pid][wid] || 0) + n }
     }
     return { ...s, stockByWh, stock, freeByWh }
   }), [])
 
-  // Обновить одну заявку в списке, не перечитывая всё
   const patchRequest = useCallback((id, fields) => setState((s) => ({
     ...s, requests: s.requests.map((r) => (r.id === id ? { ...r, ...fields } : r)),
   })), [])
 
-  // Обновить согласующего в цепочке
   const patchApprover = useCallback((id, fields) => setState((s) => ({
     ...s, reqApprovers: s.reqApprovers.map((a) => (a.id === id ? { ...a, ...fields } : a)),
   })), [])
 
-  // Подмешать свежее движение в журнал
-  const addMovements = useCallback((rows) => setState((s) => ({
-    ...s, movements: [...(rows || []), ...s.movements],
-  })), [])
-
-  return { ...state, reload: load, refresh: () => load({ silent: true }), bumpStock, patchRequest, patchApprover, addMovements }
-}
-
-function buildRequests(reqs, items) {
-  const byReq = {}
-  for (const it of items || []) (byReq[it.request_id] || (byReq[it.request_id] = [])).push(it)
-  return (reqs || []).map((r) => ({ ...r, items: byReq[r.id] || [] }))
+  return {
+    ...state,
+    reload: refresh,        // старые вызовы больше не мигают экраном
+    refresh, invalidate, load,
+    bumpStock, patchRequest, patchApprover,
+  }
 }
 
 /* Свободный остаток */
@@ -173,7 +290,6 @@ export const reservedAll = (resvByWh, productId) =>
   Object.values(resvByWh?.[Number(productId)] || {}).reduce((s, n) => s + n, 0)
 
 /* Иерархия: Направление → Тип → Кампания → Продукт */
-
 export function chainOf(product, { directions, productTypes, campaigns }) {
   if (!product) return ''
   const camp = campaigns?.find((c) => c.id === product.campaign_id)
