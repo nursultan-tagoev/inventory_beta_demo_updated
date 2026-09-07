@@ -44,7 +44,7 @@ export default function SignSheet({ act, data, profile, onClose, onDone }) {
   const chain = signersOf(actSigners, act.id)
   const cur = currentSigner(chain)
   const isMyTurn = cur && cur.in_system && cur.user_id === profile.id
-  const isAdminTurn = cur && profile.role === 'admin'
+  const isAdminTurn = cur && ['admin', 'warehouse'].includes(profile.role)
   const isExternal = cur && !cur.in_system
   const mySigned = chain.find((s) => s.user_id === profile.id && s.status === 'signed')
   const allSigned = chain.length > 0 && chain.every((s) => s.status === 'signed')
@@ -163,7 +163,7 @@ export default function SignSheet({ act, data, profile, onClose, onDone }) {
           </>
         )}
 
-        {!act.declined && !allSigned && isExternal && profile.role === 'admin' && !declining && (
+        {!act.declined && !allSigned && isExternal && ['admin', 'warehouse'].includes(profile.role) && !declining && (
           <div className="card" style={{ padding: 14, background: 'var(--am-l)' }}>
             <div style={{ fontSize: 12.5, color: 'var(--am-m)', marginBottom: 11 }}>
               <b>{cur.signer_name}</b> — вне системы. Распечатайте акт, получите подпись и приложите скан.

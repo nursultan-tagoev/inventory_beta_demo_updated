@@ -2,8 +2,8 @@ import { useState } from 'react'
 import { Btn, Input, Select, Field, useToast, Confirm } from './ui'
 import { createUser, resetPassword, setActive, loginPreview } from '../lib/users'
 
-const ROLE = { admin: 'Склад · администратор', director: 'Директор', manager: 'Руководитель филиала', employee: 'Специалист' }
-const RC = { admin: ['var(--pu-l)', 'var(--pu)'], director: ['var(--am-l)', 'var(--am-m)'], manager: ['#E3F0FB', '#1D5FA8'], employee: ['var(--gr-l)', 'var(--gr-m)'] }
+const ROLE = { admin: 'Суперадминистратор', warehouse: 'Администратор склада', manager: 'Руководитель филиала', employee: 'Специалист', director: 'Директор' }
+const RC = { admin: ['#F3E4E4', '#8B2F2F'], warehouse: ['var(--pu-l)', 'var(--pu)'], director: ['var(--am-l)', 'var(--am-m)'], manager: ['#E3F0FB', '#1D5FA8'], employee: ['var(--gr-l)', 'var(--gr-m)'] }
 
 /* Карточка с логином и паролем — показывается один раз после создания или сброса */
 function Credentials({ login, password, onClose }) {
@@ -59,7 +59,10 @@ export default function Users({ data }) {
   const submit = async () => {
     if (!f.full_name.trim()) return toast('Введите ФИО', 'error')
     if (['employee', 'manager'].includes(f.role) && !f.branch_id) return toast('Выберите филиал', 'error')
-    if (f.role === 'employee' && !f.manager_id) return toast('Выберите руководителя — без него заявка не уйдёт на согласование', 'error')
+    if (f.role === 'employee' && !f.manager_id) {
+      const br = (branches || []).find((b) => b.id == f.branch_id)
+      if (!br?.head_id && !br?.deputy_id) return toast('У филиала нет руководителя — выберите его здесь, иначе заявку некому согласовать', 'error')
+    }
     setBusy(true)
     const { data: d, error } = await createUser({
       full_name: f.full_name.trim(), role: f.role,
@@ -67,7 +70,7 @@ export default function Users({ data }) {
       manager_id: f.manager_id || null, position: f.position || null,
     })
     setBusy(false)
-    if (error) return toast(error, 'error')
+    if (error) return toast(typeof error === 'string' ? error : JSON.stringify(error), 'error')
     setCred({ login: d.email, password: d.password })
     setF({ full_name: '', role: 'employee', branch_id: '', manager_id: '', position: '' })
     setAdd(false); invalidate('profiles')
@@ -75,12 +78,12 @@ export default function Users({ data }) {
 
   const doReset = async (p) => {
     const { data: d, error } = await resetPassword(p.id)
-    if (error) return toast(error, 'error')
+    if (error) return toast(typeof error === 'string' ? error : JSON.stringify(error), 'error')
     setCred({ login: p.email, password: d.password })
   }
   const doToggle = async (p) => {
     const { error } = await setActive(p.id, p.is_active === false)
-    if (error) return toast(error, 'error')
+    if (error) return toast(typeof error === 'string' ? error : JSON.stringify(error), 'error')
     toast(p.is_active === false ? 'Доступ включён' : 'Доступ отключён'); invalidate('profiles')
   }
 
@@ -107,7 +110,7 @@ export default function Users({ data }) {
           )}
           <Field label="Роль">
             <Select value={f.role} onChange={(e) => up('role', e.target.value)}>
-              {Object.entries(ROLE).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+              {['warehouse', 'manager', 'employee', 'director'].map((v) => <option key={v} value={v}>{ROLE[v]}</option>)}
             </Select>
           </Field>
           {['employee', 'manager'].includes(f.role) && (

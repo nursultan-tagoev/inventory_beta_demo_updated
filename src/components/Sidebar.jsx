@@ -18,29 +18,30 @@ const Ico = ({ k, s = 18 }) => (
 // Блок 1: показываем только готовые разделы. Остальные включаются в своих блоках.
 /* Что выносим в нижнее меню телефона: то, чем пользуются каждый день */
 const MAIN = {
-  admin:    ['home', 'requests', 'movements', 'items'],
+  admin:     ['home', 'requests', 'movements', 'items'],
+  warehouse: ['home', 'requests', 'movements', 'items'],
   manager:  ['home', 'requests', 'movements', 'reports'],
   employee: ['home', 'requests', 'catalog', 'movements'],
   director: ['home', 'reports', 'movements', 'requests'],
 }
 
 const NAV = [
-  { id: 'home', label: 'Главная', roles: ['admin', 'manager', 'employee', 'director'] },
+  { id: 'home', label: 'Главная', roles: ['admin', 'warehouse', 'manager', 'employee', 'director'] },
   { id: 'catalog', label: 'Каталог', roles: ['manager', 'employee'] },
-  { id: 'items', label: 'Товары', roles: ['admin', 'director'] },
-  { id: 'movements', label: 'Движения', roles: ['admin', 'manager', 'employee', 'director'] },
-  { id: 'requests', label: 'Заявки', roles: ['admin', 'manager', 'employee', 'director'] },
-  { id: 'acts', label: 'Акты', roles: ['admin', 'manager', 'director'] },
-  { id: 'inventory', label: 'Инвентаризация', roles: ['admin', 'director'] },
-  { id: 'reports', label: 'Аналитика', roles: ['admin', 'director', 'manager'] },
-  { id: 'lucy', label: 'Люси', roles: ['admin', 'manager', 'employee', 'director'] },
-  { id: 'settings', label: 'Справочники', roles: ['admin'] },
+  { id: 'items', label: 'Товары', roles: ['admin', 'warehouse', 'director'] },
+  { id: 'movements', label: 'Движения', roles: ['admin', 'warehouse', 'manager', 'employee', 'director'] },
+  { id: 'requests', label: 'Заявки', roles: ['admin', 'warehouse', 'manager', 'employee', 'director'] },
+  { id: 'acts', label: 'Акты', roles: ['admin', 'warehouse', 'manager', 'employee', 'director'] },
+  { id: 'inventory', label: 'Инвентаризация', roles: ['admin', 'warehouse', 'director'] },
+  { id: 'reports', label: 'Аналитика', roles: ['admin', 'warehouse', 'director', 'manager'] },
+  { id: 'lucy', label: 'Люси', roles: ['admin', 'warehouse', 'manager', 'employee', 'director'] },
+  { id: 'settings', label: 'Справочники', roles: ['admin', 'warehouse'] },
   // Блок 2: { id: 'requests', label: 'Заявки' }, { id: 'acts', label: 'Акты' }, { id: 'recipients', label: 'Получатели' }
   // Блок 3: { id: 'reports', label: 'Аналитика' }, { id: 'inventory', label: 'Инвентаризация' }
 ]
 import { Sheet } from './ui'
 
-const ROLE_RU = { admin: 'Администратор', manager: 'Менеджер', employee: 'Сотрудник', director: 'Директор' }
+const ROLE_RU = { admin: 'Суперадминистратор', warehouse: 'Администратор склада', manager: 'Руководитель филиала', employee: 'Специалист', director: 'Директор' }
 
 export default function Sidebar({ view, setView, profile, onLogout, badges = {}, branchName, onTour }) {
   const [more, setMore] = useState(false)
