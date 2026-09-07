@@ -54,6 +54,17 @@ export default async function handler(req, res) {
   const { action, payload = {} } = req.body || {}
 
   try {
+    /* ── Проверка связки ключа с проектом ── */
+    if (action === 'ping') {
+      const { data: list, error } = await sb.auth.admin.listUsers({ page: 1, perPage: 1 })
+      return res.status(200).json({
+        url: (process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '').replace(/^https?:\/\//, '').split('.')[0],
+        keyTail: (process.env.SUPABASE_SERVICE_ROLE_KEY || '').slice(-6),
+        authOk: !error && Array.isArray(list?.users),
+        authError: error ? (error.message || JSON.stringify(error)) : null,
+      })
+    }
+
     /* ── Создать учётку ── */
     if (action === 'create') {
       const fullName = (payload.full_name || '').trim()
@@ -77,7 +88,17 @@ export default async function handler(req, res) {
         email, password, email_confirm: true,   // почта служебная, подтверждать нечем
         user_metadata: { full_name: fullName },
       })
-      if (e1) return res.status(400).json({ error: 'Учётка: ' + e1.message })
+      if (e1 || !created?.user?.id) {
+        // Пустая ошибка обычно значит, что служебный ключ не подходит к проекту
+        const detail = [e1?.message, e1?.name, e1?.status, e1?.code]
+          .filter((x) => x && String(x) !== '{}').join(' · ')
+        return res.status(400).json({
+          error: detail
+            ? 'Не удалось создать учётку: ' + detail
+            : 'Auth отклонил создание без объяснения. Обычно это значит, что SUPABASE_SERVICE_ROLE_KEY не подходит к этому проекту — проверьте, что скопирован ключ service_role именно из него, целиком и без пробелов.',
+          raw: (() => { try { return JSON.stringify(e1) } catch { return String(e1) } })(),
+        })
+      }
 
       // Профиль может создаваться триггером — поэтому обновляем, а не вставляем вслепую
       const row = {
