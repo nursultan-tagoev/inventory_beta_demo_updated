@@ -58,8 +58,9 @@ export default async function handler(req, res) {
     if (action === 'create') {
       const fullName = (payload.full_name || '').trim()
       if (!fullName) return res.status(400).json({ error: 'Укажите ФИО' })
-      if (!['employee', 'manager', 'admin', 'director'].includes(payload.role)) {
-        return res.status(400).json({ error: 'Неизвестная роль' })
+      // Роли, которые может назначить суперадмин. Своего клона не создаём.
+      if (!['warehouse', 'manager', 'employee', 'director'].includes(payload.role)) {
+        return res.status(400).json({ error: 'Недопустимая роль: ' + (payload.role || 'не выбрана') })
       }
 
       // Логин: если занят — добавляем цифру
