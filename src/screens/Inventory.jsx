@@ -21,7 +21,7 @@ const ST = {
 export default function Inventory({ data, profile }) {
   const { products, warehouses, stockByWh, inventories, invalidate, bumpStock } = data
   const { toast } = useToast()
-  const isAdmin = profile?.role === 'admin'
+  const isAdmin = ['admin', 'warehouse'].includes(profile?.role)
 
   const list = inventories || []
   const [open, setOpen] = useState(null)      // { inv, items }

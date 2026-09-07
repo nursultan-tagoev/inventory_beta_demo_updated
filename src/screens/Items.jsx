@@ -1,15 +1,17 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabaseClient'
 import { chainOf, freeAll, reservedAll } from '../lib/data'
+import ImportProducts from '../components/ImportProducts'
 import { Btn, Field, Input, Select, Badge, Confirm, useToast } from '../components/ui'
 import { fmt, som, TL } from '../lib/format'
 
 export default function Items({ data, can, profile }) {
   const toast = useToast()
-  const seeStock = ['admin', 'director'].includes(profile?.role)
+  const seeStock = ['admin', 'warehouse', 'director'].includes(profile?.role)
   const { products, categories, suppliers, locations, stock, stockByWh, freeByWh, resvByWh, warehouses, campaigns, directions, productTypes, flows, checkouts, recipients, invalidate } = data
   const [q, setQ] = useState('')
   const [add, setAdd] = useState(false)
+  const [imp, setImp] = useState(false)
   const [sel, setSel] = useState(null)
   const [nf, setNf] = useState({ name: '', sku: '', category_id: '', price: '', location_id: '', supplier_id: '', direction_id: '', product_type_id: '', campaign_id: '' })
   const [loading, setLoading] = useState(false)
@@ -52,7 +54,8 @@ export default function Items({ data, can, profile }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
         <span className="ff" style={{ fontSize: 21, fontWeight: 600 }}>Товары</span>
         <span style={{ fontSize: 12.5, color: 'var(--tx3)' }}>{list.length} позиций</span>
-        {can('edit') && <Btn size="sm" onClick={() => setAdd(!add)} style={{ marginLeft: 'auto' }}>＋ Товар</Btn>}
+        {can('edit') && <Btn size="sm" v="secondary" onClick={() => setImp(true)} style={{ marginLeft: 'auto' }}>↑ Списком</Btn>}
+        {can('edit') && <Btn size="sm" onClick={() => setAdd(!add)}>＋ Товар</Btn>}
       </div>
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -237,6 +240,7 @@ function ItemModal({ p, data, can, onClose }) {
           {tab === 'history' && <div>{hist === null ? <div style={{ textAlign: 'center', padding: 20, color: 'var(--tx3)' }}>Загрузка…</div> : hist.length === 0 ? <div style={{ textAlign: 'center', padding: 20, color: 'var(--tx3)' }}>Нет операций</div> : hist.map((m) => <div key={m.id} style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--brd)', fontSize: 13 }}><Badge color={{ in: 'green', out: 'ink', return: 'purple', writeoff: 'red' }[m.type]}>{TL[m.type]}</Badge><b className="mono">×{m.qty}</b><span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--tx3)' }} className="mono">{new Date(m.created_at).toLocaleDateString('ru-RU')}</span></div>)}</div>}
         </div>}
       </div>
+      {imp && <ImportProducts data={data} onClose={() => setImp(false)} onDone={() => { setImp(false); invalidate(['products', 'stock']) }} />}
     </div>
   )
 }

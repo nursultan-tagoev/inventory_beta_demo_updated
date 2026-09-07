@@ -175,7 +175,7 @@ export default function Home({ data, profile, can, setView }) {
                 {sub(m) && <div style={{ fontSize: 11, color: 'var(--tx3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sub(m)}</div>}
               </div>
               {(() => {
-                const seeAll = ['admin', 'director'].includes(role)
+                const seeAll = ['admin', 'warehouse', 'director'].includes(role)
                 const plus = seeAll ? ['in', 'return'].includes(m.type) : m.type === 'out'
                 const sign = m.type === 'transfer' ? '~' : plus ? '+' : '−'
                 const clr = m.type === 'transfer' ? 'var(--am-m)' : plus ? 'var(--gr)' : seeAll ? 'var(--tx)' : 'var(--pu)'
