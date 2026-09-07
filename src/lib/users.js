@@ -27,9 +27,14 @@ async function call(action, payload) {
       body: JSON.stringify({ action, payload }),
     })
   } catch (e) { return { error: 'Сервер недоступен' } }
-  let d = {}
-  try { d = await res.json() } catch (e) {}
-  if (!res.ok) return { error: d.error || 'Ошибка ' + res.status }
+  let d = {}, raw = ''
+  try { raw = await res.text(); d = raw ? JSON.parse(raw) : {} } catch (e) { d = {} }
+  if (!res.ok) {
+    // Сервер мог ответить не JSON — тогда показываем то, что реально пришло
+    const msg = typeof d?.error === 'string' ? d.error
+      : (raw && raw.slice(0, 200)) || `Сервер ответил ${res.status}`
+    return { error: msg }
+  }
   return { data: d }
 }
 
@@ -38,11 +43,37 @@ export const resetPassword = (id) => call('reset_password', { id })
 export const setActive = (id, is_active) => call('set_active', { id, is_active })
 
 // Смену собственного пароля делает сам пользователь — служебный ключ тут не нужен
+// Ошибки Supabase приходят на английском — переводим на человеческий
+const RU = (m = '') => {
+  const t = m.toLowerCase()
+  if (t.includes('should be different')) return 'Новый пароль должен отличаться от временного'
+  if (t.includes('at least') || t.includes('too short')) return 'Пароль слишком короткий'
+  if (t.includes('weak') || t.includes('pwned')) return 'Пароль слишком простой — добавьте цифры или буквы'
+  if (t.includes('session') || t.includes('jwt') || t.includes('expired')) return 'Сессия истекла — войдите заново'
+  if (t.includes('failed to fetch') || t.includes('network')) return 'Нет связи с сервером — проверьте интернет'
+  return m || 'Не удалось сменить пароль'
+}
+
 export async function changeOwnPassword(newPass) {
   if (!newPass || newPass.length < 8) return { error: 'Пароль не короче 8 символов' }
+
+  const { data: u0 } = await supabase.auth.getUser()
+  const uid = u0?.user?.id
+  if (!uid) return { error: 'Сессия истекла — войдите заново' }
+
   const { error } = await supabase.auth.updateUser({ password: newPass })
-  if (error) return { error: error.message }
-  const { data: u } = await supabase.auth.getUser()
-  if (u?.user) await supabase.from('profiles').update({ must_change_password: false }).eq('id', u.user.id)
-  return { error: null }
+  if (error) return { error: RU(error.message) }
+
+  /* Флаг снимаем с проверкой результата. Раньше запись не проверялась:
+     если она не проходила, экран закрывался, а при следующем входе
+     смену пароля просили снова. Плюс updateUser обновляет токен,
+     и первая попытка может уйти со старым — поэтому повторяем. */
+  for (let i = 0; i < 3; i++) {
+    const { data, error: e2 } = await supabase.from('profiles')
+      .update({ must_change_password: false })
+      .eq('id', uid).select('must_change_password').maybeSingle()
+    if (!e2 && data && data.must_change_password === false) return { error: null }
+    await new Promise((r) => setTimeout(r, 450))
+  }
+  return { error: 'Пароль изменён, но отметка не сохранилась. Войдите заново — если экран повторится, обратитесь к администратору.' }
 }
