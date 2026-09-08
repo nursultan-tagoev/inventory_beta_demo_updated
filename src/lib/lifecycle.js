@@ -16,7 +16,7 @@ export function canDelete(req, profile, chain) {
   if (role === 'director') return false
   const touched = (chain || []).some((a) => a.status !== 'waiting')
   if (req.sent_at || touched) return false
-  if (['admin', 'warehouse'].includes(role)) return true
+  if (role === 'admin') return true
   return req.author_id === profile?.id
 }
 

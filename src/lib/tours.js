@@ -88,6 +88,4 @@ export const TOURS = {
   },
 }
 
-TOURS.warehouse = TOURS.admin
-
 export const tourFor = (role) => TOURS[role] || TOURS.employee
