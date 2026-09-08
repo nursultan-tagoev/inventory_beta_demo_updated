@@ -6,18 +6,16 @@ import Users from '../components/Users'
 
 const NAV = [
   { id: 'hier', l: 'Иерархия', ico: '🗂' },
-  { id: 'warehouses', l: 'Склады', ico: '🏬', super: true },
+  { id: 'warehouses', l: 'Склады', ico: '🏬' },
   { id: 'locations', l: 'Места хранения', ico: '📍' },
-  { id: 'branches', l: 'Филиалы', ico: '🗺', super: true },
+  { id: 'branches', l: 'Филиалы-адресаты', ico: '🗺' },
   { id: 'categories', l: 'Категории', ico: '🏷' },
   { id: 'suppliers', l: 'Поставщики', ico: '🚚' },
-  { id: 'appr', l: 'Согласование', ico: '🧭', super: true },
-  { id: 'users', l: 'Пользователи', ico: '👥', super: true },
+  { id: 'appr', l: 'Согласование', ico: '🧭' },
+  { id: 'users', l: 'Пользователи', ico: '👥' },
 ]
 
-export default function Settings({ data, profile }) {
-  const isSuper = profile?.role === 'admin'   // структура и учётки — только суперадмину
-  const navItems = NAV.filter((n) => isSuper || !n.super)
+export default function Settings({ data }) {
   const toast = useToast()
   const [tab, setTab] = useState('hier')
   const { directions, productTypes, campaigns, warehouses, locations, branches, categories, suppliers, reload } = data
@@ -42,10 +40,10 @@ export default function Settings({ data, profile }) {
     <div style={{ maxWidth: 1000, margin: '0 auto', padding: '24px 20px 80px', animation: 'fadeUp .3s ease' }}>
       <div className="ff" style={{ fontSize: 21, fontWeight: 600, marginBottom: 16 }}>Справочники</div>
 
-      <div className="side-wrap" style={{ display: 'flex', gap: 16, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-        {/* Меню: на ноутбуке сбоку, на телефоне лентой сверху */}
-        <div className="card side-nav" style={{ width: 200, padding: 8, flexShrink: 0, display: 'flex', flexDirection: 'column' }}>
-          {navItems.map((n) => (
+      <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+        {/* Левое меню */}
+        <div className="card" style={{ width: 200, padding: 8, flexShrink: 0 }}>
+          {NAV.map((n) => (
             <button key={n.id} onClick={() => setTab(n.id)} style={{
               display: 'flex', alignItems: 'center', gap: 9, width: '100%', height: 38, padding: '0 11px', borderRadius: 9,
               fontSize: 12.5, fontWeight: tab === n.id ? 600 : 500, textAlign: 'left',
@@ -55,7 +53,7 @@ export default function Settings({ data, profile }) {
         </div>
 
         {/* Контент */}
-        <div style={{ flex: 1, minWidth: 0, width: '100%' }}>
+        <div style={{ flex: 1, minWidth: 300 }}>
           {tab === 'hier' && <Hierarchy {...{ directions, productTypes, campaigns, ins, del }} />}
           {tab === 'warehouses' && <Simple title="Склады" hint="Где физически лежит товар и считается остаток." table="warehouses" rows={warehouses} cols={[['name', 'Название'], ['city', 'Город']]} ins={ins} del={del} upd={upd} />}
           {tab === 'locations' && <Places {...{ locations, warehouses, ins, del }} />}
