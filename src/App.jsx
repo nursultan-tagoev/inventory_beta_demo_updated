@@ -41,9 +41,10 @@ class ErrorBoundary extends React.Component {
 
 const ROLE_VIEWS = {
   admin: ['home', 'items', 'movements', 'requests', 'acts', 'inventory', 'lucy', 'recipients', 'reports', 'settings'],
+  warehouse: ['home', 'items', 'movements', 'requests', 'acts', 'inventory', 'lucy', 'recipients', 'reports', 'settings'],
   manager: ['home', 'catalog', 'movements', 'requests', 'acts', 'reports', 'lucy'],
   director: ['home', 'items', 'movements', 'requests', 'acts', 'inventory', 'reports'],
-  employee: ['home', 'catalog', 'movements', 'requests', 'lucy'],
+  employee: ['home', 'catalog', 'movements', 'requests', 'acts', 'lucy'],
 }
 
 export default function App() {
@@ -101,9 +102,11 @@ export default function App() {
   const logout = async () => { await supabase.auth.signOut(); setView('home') }
 
   const role = profile?.role
+  /* Права по ролям. Директор — наблюдатель: видит всё, не меняет ничего. */
   const can = (k) => {
+    if (role === 'director') return false
     if (role === 'admin') return true
-    if (k === 'admin') return false
+    if (role === 'warehouse') return k !== 'admin'   // всё, кроме учёток и структуры
     if (k === 'move' || k === 'edit') return role === 'manager'
     return false
   }
@@ -156,7 +159,7 @@ export default function App() {
     recipients: <Recipients data={data} can={can} />,
     reports: <Reports data={data} profile={profile} />,
     acts: <Acts data={data} profile={profile} />,
-    settings: <Settings data={data} />,
+    settings: <Settings data={data} profile={profile} />,
     inventory: <Inventory data={data} profile={profile} />,
     requests: <Requests data={data} profile={profile} can={can} draftItems={draftItems} onDraftUsed={() => setDraftItems(null)} />,
     lucy: <Lucy data={data} profile={profile} can={can} setView={setView} autostart={assistAuto} onAutostart={() => setAssistAuto(false)} />,

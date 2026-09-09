@@ -103,8 +103,11 @@ input,select,textarea{font-family:inherit;outline:none;color:inherit}
 }
 
 @media (max-width: 520px) {
-  .home-actions { grid-template-columns: repeat(2,1fr) !important; }
+  /* Действия в один столбец: в две колонки подписи обрезались */
+  .home-actions { grid-template-columns: 1fr !important; }
   .home-kpi { grid-template-columns: repeat(2,1fr) !important; }
+  /* Плитки KPI: подпись целиком, цифра крупно */
+  .home-kpi > * { min-width: 0; }
 }
 
 /* Шторка снизу */
@@ -145,5 +148,58 @@ button:active { transform: scale(.97); }
 
 /* Нижнее меню не должно налезать на контент и на плашку установки */
 @media (max-width: 860px) {
+  .bottom-nav { padding-bottom: env(safe-area-inset-bottom, 0px); }
+}
+
+/* ══ Мобильные правила ═══════════════════════════════════════
+   Пальцем труднее попасть, чем курсором: нижняя граница нажимаемых
+   элементов 44px, шрифта — 12px. Колонки на узком экране не жмём,
+   а переносим. */
+@media (max-width: 700px) {
+  button, .btn, input, select, textarea { min-height: 44px; }
+  input, select, textarea { font-size: 16px; }   /* меньше 16 — iOS зумит страницу */
+
+  /* Ряды вкладок и фильтров: прокрутка вбок вместо переноса */
+  .scroll-x {
+    flex-wrap: nowrap !important;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 2px;
+  }
+  .scroll-x::-webkit-scrollbar { display: none; }
+  .scroll-x > * { flex-shrink: 0; }
+
+  /* Плитки: две колонки вместо четырёх */
+  .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+
+  /* Диаграммы прокручиваются сами, а не сплющиваются */
+  .chart-x { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .chart-x > * { min-width: 430px; }
+
+  /* Боковое меню справочников уезжает наверх лентой */
+  .side-nav {
+    flex-direction: row !important;
+    width: auto !important;
+    border-right: none !important;
+    border-bottom: 1px solid var(--brd);
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .side-nav::-webkit-scrollbar { display: none; }
+  .side-nav > * { flex-shrink: 0; white-space: nowrap; }
+  .side-wrap { flex-direction: column !important; }
+
+  /* Строка-таблица становится карточкой */
+  .row-card { display: block !important; }
+  .row-card .row-meta {
+    display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;
+  }
+  .row-card .row-meta > span {
+    font-size: 12px; padding: 3px 9px; border-radius: 20px;
+    background: var(--sur2); color: var(--tx3);
+  }
+
+  /* Нижнее меню не должно перекрывать содержимое */
   .bottom-nav { padding-bottom: env(safe-area-inset-bottom, 0px); }
 }
