@@ -3,6 +3,7 @@ import { Btn, Badge, Sheet, useToast, Confirm } from '../components/ui'
 import { AFFECTS } from '../lib/data'
 import { printDoc } from '../lib/print'
 import { fmt } from '../lib/format'
+import { fullName } from '../lib/attrs'
 import {
   startInventory, saveFact, compareWithStock, applyAdjustment,
   loadInventory, deleteInventory,
@@ -21,7 +22,7 @@ const ST = {
 export default function Inventory({ data, profile }) {
   const { products, warehouses, stockByWh, inventories, invalidate, bumpStock } = data
   const { toast } = useToast()
-  const isAdmin = profile?.role === 'admin'
+  const isAdmin = ['admin', 'warehouse'].includes(profile?.role)
 
   const list = inventories || []
   const [open, setOpen] = useState(null)      // { inv, items }
@@ -34,7 +35,7 @@ export default function Inventory({ data, profile }) {
   const printRef = useRef(null)
 
 
-  const pName = (id) => (products || []).find((p) => p.id === id)?.name || '—'
+  const pName = (id) => fullName((products || []).find((p) => p.id === id)) || '—'
   const pPrice = (id) => Number((products || []).find((p) => p.id === id)?.price || 0)
   const whName = (id) => (warehouses || []).find((w) => w.id === id)?.name || '—'
   const sysQty = (pid, wid) => Number(stockByWh?.[pid]?.[wid] || 0)

@@ -3,6 +3,7 @@ import { Stat, Btn, Badge, Sheet } from '../components/ui'
 import { signersOf, currentSigner } from '../lib/signing'
 import { approversOf, currentApprover } from '../lib/approval'
 import { fmt, som, TL } from '../lib/format'
+import { fullName } from '../lib/attrs'
 import OperationSheet from '../components/OperationSheet'
 import { InstallCard } from '../components/InstallPrompt'
 
@@ -58,7 +59,7 @@ export default function Home({ data, profile, can, setView }) {
     return m.recipient_profile_id === profile?.id
   })
   const recent = visibleMoves.slice(0, 6)
-  const pName = (id) => products.find((p) => p.id === id)?.name || '—'
+  const pName = (id) => fullName(products.find((p) => p.id === id)) || '—'
   const rName = (id) => recipients.find((r) => r.id === id)?.name || ''
   const whName = (id) => warehouses.find((w) => w.id === id)?.name || ''
   const sub = (m) => m.type === 'transfer'
@@ -175,7 +176,7 @@ export default function Home({ data, profile, can, setView }) {
                 {sub(m) && <div style={{ fontSize: 11, color: 'var(--tx3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sub(m)}</div>}
               </div>
               {(() => {
-                const seeAll = ['admin', 'director'].includes(role)
+                const seeAll = ['admin', 'warehouse', 'director'].includes(role)
                 const plus = seeAll ? ['in', 'return'].includes(m.type) : m.type === 'out'
                 const sign = m.type === 'transfer' ? '~' : plus ? '+' : '−'
                 const clr = m.type === 'transfer' ? 'var(--am-m)' : plus ? 'var(--gr)' : seeAll ? 'var(--tx)' : 'var(--pu)'

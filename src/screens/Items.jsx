@@ -1,17 +1,20 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabaseClient'
 import { chainOf, freeAll, reservedAll } from '../lib/data'
+import ImportProducts from '../components/ImportProducts'
+import { SIZE_TYPES, SIZE_OPTIONS, SIZE_HINT, SIZE_UNIT, GENDERS, SEASONS, sizeLabel, attrsLine } from '../lib/attrs'
 import { Btn, Field, Input, Select, Badge, Confirm, useToast } from '../components/ui'
 import { fmt, som, TL } from '../lib/format'
 
 export default function Items({ data, can, profile }) {
   const toast = useToast()
-  const seeStock = ['admin', 'director'].includes(profile?.role)
+  const seeStock = ['admin', 'warehouse', 'director'].includes(profile?.role)
   const { products, categories, suppliers, locations, stock, stockByWh, freeByWh, resvByWh, warehouses, campaigns, directions, productTypes, flows, checkouts, recipients, invalidate } = data
   const [q, setQ] = useState('')
   const [add, setAdd] = useState(false)
+  const [imp, setImp] = useState(false)
   const [sel, setSel] = useState(null)
-  const [nf, setNf] = useState({ name: '', sku: '', category_id: '', price: '', location_id: '', supplier_id: '', direction_id: '', product_type_id: '', campaign_id: '' })
+  const [nf, setNf] = useState({ name: '', sku: '', size_type: '', size: '', color: '', gender: '', season: '', category_id: '', price: '', location_id: '', supplier_id: '', direction_id: '', product_type_id: '', campaign_id: '' })
   const [loading, setLoading] = useState(false)
   const [hier, setHier] = useState({ direction_id: '', product_type_id: '', campaign_id: '' })
   const [whF, setWhF] = useState('')
@@ -32,7 +35,7 @@ export default function Items({ data, can, profile }) {
     return true
   }
   const list = products.filter((p) => !p.archived
-    && (!q || p.name.toLowerCase().includes(q.toLowerCase()) || (p.sku || '').toLowerCase().includes(q.toLowerCase()))
+    && (!q || p.name.toLowerCase().includes(q.toLowerCase()) || (p.sku || '').toLowerCase().includes(q.toLowerCase()) || attrsLine(p).toLowerCase().includes(q.toLowerCase()))
     && inHier(p)
     && (!whF || ((stockByWh?.[p.id]?.[whF]) || 0) > 0))
   const hierActive = hier.direction_id || hier.product_type_id || hier.campaign_id || whF
@@ -41,10 +44,10 @@ export default function Items({ data, can, profile }) {
   const save = async () => {
     if (!nf.name.trim()) return toast('Название обязательно', 'error')
     setLoading(true)
-    const { error } = await supabase.from('products').insert({ name: nf.name.trim(), sku: nf.sku || null, category_id: nf.category_id ? Number(nf.category_id) : null, price: Number(nf.price) || 0, location_id: nf.location_id ? Number(nf.location_id) : null, supplier_id: nf.supplier_id ? Number(nf.supplier_id) : null, campaign_id: nf.campaign_id ? Number(nf.campaign_id) : null, direction_id: nf.direction_id ? Number(nf.direction_id) : null, archived: false })
+    const { error } = await supabase.from('products').insert({ name: nf.name.trim(), sku: nf.sku || null, size_type: nf.size_type || null, size: nf.size?.trim() || null, color: nf.color?.trim() || null, gender: nf.gender || null, season: nf.season || null, category_id: nf.category_id ? Number(nf.category_id) : null, price: Number(nf.price) || 0, location_id: nf.location_id ? Number(nf.location_id) : null, supplier_id: nf.supplier_id ? Number(nf.supplier_id) : null, campaign_id: nf.campaign_id ? Number(nf.campaign_id) : null, direction_id: nf.direction_id ? Number(nf.direction_id) : null, archived: false })
     setLoading(false)
     if (error) return toast('Ошибка: ' + error.message, 'error')
-    setAdd(false); setNf({ name: '', sku: '', category_id: '', price: '', location_id: '', supplier_id: '', direction_id: '', product_type_id: '', campaign_id: '' }); toast('Товар добавлен'); invalidate(['products', 'stock'])
+    setAdd(false); setNf({ name: '', sku: '', size_type: '', size: '', color: '', gender: '', season: '', category_id: '', price: '', location_id: '', supplier_id: '', direction_id: '', product_type_id: '', campaign_id: '' }); toast('Товар добавлен'); invalidate(['products', 'stock'])
   }
 
   return (
@@ -52,7 +55,8 @@ export default function Items({ data, can, profile }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
         <span className="ff" style={{ fontSize: 21, fontWeight: 600 }}>Товары</span>
         <span style={{ fontSize: 12.5, color: 'var(--tx3)' }}>{list.length} позиций</span>
-        {can('edit') && <Btn size="sm" onClick={() => setAdd(!add)} style={{ marginLeft: 'auto' }}>＋ Товар</Btn>}
+        {can('edit') && <Btn size="sm" v="secondary" onClick={() => setImp(true)} style={{ marginLeft: 'auto' }}>↑ Списком</Btn>}
+        {can('edit') && <Btn size="sm" onClick={() => setAdd(!add)}>＋ Товар</Btn>}
       </div>
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -83,6 +87,32 @@ export default function Items({ data, can, profile }) {
         <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: 10, marginBottom: 12 }}>
           <Field label="Название"><Input value={nf.name} onChange={(e) => setNf({ ...nf, name: e.target.value })} autoFocus /></Field>
           <Field label="Артикул"><Input value={nf.sku} onChange={(e) => setNf({ ...nf, sku: e.target.value })} /></Field>
+          <Field label="Тип размерности">
+            <Select value={nf.size_type} onChange={(e) => setNf({ ...nf, size_type: e.target.value, size: '' })}>
+              {SIZE_TYPES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </Select>
+          </Field>
+          {nf.size_type && (
+            <Field label={'Размер' + (SIZE_UNIT[nf.size_type] ? ', ' + SIZE_UNIT[nf.size_type] : '')}>
+              {SIZE_OPTIONS[nf.size_type]
+                ? <Select value={nf.size} onChange={(e) => setNf({ ...nf, size: e.target.value })}>
+                    <option value="">—</option>
+                    {SIZE_OPTIONS[nf.size_type].map((v) => <option key={v} value={v}>{v}</option>)}
+                  </Select>
+                : <Input value={nf.size} onChange={(e) => setNf({ ...nf, size: e.target.value })} placeholder={SIZE_HINT[nf.size_type]} />}
+            </Field>
+          )}
+          <Field label="Цвет"><Input value={nf.color} onChange={(e) => setNf({ ...nf, color: e.target.value })} placeholder="не обязательно" /></Field>
+          <Field label="Пол">
+            <Select value={nf.gender} onChange={(e) => setNf({ ...nf, gender: e.target.value })}>
+              {GENDERS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </Select>
+          </Field>
+          <Field label="Сезон">
+            <Select value={nf.season} onChange={(e) => setNf({ ...nf, season: e.target.value })}>
+              {SEASONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </Select>
+          </Field>
           <Field label="Категория"><Select value={nf.category_id} onChange={(e) => setNf({ ...nf, category_id: e.target.value })}><option value="">—</option>{categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</Select></Field>
           <Field label="Цена"><Input type="number" value={nf.price} onChange={(e) => setNf({ ...nf, price: e.target.value })} /></Field>
           <Field label="Место"><Select value={nf.location_id} onChange={(e) => setNf({ ...nf, location_id: e.target.value })}><option value="">—</option>{locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}</Select></Field>
@@ -124,7 +154,11 @@ export default function Items({ data, can, profile }) {
                     <span key={w.id} style={{ fontSize: 10.5, color: 'var(--tx3)' }}>{w.name} <b className="mono" style={{ color: 'var(--tx2)' }}>{(stockByWh?.[p.id]?.[w.id]) || 0}</b></span>
                   ))}
                 </div>}
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}><span className="mono" style={{ fontSize: 12, color: 'var(--tx2)' }}>{fmt(p.price)} сом</span>{cat && <Badge>{cat.name}</Badge>}</div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}><span className="mono" style={{ fontSize: 12, color: 'var(--tx2)' }}>{fmt(p.price)} сом</span>
+                  <span style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
+                    {attrsLine(p) && <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 6, background: 'var(--sur2)', color: 'var(--tx2)', fontWeight: 600 }}>{attrsLine(p)}</span>}
+                    {cat && <Badge>{cat.name}</Badge>}
+                  </span></div>
               </div>
             </div>
           )
@@ -133,6 +167,7 @@ export default function Items({ data, can, profile }) {
       {list.length === 0 && !add && <div style={{ padding: 60, textAlign: 'center', color: 'var(--tx3)' }}>{q ? 'Ничего не найдено.' : 'Товаров нет. Добавьте первый или оформите приход.'}</div>}
 
       {sel && <ItemModal p={sel} data={data} can={can} onClose={() => setSel(null)} />}
+      {imp && <ImportProducts data={data} onClose={() => setImp(false)} onDone={() => { setImp(false); invalidate(['products', 'stock']) }} />}
     </div>
   )
 }
@@ -151,13 +186,15 @@ function ItemModal({ p, data, can, onClose }) {
     const tid = camp?.product_type_id || p.product_type_id || ''
     const type = productTypes.find((t) => t.id === tid)
     const did = type?.direction_id || p.direction_id || ''
-    setEf({ name: p.name || '', sku: p.sku || '', price: p.price || '', category_id: p.category_id || '', supplier_id: p.supplier_id || '', direction_id: did, product_type_id: tid, campaign_id: p.campaign_id || '' })
+    setEf({ name: p.name || '', sku: p.sku || '', size_type: p.size_type || '', size: p.size || '', color: p.color || '', gender: p.gender || '', season: p.season || '', price: p.price || '', category_id: p.category_id || '', supplier_id: p.supplier_id || '', direction_id: did, product_type_id: tid, campaign_id: p.campaign_id || '' })
     setEditing(true)
   }
   const saveEdit = async () => {
     if (!ef.name.trim()) return toast('Название обязательно', 'error')
     const { error } = await supabase.from('products').update({
       name: ef.name.trim(), sku: ef.sku || null, price: Number(ef.price) || 0,
+      size_type: ef.size_type || null, size: ef.size?.trim() || null,
+      color: ef.color?.trim() || null, gender: ef.gender || null, season: ef.season || null,
       category_id: ef.category_id ? Number(ef.category_id) : null,
       supplier_id: ef.supplier_id ? Number(ef.supplier_id) : null,
       campaign_id: ef.campaign_id ? Number(ef.campaign_id) : null,
@@ -209,6 +246,32 @@ function ItemModal({ p, data, can, onClose }) {
           <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 12, marginBottom: 12 }}>
             <Field label="Название"><Input value={ef.name} onChange={(e) => setEf({ ...ef, name: e.target.value })} /></Field>
             <Field label="Артикул"><Input value={ef.sku} onChange={(e) => setEf({ ...ef, sku: e.target.value })} /></Field>
+            <Field label="Тип размерности">
+              <Select value={ef.size_type} onChange={(e) => setEf({ ...ef, size_type: e.target.value, size: '' })}>
+                {SIZE_TYPES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+              </Select>
+            </Field>
+            {ef.size_type && (
+              <Field label={'Размер' + (SIZE_UNIT[ef.size_type] ? ', ' + SIZE_UNIT[ef.size_type] : '')}>
+                {SIZE_OPTIONS[ef.size_type]
+                  ? <Select value={ef.size} onChange={(e) => setEf({ ...ef, size: e.target.value })}>
+                      <option value="">—</option>
+                      {SIZE_OPTIONS[ef.size_type].map((v) => <option key={v} value={v}>{v}</option>)}
+                    </Select>
+                  : <Input value={ef.size} onChange={(e) => setEf({ ...ef, size: e.target.value })} placeholder={SIZE_HINT[ef.size_type]} />}
+              </Field>
+            )}
+            <Field label="Цвет"><Input value={ef.color} onChange={(e) => setEf({ ...ef, color: e.target.value })} /></Field>
+            <Field label="Пол">
+              <Select value={ef.gender} onChange={(e) => setEf({ ...ef, gender: e.target.value })}>
+                {GENDERS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+              </Select>
+            </Field>
+            <Field label="Сезон">
+              <Select value={ef.season} onChange={(e) => setEf({ ...ef, season: e.target.value })}>
+                {SEASONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+              </Select>
+            </Field>
             <Field label="Цена"><Input type="number" value={ef.price} onChange={(e) => setEf({ ...ef, price: e.target.value })} /></Field>
           </div>
           <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--ink)', marginBottom: 8 }}>Цепочка (Направление → Тип → Кампания)</div>

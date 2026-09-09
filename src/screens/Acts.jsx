@@ -20,7 +20,15 @@ export default function Acts({ data, profile }) {
   const load = () => supabase.from('acts').select('*').order('created_at', { ascending: false }).then(({ data: d }) => setActs(d || []))
   useEffect(() => { load() }, [])
 
+  /* Склад и директор — все акты, руководитель — филиал, специалист — свои */
+  const role = profile?.role
+  const seeAll = ['admin', 'warehouse', 'director'].includes(role)
+  const myReqIds = new Set((data.requests || [])
+    .filter((r) => (role === 'manager' ? r.branch_id === profile?.branch_id : r.author_id === profile?.id))
+    .map((r) => r.id))
+
   const list = (acts || []).filter((a) => {
+    if (!seeAll && !(a.request_id && myReqIds.has(a.request_id))) return false
     if (f === 'annulled') return a.annulled
     if (f !== 'all' && a.type !== f) return false
     if (q && !((a.number || '').toLowerCase().includes(q.toLowerCase()) || (a.recipient_name || '').toLowerCase().includes(q.toLowerCase()))) return false

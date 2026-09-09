@@ -7,6 +7,7 @@ import { canArchive, canDelete, canRequestCancel, requestCancel, confirmCancel, 
 import { push, clearFor } from '../lib/notify'
 import ApprovalSheet from '../components/ApprovalSheet'
 import RequestChat from '../components/RequestChat'
+import { fullName } from '../lib/attrs'
 
 const SEC = 'var(--sec-req)', SEC_L = 'var(--sec-req-l)'
 const ST = {
@@ -20,7 +21,7 @@ export default function Requests({ data, profile, can, draftItems, onDraftUsed }
   const toast = useToast()
   const { requests, products, branches, profiles, reqApprovers, reload } = data
   const role = profile?.role
-  const isAdmin = role === 'admin'
+  const isAdmin = ['admin', 'warehouse'].includes(role)
   const isManager = role === 'manager'
   const me = profile?.id
 
@@ -38,7 +39,7 @@ export default function Requests({ data, profile, can, draftItems, onDraftUsed }
   // черновик из каталога
   useEffect(() => { if (draftItems?.length) { setEditReq(null); setForm(true) } }, [draftItems])
 
-  const pName = (id) => products.find((p) => p.id === id)?.name || '—'
+  const pName = (id) => fullName(products.find((p) => p.id === id)) || '—'
   const bName = (id) => branches.find((b) => b.id === id)?.name || ''
   const uName = (id) => { const p = profiles.find((x) => x.id === id); return p?.full_name || p?.email || '' }
 
@@ -119,8 +120,8 @@ export default function Requests({ data, profile, can, draftItems, onDraftUsed }
     patchRequest(r.id, { sent_at: at, sent_by: profile.id, status: 'approved' })
     const { error } = await sendToWarehouse(r.id, profile.id)
     if (error) { patchRequest(r.id, { sent_at: null, sent_by: null, status: r.status }); return toast(error, 'error') }
-    const admin = profiles.find((p) => p.role === 'admin')
-    if (admin) await push({ userId: admin.id, kind: 'to_issue', action: true,
+    const whs = profiles.filter((p) => ['admin', 'warehouse'].includes(p.role) && p.is_active !== false)
+    for (const w of whs) await push({ userId: w.id, kind: 'to_issue', action: true,
       title: `Заявка №${r.id} к выдаче`, body: `${bName(r.branch_id)} · ${r.purpose || ''}`, entity: 'request', entityId: r.id })
     if (r.author_id && r.author_id !== me) await push({ userId: r.author_id, kind: 'approved', action: false,
       title: `Заявка №${r.id} отправлена на склад`, body: 'ожидает выдачи', entity: 'request', entityId: r.id })
@@ -421,8 +422,8 @@ export default function Requests({ data, profile, can, draftItems, onDraftUsed }
               patchRequest(cancelReq.id, { cancel_requested_at: new Date().toISOString(), cancel_reason: cancelWhy })
               const { error } = await requestCancel(cancelReq, profile, cancelWhy)
               if (error) { patchRequest(cancelReq.id, { cancel_requested_at: null, cancel_reason: null }); return toast(error, 'error') }
-              const admin = (data.profiles || []).find((p) => p.role === 'admin' && p.is_active !== false)
-              if (admin) await push({ userId: admin.id, kind: 'message', action: true,
+              const whs = (data.profiles || []).filter((p) => ['admin', 'warehouse'].includes(p.role) && p.is_active !== false)
+              for (const w of whs) await push({ userId: w.id, kind: 'message', action: true,
                 title: `Просят отменить заявку №${cancelReq.id}`, body: cancelWhy, entity: 'request', entityId: cancelReq.id })
               toast('Запрос отправлен — выдача остановлена')
               setCancelReq(null); setCancelWhy(''); invalidate(AFFECTS.cancel)
@@ -572,7 +573,7 @@ function IssueModal({ req, data, profile, onClose, onDone }) {
   const [wh, setWh] = useState(req.warehouse_id || warehouses[0]?.id || '')
   const [qty, setQty] = useState(Object.fromEntries(req.items.map((it) => [it.id, it.qty])))
   const [loading, setLoading] = useState(false)
-  const pName = (id) => products.find((p) => p.id === id)?.name || '—'
+  const pName = (id) => fullName(products.find((p) => p.id === id)) || '—'
 
   const go = async () => {
     setLoading(true)

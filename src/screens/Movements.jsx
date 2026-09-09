@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { Btn, Sheet } from '../components/ui'
 import { TL } from '../lib/format'
+import { fullName } from '../lib/attrs'
 import OperationSheet from '../components/OperationSheet'
 
 const SEC = 'var(--sec-mov)', SEC_L = 'var(--sec-mov-l)'
@@ -18,7 +19,7 @@ const PALETTE = [
 export default function Movements({ data, profile, can }) {
   const { movements, products, recipients, warehouses, branches, campaigns, productTypes, directions, requests, profiles } = data
   const role = profile?.role
-  const isAdmin = role === 'admin'
+  const isAdmin = ['admin', 'warehouse'].includes(role)
   const isDirector = role === 'director'
   const isManager = role === 'manager'
   const seeAll = isAdmin || isDirector
@@ -30,7 +31,7 @@ export default function Movements({ data, profile, can }) {
   const [sheet, setSheet] = useState(null)
 
   const pById = useMemo(() => Object.fromEntries(products.map((p) => [p.id, p])), [products])
-  const pName = (id) => pById[id]?.name || '—'
+  const pName = (id) => fullName(pById[id]) || '—'
   const rName = (id) => recipients.find((r) => r.id === id)?.name || ''
   const bName = (id) => branches.find((b) => b.id === id)?.name || ''
   const whName = (id) => warehouses.find((w) => w.id === id)?.name || ''
@@ -160,7 +161,7 @@ export default function Movements({ data, profile, can }) {
       </div>
 
       {/* Пилюли типов */}
-      <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
+      <div className="scroll-x" style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
         {TYPES.map(([t, l]) => (
           <button key={t} onClick={() => setF(t)} style={{
             fontSize: 12, padding: '7px 13px', minHeight: 36, borderRadius: 20, whiteSpace: 'nowrap',

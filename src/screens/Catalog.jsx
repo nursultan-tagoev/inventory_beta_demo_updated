@@ -103,6 +103,7 @@ export default function Catalog({ data, profile, onRequest }) {
               style={{ padding: 13, cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.55 : 1 }}>
               <div style={{ width: 36, height: 36, borderRadius: 11, background: 'var(--sur2)', display: 'grid', placeItems: 'center', fontSize: 17, marginBottom: 8 }}>📦</div>
               <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.3 }}>{p.name}</div>
+              {attrsLine(p) && <div style={{ fontSize: 10.5, color: 'var(--tx3)', marginTop: 2 }}>{attrsLine(p)}</div>}
               {chain && <div style={{ fontSize: 10, color: 'var(--tx3)', marginTop: 2 }}>{chain}</div>}
               <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 9 }}>
                 <span style={{ fontSize: 9.5, padding: '2px 8px', borderRadius: 20, background: bg, color: col }}>{lbl}</span>
