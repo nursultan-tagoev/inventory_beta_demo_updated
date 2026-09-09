@@ -13,6 +13,8 @@ export default function Items({ data, can, profile }) {
   const [q, setQ] = useState('')
   const [add, setAdd] = useState(false)
   const [imp, setImp] = useState(false)
+  const [view, setView] = useState(() => localStorage.getItem('items_view') || 'grid')
+  const switchView = (v) => { setView(v); try { localStorage.setItem('items_view', v) } catch {} }
   const [sel, setSel] = useState(null)
   const [nf, setNf] = useState({ name: '', sku: '', size_type: '', size: '', color: '', gender: '', season: '', category_id: '', price: '', location_id: '', supplier_id: '', direction_id: '', product_type_id: '', campaign_id: '' })
   const [loading, setLoading] = useState(false)
@@ -55,7 +57,15 @@ export default function Items({ data, can, profile }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
         <span className="ff" style={{ fontSize: 21, fontWeight: 600 }}>Товары</span>
         <span style={{ fontSize: 12.5, color: 'var(--tx3)' }}>{list.length} позиций</span>
-        {can('edit') && <Btn size="sm" v="secondary" onClick={() => setImp(true)} style={{ marginLeft: 'auto' }}>↑ Списком</Btn>}
+        <div style={{ marginLeft: 'auto', display: 'inline-flex', background: 'var(--sur2)', borderRadius: 9, padding: 3 }}>
+          {[['grid', '▦', 'Кубиками'], ['list', '☰', 'Списком']].map(([v, ico, title]) => (
+            <button key={v} onClick={() => switchView(v)} title={title}
+              style={{ height: 30, padding: '0 11px', borderRadius: 7, fontSize: 13,
+                background: view === v ? 'var(--sur)' : 'transparent',
+                color: view === v ? 'var(--tx)' : 'var(--tx3)', fontWeight: view === v ? 600 : 400 }}>{ico}</button>
+          ))}
+        </div>
+        {can('edit') && <Btn size="sm" v="secondary" onClick={() => setImp(true)}>↑ Загрузить</Btn>}
         {can('edit') && <Btn size="sm" onClick={() => setAdd(!add)}>＋ Товар</Btn>}
       </div>
 
@@ -127,17 +137,21 @@ export default function Items({ data, can, profile }) {
         <div style={{ display: 'flex', gap: 8 }}><Btn onClick={save} loading={loading}>Сохранить</Btn><Btn v="secondary" onClick={() => setAdd(false)}>Отмена</Btn></div>
       </div>}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(184px,1fr))', gap: 14 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: view === 'list' ? '1fr' : 'repeat(auto-fill,minmax(184px,1fr))', gap: view === 'list' ? 8 : 14 }}>
         {list.map((p) => {
           const s = seeStock ? (stock[p.id] || 0) : null
           const c = s === null ? 'var(--tx3)' : s < 0 ? 'var(--rd)' : s === 0 ? 'var(--tx3)' : s < 5 ? 'var(--am)' : 'var(--gr)'
           const cat = categories.find((x) => x.id === p.category_id)
           return (
-            <div key={p.id} onClick={() => setSel(p)} className="card" style={{ padding: 0, overflow: 'hidden', cursor: 'pointer' }}>
-              {seeStock && <div style={{ height: 60, background: 'var(--sur2)', display: 'flex', alignItems: 'flex-end', padding: '10px 14px' }}>
-                <span className="mono" style={{ fontSize: 23, fontWeight: 600, color: c }}>{s}<span style={{ fontFamily: 'var(--f)', fontSize: 11, color: 'var(--tx3)' }}> шт</span></span>
+            <div key={p.id} onClick={() => setSel(p)} className="card"
+              style={{ padding: 0, overflow: 'hidden', cursor: 'pointer',
+                ...(view === 'list' ? { display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px' } : {}) }}>
+              {seeStock && <div style={view === 'list'
+                ? { minWidth: 62, textAlign: 'right', order: 2, marginLeft: 'auto' }
+                : { height: 60, background: 'var(--sur2)', display: 'flex', alignItems: 'flex-end', padding: '10px 14px' }}>
+                <span className="mono" style={{ fontSize: view === 'list' ? 15 : 23, fontWeight: 600, color: c }}>{s}<span style={{ fontFamily: 'var(--f)', fontSize: 11, color: 'var(--tx3)' }}> шт</span></span>
               </div>}
-              <div style={{ padding: '12px 14px' }}>
+              <div style={view === 'list' ? { flex: 1, minWidth: 0 } : { padding: '12px 14px' }}>
                 <div style={{ fontSize: 13.5, fontWeight: 600, lineHeight: 1.3 }}>{p.name}</div>
                 {chainOf(p, { directions, productTypes, campaigns }) && <div style={{ fontSize: 10.5, color: 'var(--tx3)', marginTop: 3 }}>{chainOf(p, { directions, productTypes, campaigns })}</div>}
                 {seeStock && (() => { const rsv = reservedAll(resvByWh, p.id); const tot = stock[p.id] || 0
