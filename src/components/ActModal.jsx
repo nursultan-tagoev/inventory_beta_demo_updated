@@ -22,13 +22,19 @@ export default function ActModal({ init, profile, onClose, onSaved }) {
   const [approver, setApprover] = useState('')
   const [actKind, setActKind] = useState(init.type === 'return' ? 'возврата товарно-материальных ценностей' : 'приема-передачи товарно-материальных ценностей')
   const [city, setCity] = useState('г. Бишкек')
+  const [giverPos, setGiverPos] = useState('')
+  const [recvPos, setRecvPos] = useState('')
+  // Иногда передают несколько человек — добавляются вручную
+  const [extra, setExtra] = useState([])
+  const addExtra = () => setExtra((l) => [...l, { name: '', pos: '' }])
+  const setExtraAt = (i, k, v) => setExtra((l) => l.map((x, j) => (j === i ? { ...x, [k]: v } : x)))
   const [branch, setBranch] = useState(init.branchName || 'Центральный филиал')
   const [giver, setGiver] = useState('')
   const [recv, setRecv] = useState(init.recipient || '')
   const [basis, setBasis] = useState(init.purpose ? 'Цель: ' + init.purpose : 'Служебная записка № ___')
   const [showInv, setShowInv] = useState(true)
   const [mode, setMode] = useState('e')
-  const [rows, setRows] = useState(init.items.map((it) => ({ name: it.name, sku: it.sku || '', inv: '', unit: 'шт', qty: it.qty, price: it.price || 0, cond: 'новое', dept: init.branchName || '', product_id: it.product_id, warehouse_id: it.warehouse_id })))
+  const [rows, setRows] = useState(init.items.map((it) => ({ name: it.name, sku: it.sku || '', inv: '', unit: 'шт', qty: it.qty, price: it.price || 0, cond: 'новое', dept: init.dept || init.branchName || '', product_id: it.product_id, warehouse_id: it.warehouse_id })))
   const [scan, setScan] = useState(null)
   const [savedNo, setSavedNo] = useState(null)
   const [saving, setSaving] = useState(false)
@@ -42,7 +48,7 @@ export default function ActModal({ init, profile, onClose, onSaved }) {
     setSaving(true)
     try {
       const res = await createAct({
-        act: { type: isRet ? 'return' : 'out', act_date: new Date().toISOString().slice(0, 10), recipient_id: init.recipient_id || null, recipient_name: recv, giver_name: giver, basis, total_sum: total, sign_mode: mode === 'e' ? 'electronic' : 'manual', branch_id: init.branch_id || null, source_act_id: init.source_act_id || null, created_by: profile.id },
+        act: { type: isRet ? 'return' : 'out', act_date: new Date().toISOString().slice(0, 10), recipient_id: init.recipient_id || null, recipient_name: recv, giver_name: giver, giver_position: giverPos || null, recipient_position: recvPos || null, extra_signers: extra.filter((e) => e.name.trim()).map((e) => [e.name, e.pos].filter(Boolean).join(' — ')).join('; ') || null, basis, total_sum: total, sign_mode: mode === 'e' ? 'electronic' : 'manual', branch_id: init.branch_id || null, source_act_id: init.source_act_id || null, created_by: profile.id },
         items: rows, sigGiver: sigG.current?.() || null, sigRecipient: sigR.current?.() || null, scanFile: scan,
       })
       setSavedNo(res.number)
@@ -66,7 +72,7 @@ export default function ActModal({ init, profile, onClose, onSaved }) {
         )}
 
         <div className="no-print" style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-          <button onClick={() => setShowInv((v) => !v)} style={{ height: 34, padding: '0 13px', borderRadius: 9, border: `1px solid ${showInv ? 'var(--ink)' : 'var(--brd2)'}`, background: showInv ? 'var(--ink-l)' : 'var(--sur)', color: showInv ? 'var(--ink)' : 'var(--tx2)', fontSize: 12.5, fontWeight: 600 }}>Инв. №</button>
+          <button onClick={() => setShowInv((v) => !v)} style={{ height: 34, padding: '0 13px', borderRadius: 9, border: `1px solid ${showInv ? 'var(--ink)' : 'var(--brd2)'}`, background: showInv ? 'var(--ink-l)' : 'var(--sur)', color: showInv ? 'var(--ink)' : 'var(--tx2)', fontSize: 12.5, fontWeight: 600 }}>Артикул</button>
           <div style={{ display: 'inline-flex', background: 'var(--sur2)', borderRadius: 9, padding: 3 }}>
             {[['e', 'Эл. подпись'], ['m', 'Ручная']].map(([v, l]) => <button key={v} onClick={() => setMode(v)} style={{ height: 28, padding: '0 12px', borderRadius: 7, fontSize: 12, fontWeight: mode === v ? 600 : 400, background: mode === v ? 'var(--sur)' : 'transparent', color: mode === v ? 'var(--tx)' : 'var(--tx2)' }}>{l}</button>)}
           </div>
@@ -114,15 +120,39 @@ export default function ActModal({ init, profile, onClose, onSaved }) {
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18, fontSize: 13, marginBottom: 6 }}>
-            <div><div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', color: '#98A0AE' }}>{isRet ? 'Возвращает' : 'Передал (МОЛ)'}</div><input className="act-in" value={isRet ? recv : giver} onChange={(e) => (isRet ? setRecv : setGiver)(e.target.value)} style={{ width: '100%' }} /></div>
-            <div><div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', color: '#98A0AE' }}>{isRet ? 'Принял' : 'Принял'}</div><input className="act-in" value={isRet ? giver : recv} onChange={(e) => (isRet ? setGiver : setRecv)(e.target.value)} style={{ width: '100%' }} /></div>
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', color: '#98A0AE' }}>{isRet ? 'Возвращает' : 'Передал (МОЛ)'}</div>
+              <input className="act-in" value={isRet ? recv : giver} onChange={(e) => (isRet ? setRecv : setGiver)(e.target.value)} style={{ width: '100%' }} />
+              <input className="act-in" value={giverPos} onChange={(e) => setGiverPos(e.target.value)}
+                placeholder="должность" style={{ width: '100%', fontSize: 11.5, color: '#5A6472' }} />
+            </div>
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', color: '#98A0AE' }}>Принял</div>
+              <input className="act-in" value={isRet ? giver : recv} onChange={(e) => (isRet ? setGiver : setRecv)(e.target.value)} style={{ width: '100%' }} />
+              <input className="act-in" value={recvPos} onChange={(e) => setRecvPos(e.target.value)}
+                placeholder="должность" style={{ width: '100%', fontSize: 11.5, color: '#5A6472' }} />
+            </div>
           </div>
+          {extra.map((e, i) => (
+            <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 12, alignItems: 'end', marginBottom: 4 }}>
+              <div>
+                <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', color: '#98A0AE' }}>Также передал</div>
+                <input className="act-in" value={e.name} onChange={(ev) => setExtraAt(i, 'name', ev.target.value)} placeholder="Ф.И.О." style={{ width: '100%' }} />
+              </div>
+              <input className="act-in" value={e.pos} onChange={(ev) => setExtraAt(i, 'pos', ev.target.value)} placeholder="должность" style={{ width: '100%', fontSize: 11.5, color: '#5A6472' }} />
+              <button className="no-print" onClick={() => setExtra((l) => l.filter((_, j) => j !== i))}
+                style={{ color: '#98A0AE', fontSize: 15, padding: '0 6px' }}>×</button>
+            </div>
+          ))}
+          <button className="no-print" onClick={addExtra}
+            style={{ fontSize: 11.5, color: '#5A6472', padding: '4px 0', marginBottom: 6 }}>＋ Добавить передавшего</button>
+
           <div style={{ fontSize: 12.5, color: '#5A6472', margin: '6px 0' }}>Основание: <input className="act-in" value={basis} onChange={(e) => setBasis(e.target.value)} style={{ width: '70%' }} /></div>
 
           <table className="act-tbl">
             <thead><tr>
               <th style={{ width: 24 }}>№</th>
-              {showInv && <th style={{ width: 78 }}>Инв. №</th>}
+              {showInv && <th style={{ width: 92 }}>Артикул</th>}
               <th>Наименование</th>
               <th style={{ width: 52, textAlign: 'right' }}>Кол-во</th>
               <th style={{ width: 86, textAlign: 'right' }}>Стоимость за 1 шт (сом)</th>
@@ -131,7 +161,7 @@ export default function ActModal({ init, profile, onClose, onSaved }) {
             </tr></thead>
             <tbody>{rows.map((r, i) => <tr key={i}>
               <td style={{ textAlign: 'center' }}>{i + 1}</td>
-              {showInv && <td><input value={r.inv} placeholder="—" onChange={(e) => setRow(i, 'inv', e.target.value)} /></td>}
+              {showInv && <td><input value={r.sku} placeholder="—" onChange={(e) => setRow(i, 'sku', e.target.value)} /></td>}
               <td><input value={r.name} onChange={(e) => setRow(i, 'name', e.target.value)} /></td>
               <td className="mono" style={{ textAlign: 'right' }}><input value={r.qty} onChange={(e) => setRow(i, 'qty', e.target.value)} style={{ textAlign: 'right' }} /></td>
               <td className="mono" style={{ textAlign: 'right' }}><input value={r.price} onChange={(e) => setRow(i, 'price', e.target.value)} style={{ textAlign: 'right' }} /></td>
@@ -144,6 +174,19 @@ export default function ActModal({ init, profile, onClose, onSaved }) {
             на сумму <b className="mono">{fmt(total)} сом</b>
           </div>
 
+          {extra.filter((e) => e.name.trim()).length > 0 && (
+            <div style={{ marginTop: 18, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 26 }}>
+              {extra.filter((e) => e.name.trim()).map((e, i) => (
+                <div key={i} style={{ fontSize: 13 }}>
+                  Передал: <b>{e.name}</b>
+                  {e.pos && <div style={{ fontSize: 11, color: '#5A6472' }}>{e.pos}</div>}
+                  <div style={{ borderBottom: '1px solid #14171D', height: 32, marginTop: 8 }} />
+                  <div style={{ fontSize: 10, color: '#98A0AE' }}>подпись / дата</div>
+                </div>
+              ))}
+            </div>
+          )}
+
           <div style={{ marginTop: 24 }}>
             {mode === 'e'
               ? <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 26 }}>
@@ -152,7 +195,9 @@ export default function ActModal({ init, profile, onClose, onSaved }) {
               </div>
               : <div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 26, marginBottom: 12 }}>
-                  <div style={{ fontSize: 13 }}>{isRet ? 'Возвращает' : 'Передал'}: <b>{isRet ? recv : giver}</b><div style={{ borderBottom: '1px solid #14171D', height: 32, marginTop: 8 }} /><div style={{ fontSize: 10, color: '#98A0AE' }}>подпись / дата</div></div>
+                  <div style={{ fontSize: 13 }}>{isRet ? 'Возвращает' : 'Передал'}: <b>{isRet ? recv : giver}</b>
+                    {giverPos && <div style={{ fontSize: 11, color: '#5A6472' }}>{giverPos}</div>}
+                    <div style={{ borderBottom: '1px solid #14171D', height: 32, marginTop: 8 }} /><div style={{ fontSize: 10, color: '#98A0AE' }}>подпись / дата</div></div>
                   <div style={{ fontSize: 13 }}>Принял: <b>{isRet ? giver : recv}</b><div style={{ borderBottom: '1px solid #14171D', height: 32, marginTop: 8 }} /><div style={{ fontSize: 10, color: '#98A0AE' }}>подпись / дата</div></div>
                 </div>
                 <div className="no-print" style={{ fontSize: 12, color: '#5A6472', padding: '10px 12px', background: '#F6F7F9', borderRadius: 8, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>

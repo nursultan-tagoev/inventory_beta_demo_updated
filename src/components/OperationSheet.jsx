@@ -23,7 +23,7 @@ export default function OperationSheet({ type, data, profile, can, onDone }) {
   const [newProd, setNewProd] = useState({ name: '', sku: '', price: '', direction_id: '', product_type_id: '', campaign_id: '' })
   const [createdProd, setCreatedProd] = useState(null)
   const [showNewRec, setShowNewRec] = useState(false)
-  const [newRec, setNewRec] = useState({ name: '', branch_id: '' })
+  const [newRec, setNewRec] = useState({ name: '', dept: '', branch_id: '' })
   const [dictating, setDictating] = useState(false)
   const [act, setAct] = useState(null)
   const [f, setF] = useState({
@@ -82,12 +82,12 @@ export default function OperationSheet({ type, data, profile, can, onDone }) {
   }
   const createRecipient = async () => {
     if (!newRec.name.trim()) return toast('Введите имя', 'error')
-    const { data: d, error } = await supabase.from('recipients').insert({ name: newRec.name.trim(), branch_id: Number(newRec.branch_id) || null }).select().single()
+    const { data: d, error } = await supabase.from('recipients').insert({ name: newRec.name.trim(), dept: newRec.dept?.trim() || null, branch_id: Number(newRec.branch_id) || null }).select().single()
     if (error) return toast('Ошибка: ' + error.message, 'error')
     setExtraRecs((l) => [...l, d])          // сразу в список
     up('recipient_id', d.id)
     if (d.branch_id) up('branch_id', d.branch_id)
-    setShowNewRec(false); setNewRec({ name: '', branch_id: '' })
+    setShowNewRec(false); setNewRec({ name: '', dept: '', branch_id: '' })
     data.invalidate?.('refs')               // и обновляем справочник в фоне
     toast('Получатель добавлен')
   }
@@ -127,7 +127,7 @@ export default function OperationSheet({ type, data, profile, can, onDone }) {
     if (error) return toast(error, 'error')
     toast(TL[type] + ' сохранена')
     if ((type === 'out' || type === 'return') && selProd) {
-      setAct({ type, items: [{ name: fullName(selProd), sku: selProd.sku, price: selProd.price, qty: Number(f.qty), product_id: selProd.id, warehouse_id: Number(f.warehouse_id) }], recipient: selRec?.name || '', recipient_id: selRec?.id || null, purpose: f.purpose, branch_id: f.branch_id || selRec?.branch_id || null, branchName: branches.find((b) => b.id === (f.branch_id || selRec?.branch_id))?.name })
+      setAct({ type, items: [{ name: fullName(selProd), sku: selProd.sku, price: selProd.price, qty: Number(f.qty), product_id: selProd.id, warehouse_id: Number(f.warehouse_id) }], recipient: selRec?.name || '', recipient_id: selRec?.id || null, purpose: f.purpose, branch_id: f.branch_id || selRec?.branch_id || null, branchName: branches.find((b) => b.id === (f.branch_id || selRec?.branch_id))?.name, dept: selRec?.dept || '' })
     } else { onDone() }
   }
   const next = () => { if (step < steps) setStep(step + 1); else setConfirm(true) }
@@ -317,6 +317,7 @@ export default function OperationSheet({ type, data, profile, can, onDone }) {
         {showNewRec && <div className="card" style={{ padding: 14, background: 'var(--bg)' }}>
           <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 10, marginBottom: 10 }}>
             <Field label="Имя"><Input value={newRec.name} onChange={(e) => setNewRec({ ...newRec, name: e.target.value })} autoFocus /></Field>
+            <Field label="Департамент"><Input value={newRec.dept} onChange={(e) => setNewRec({ ...newRec, dept: e.target.value })} placeholder="отдел или управление" /></Field>
             <Field label="Филиал"><Select value={newRec.branch_id} onChange={(e) => setNewRec({ ...newRec, branch_id: e.target.value })}><option value="">—</option>{branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</Select></Field>
           </div>
           <div style={{ display: 'flex', gap: 8 }}><Btn size="sm" onClick={createRecipient}>Сохранить</Btn><Btn size="sm" v="secondary" onClick={() => setShowNewRec(false)}>Отмена</Btn></div>
