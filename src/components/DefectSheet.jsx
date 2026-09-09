@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../supabaseClient'
 import { Btn, Sheet, useToast } from './ui'
 import { writeOffDefect } from '../lib/inventory'
+import { fullName } from '../lib/attrs'
 
 /* Брак, найденный после приёмки. Списывается со ссылкой на поставку —
    иначе рейтинг поставщика не узнает о претензии. */
@@ -17,7 +18,7 @@ export default function DefectSheet({ data, profile, onClose, onDone }) {
   const [comment, setComment] = useState('')
   const [busy, setBusy] = useState(false)
 
-  const pName = (id) => (products || []).find((p) => p.id === id)?.name || '—'
+  const pName = (id) => fullName((products || []).find((p) => p.id === id)) || '—'
   const sName = (id) => (suppliers || []).find((s) => s.id === id)?.name || 'поставщик'
   const wName = (id) => (warehouses || []).find((w) => w.id === id)?.name || ''
 

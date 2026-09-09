@@ -4,6 +4,7 @@ import { fmt } from '../lib/format'
 import { openFile } from '../lib/requests'
 import { printDoc } from '../lib/print'
 import { approversOf, currentApprover, approveOnScreen, approveByScan, declineApproval, revokeApproval } from '../lib/approval'
+import { fullName } from '../lib/attrs'
 
 function SignPad({ onRef }) {
   const cv = useRef(null)
@@ -44,7 +45,7 @@ export default function ApprovalSheet({ req, data, profile, onClose, onDone }) {
   const prevInSystem = cur ? chain.filter((a) => a.order_no < cur.order_no && a.in_system).slice(-1)[0] : null
   const isExternal = false  // зампред подписывает бумажную СЗ вне системы — в цепочке его нет
   const mineDone = chain.find((a) => a.user_id === profile.id && a.status === 'approved')
-  const pName = (id) => products.find((p) => p.id === id)?.name || '—'
+  const pName = (id) => fullName(products.find((p) => p.id === id)) || '—'
   const rName = (id) => recipients.find((r) => r.id === id)?.name || ''
   const bName = (id) => branches.find((b) => b.id === id)?.name || ''
 

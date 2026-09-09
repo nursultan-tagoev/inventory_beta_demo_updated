@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
 import { supabase } from '../supabaseClient'
+import { fullName, attrsLine } from '../lib/attrs'
 import { Btn, Field, Input, Select, Confirm, useToast } from './ui'
 import { som } from '../lib/format'
 import { saveMovement, stockAt } from '../lib/ops'
@@ -33,7 +34,10 @@ export default function OperationSheet({ type, data, profile, can, onDone }) {
   })
   const up = (k, v) => setF((s) => ({ ...s, [k]: v }))
   const selProd = useMemo(() => products.find((p) => p.id == f.product_id) || createdProd, [f.product_id, products, createdProd])
-  const selRec = recipients.find((r) => r.id == f.recipient_id)
+  // Только что созданные получатели: показываем их сразу, пока справочник перечитывается
+  const [extraRecs, setExtraRecs] = useState([])
+  const recList = [...(recipients || []), ...extraRecs.filter((e) => !(recipients || []).some((r) => r.id === e.id))]
+  const selRec = recList.find((r) => r.id == f.recipient_id)
   const whLocations = locations.filter((l) => !f.warehouse_id || l.warehouse_id == f.warehouse_id)
   const availHere = selProd && f.warehouse_id ? stockAt(stockByWh, selProd.id, f.warehouse_id) : 0
   const SR = typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition)
@@ -52,11 +56,11 @@ export default function OperationSheet({ type, data, profile, can, onDone }) {
     const low = norm(text)
     if (!productName) productName = matchName(low, products.filter((p) => !p.archived).map((p) => p.name))
     if (qty == null) qty = parseQty(low)
-    if (!recipientName) recipientName = matchName(low, recipients.map((r) => r.name))
+    if (!recipientName) recipientName = matchName(low, recList.map((r) => r.name))
     const p = products.find((x) => x.name === matchName(norm(productName || ''), products.map((pp) => pp.name)) || x.name === productName)
     if (p) up('product_id', p.id)
     if (qty != null) up('qty', qty)
-    const r = recipients.find((x) => x.name === matchName(norm(recipientName || ''), recipients.map((rr) => rr.name)) || x.name === recipientName)
+    const r = recList.find((x) => x.name === matchName(norm(recipientName || ''), recList.map((rr) => rr.name)) || x.name === recipientName)
     if (r) { up('recipient_id', r.id); if (r.branch_id) up('branch_id', r.branch_id) }
     if (p || qty != null || r) toast('Люси заполнила — проверьте')
     else toast('Не расслышала, попробуйте ещё раз', 'warn')
@@ -80,7 +84,12 @@ export default function OperationSheet({ type, data, profile, can, onDone }) {
     if (!newRec.name.trim()) return toast('Введите имя', 'error')
     const { data: d, error } = await supabase.from('recipients').insert({ name: newRec.name.trim(), branch_id: Number(newRec.branch_id) || null }).select().single()
     if (error) return toast('Ошибка: ' + error.message, 'error')
-    up('recipient_id', d.id); if (d.branch_id) up('branch_id', d.branch_id); setShowNewRec(false); setNewRec({ name: '', branch_id: '' }); toast('Получатель добавлен')
+    setExtraRecs((l) => [...l, d])          // сразу в список
+    up('recipient_id', d.id)
+    if (d.branch_id) up('branch_id', d.branch_id)
+    setShowNewRec(false); setNewRec({ name: '', branch_id: '' })
+    data.invalidate?.('refs')               // и обновляем справочник в фоне
+    toast('Получатель добавлен')
   }
 
   const doSave = async () => {
@@ -118,7 +127,7 @@ export default function OperationSheet({ type, data, profile, can, onDone }) {
     if (error) return toast(error, 'error')
     toast(TL[type] + ' сохранена')
     if ((type === 'out' || type === 'return') && selProd) {
-      setAct({ type, items: [{ name: selProd.name, sku: selProd.sku, price: selProd.price, qty: Number(f.qty), product_id: selProd.id, warehouse_id: Number(f.warehouse_id) }], recipient: selRec?.name || '', recipient_id: selRec?.id || null, purpose: f.purpose, branch_id: f.branch_id || selRec?.branch_id || null, branchName: branches.find((b) => b.id === (f.branch_id || selRec?.branch_id))?.name })
+      setAct({ type, items: [{ name: fullName(selProd), sku: selProd.sku, price: selProd.price, qty: Number(f.qty), product_id: selProd.id, warehouse_id: Number(f.warehouse_id) }], recipient: selRec?.name || '', recipient_id: selRec?.id || null, purpose: f.purpose, branch_id: f.branch_id || selRec?.branch_id || null, branchName: branches.find((b) => b.id === (f.branch_id || selRec?.branch_id))?.name })
     } else { onDone() }
   }
   const next = () => { if (step < steps) setStep(step + 1); else setConfirm(true) }
@@ -166,7 +175,7 @@ export default function OperationSheet({ type, data, profile, can, onDone }) {
           <Select value={f.product_id} onChange={(e) => { if (e.target.value === 'new') setShowNewProd(true); else { up('product_id', e.target.value); setCreatedProd(null) } }}>
             <option value="">— выбрать товар —</option>
             {createdProd && <option value={createdProd.id}>{createdProd.name} (новый)</option>}
-            {products.filter((p) => !p.archived).map((p) => <option key={p.id} value={p.id}>{p.name}{p.sku ? ` (${p.sku})` : ''}</option>)}
+            {products.filter((p) => !p.archived).map((p) => <option key={p.id} value={p.id}>{fullName(p)}{p.sku ? ` (${p.sku})` : ''}</option>)}
             <option value="new">➕ Добавить новый товар</option>
           </Select>
         </Field>
@@ -301,7 +310,7 @@ export default function OperationSheet({ type, data, profile, can, onDone }) {
         <Field label={type === 'out' ? 'Получатель' : 'Возврат от'}>
           <Select value={f.recipient_id} onChange={(e) => { if (e.target.value === 'new') setShowNewRec(true); else { up('recipient_id', e.target.value); const r = recipients.find((x) => x.id == e.target.value); if (r?.branch_id) up('branch_id', r.branch_id) } }}>
             <option value="">— выбрать —</option>
-            {recipients.map((r) => <option key={r.id} value={r.id}>{r.name}{r.branch_id ? ` (${branches.find((b) => b.id === r.branch_id)?.name || ''})` : ''}</option>)}
+            {recList.map((r) => <option key={r.id} value={r.id}>{r.name}{r.branch_id ? ` (${branches.find((b) => b.id === r.branch_id)?.name || ''})` : ''}</option>)}
             <option value="new">➕ Добавить получателя</option>
           </Select>
         </Field>

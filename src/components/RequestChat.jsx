@@ -35,7 +35,7 @@ export default function RequestChat({ req, data, profile, compact }) {
     const parts = new Set()
     if (req.author_id) parts.add(req.author_id)
     for (const a of (data.reqApprovers || []).filter((x) => x.request_id === req.id && x.user_id)) parts.add(a.user_id)
-    const admin = (data.profiles || []).find((p) => p.role === 'admin')
+    const admin = (data.profiles || []).find((p) => ['admin', 'warehouse'].includes(p.role) && p.is_active !== false)
     if (admin && req.sent_at) parts.add(admin.id)
     parts.delete(profile.id)
     for (const uid of parts) {

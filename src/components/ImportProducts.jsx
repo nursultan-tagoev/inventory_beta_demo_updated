@@ -6,7 +6,7 @@ import { Btn, Sheet, useToast } from './ui'
 /* Загрузка товаров списком. Ничего не пишем, пока человек не увидит,
    что именно произойдёт: новое, обновление, ошибки — раздельно. */
 
-const COLS = ['Наименование', 'Артикул', 'Категория', 'Направление', 'Тип', 'Кампания', 'Цена']
+const COLS = ['Наименование', 'Артикул', 'Тип размерности', 'Размер', 'Цвет', 'Пол', 'Сезон', 'Категория', 'Направление', 'Тип', 'Кампания', 'Цена']
 
 // Заголовки в файле могут отличаться регистром и пробелами
 const norm = (s) => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ')
@@ -15,6 +15,9 @@ const PICK = {
   категория: 'category', направление: 'direction', тип: 'type', кампания: 'campaign',
   цена: 'price', стоимость: 'price',
   артикул: 'sku', код: 'sku', sku: 'sku',
+  размер: 'size', размерность: 'size',
+  'тип размерности': 'size_type', 'тип размера': 'size_type',
+  цвет: 'color', пол: 'gender', сезон: 'season',
 }
 
 export default function ImportProducts({ data, onClose, onDone }) {
@@ -62,7 +65,11 @@ export default function ImportProducts({ data, onClose, onDone }) {
           line: i + 2, name, price,
           category: o.category || '', direction: o.direction || '',
           type: o.type || '', campaign: o.campaign || '',
-          sku: (o.sku || '').toString().trim(),
+          sku: (o.sku || '').toString().trim(), size: (o.size || '').toString().trim(),
+          size_type: (o.size_type || '').toString().trim(),
+          color: (o.color || '').toString().trim(),
+          gender: (o.gender || '').toString().trim(),
+          season: (o.season || '').toString().trim(),
           status: error ? 'error' : exists ? 'update' : 'new',
           error, existingId: exists?.id || null,
         }
@@ -108,6 +115,8 @@ export default function ImportProducts({ data, onClose, onDone }) {
 
         const body = {
           name: r.name, sku: r.sku || null, price: r.price, archived: false,
+          size_type: r.size_type || null, size: r.size || null,
+          color: r.color || null, gender: r.gender || null, season: r.season || null,
           category_id, direction_id, product_type_id, campaign_id,
         }
         if (r.existingId) {
