@@ -303,63 +303,6 @@ export default function OperationSheet({ type, data, profile, can, onDone }) {
         </div>}
 
         <Field label="Примечание"><Input value={f.notes} onChange={(e) => up('notes', e.target.value)} placeholder="Необязательно" /></Field>
-        <div style={{ display: 'flex', gap: 8 }}><Btn v="secondary" onClick={() => setStep(1)}>← Назад</Btn><Btn loading={loading} onClick={() => setConfirm(true)} style={{ flex: 1 }}>Сохранить приход</Btn></div>
-      </div>}
-
-      {step === 2 && (type === 'out' || type === 'return') && <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <Field label={type === 'out' ? 'Получатель' : 'Возврат от'}>
-          <Select value={f.recipient_id} onChange={(e) => {
-            if (e.target.value === 'new') { setShowNewRec(true); return }
-            up('recipient_id', e.target.value)
-            const r = recList.find((x) => x.id == e.target.value)
-            // Департамент и филиал подтягиваются из карточки получателя
-            if (r?.branch_id) up('branch_id', r.branch_id)
-            up('dept', r?.dept || '')
-          }}>
-            <option value="">— выбрать —</option>
-            {recList.map((r) => <option key={r.id} value={r.id}>{r.name}{r.dept ? ` · ${r.dept}` : ''}</option>)}
-            <option value="new">➕ Добавить получателя</option>
-          </Select>
-        </Field>
-        {showNewRec && <div className="card" style={{ padding: 14, background: 'var(--bg)' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 10, marginBottom: 10 }}>
-            <Field label="Имя"><Input value={newRec.name} onChange={(e) => setNewRec({ ...newRec, name: e.target.value })} autoFocus /></Field>
-            <Field label="Департамент">
-              <Select value={newRec.dept} onChange={(e) => setNewRec({ ...newRec, dept: e.target.value })}>
-                <option value="">—</option>
-                {departments.map((d) => <option key={d.id} value={d.name}>{d.name}</option>)}
-              </Select>
-            </Field>
-            <Field label="Филиал"><Select value={newRec.branch_id} onChange={(e) => setNewRec({ ...newRec, branch_id: e.target.value })}><option value="">—</option>{branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</Select></Field>
-          </div>
-          <div style={{ display: 'flex', gap: 8 }}><Btn size="sm" onClick={createRecipient}>Сохранить</Btn><Btn size="sm" v="secondary" onClick={() => setShowNewRec(false)}>Отмена</Btn></div>
-        </div>}
-        {/* Подразделение — кому предназначен товар. Подставляется из карточки
-            получателя, но правится: бывает, что получает один, а для другого отдела. */}
-        {type === 'out' && <Field label="Подразделение — кому предназначено">
-          <Select value={f.dept} onChange={(e) => up('dept', e.target.value)}>
-            <option value="">— выбрать —</option>
-            {departments.filter((d) => d.kind === 'dep').length > 0 && (
-              <optgroup label="Департаменты и управления">
-                {departments.filter((d) => d.kind === 'dep').map((d) => <option key={d.id} value={d.name}>{d.name}</option>)}
-              </optgroup>
-            )}
-            {departments.filter((d) => d.kind === 'branch').length > 0 && (
-              <optgroup label="Филиалы">
-                {departments.filter((d) => d.kind === 'branch').map((d) => <option key={d.id} value={d.name}>{d.name}</option>)}
-              </optgroup>
-            )}
-          </Select>
-        </Field>}
-        {/* Тестовая операция: помечается, чтобы перед запуском убрать одним фильтром */}
-        <label style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '11px 13px', borderRadius: 11, background: f.is_test ? 'var(--am-l)' : 'var(--bg)', cursor: 'pointer', marginBottom: 4 }}>
-          <input type="checkbox" checked={f.is_test} onChange={(e) => up('is_test', e.target.checked)}
-            style={{ width: 18, height: 18, minHeight: 18, accentColor: 'var(--am)' }} />
-          <span style={{ fontSize: 12.5, color: f.is_test ? 'var(--am-m)' : 'var(--tx2)' }}>
-            Тестовая операция — пометить для удаления перед запуском
-          </span>
-        </label>
-
         {type === 'return' && <Field label="Состояние"><Select value={f.condition} onChange={(e) => up('condition', e.target.value)}><option value="хорошее">Хорошее</option><option value="б/у">Б/у</option><option value="брак">Брак</option></Select></Field>}
         <div style={{ display: 'flex', gap: 8 }}><Btn v="secondary" onClick={() => setStep(1)}>← Назад</Btn><Btn onClick={next} style={{ flex: 1 }}>Далее →</Btn></div>
       </div>}
@@ -374,6 +317,14 @@ export default function OperationSheet({ type, data, profile, can, onDone }) {
         <div style={{ padding: '12px 14px', background: 'var(--bg)', borderRadius: 10, fontSize: 12.5, color: 'var(--tx2)' }}>
           <b style={{ color: 'var(--tx)' }}>{selProd?.name}</b> × {f.qty} шт · склад {whName(f.warehouse_id)}{selRec ? <> · {selRec.name}</> : null}
         </div>
+        {/* Тестовая операция: помечается, чтобы перед запуском убрать одним фильтром */}
+        <label style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '11px 13px', borderRadius: 11, background: f.is_test ? 'var(--am-l)' : 'var(--bg)', cursor: 'pointer', marginBottom: 10 }}>
+          <input type="checkbox" checked={f.is_test} onChange={(e) => up('is_test', e.target.checked)}
+            style={{ width: 18, height: 18, minHeight: 18, accentColor: 'var(--am)' }} />
+          <span style={{ fontSize: 12.5, color: f.is_test ? 'var(--am-m)' : 'var(--tx2)' }}>
+            Тестовая операция — пометить для удаления перед запуском
+          </span>
+        </label>
         <div style={{ display: 'flex', gap: 8 }}><Btn v="secondary" onClick={() => setStep(2)}>← Назад</Btn><Btn loading={loading} onClick={() => setConfirm(true)} style={{ flex: 1 }}>Сохранить</Btn></div>
       </div>}
     </div>
