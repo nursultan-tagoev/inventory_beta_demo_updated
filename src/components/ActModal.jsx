@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { Btn, useToast } from './ui'
 import { fmt } from '../lib/format'
 import { createAct } from '../lib/acts'
+import { supabase } from '../supabaseClient'
 
 function SignPad({ label, onRef }) {
   const ref = useRef(null); const draw = useRef(false); const [signed, setSigned] = useState(false)
@@ -14,6 +15,13 @@ function SignPad({ label, onRef }) {
 }
 
 export default function ActModal({ init, profile, onClose, onSaved }) {
+  // Подразделения нужны для выбора в строках; компонент вызывается из разных
+  // мест и data не получает, поэтому тянет справочник сам
+  const [deps, setDeps] = useState([])
+  useEffect(() => {
+    supabase.from('departments').select('id,name,kind').eq('is_active', true)
+      .order('kind').order('name').then(({ data }) => setDeps(data || []))
+  }, [])
   const toast = useToast()
   const today = new Date().toLocaleDateString('ru-RU', { day: '2-digit', month: 'long', year: 'numeric' })
   const isRet = init.type === 'return'
@@ -34,7 +42,7 @@ export default function ActModal({ init, profile, onClose, onSaved }) {
   const [basis, setBasis] = useState(init.purpose ? 'Цель: ' + init.purpose : 'Служебная записка № ___')
   const [showInv, setShowInv] = useState(true)
   const [mode, setMode] = useState('e')
-  const [rows, setRows] = useState(init.items.map((it) => ({ name: it.name, sku: it.sku || '', inv: '', unit: 'шт', qty: it.qty, price: it.price || 0, cond: 'новое', dept: init.dept || init.branchName || '', product_id: it.product_id, warehouse_id: it.warehouse_id })))
+  const [rows, setRows] = useState(init.items.map((it) => ({ name: it.name, sku: it.sku || '', inv: '', unit: 'шт', qty: it.qty, price: it.price || 0, cond: 'новое', dept: init.dept || '', product_id: it.product_id, warehouse_id: it.warehouse_id })))
   const [scan, setScan] = useState(null)
   const [savedNo, setSavedNo] = useState(null)
   const [saving, setSaving] = useState(false)
@@ -166,7 +174,25 @@ export default function ActModal({ init, profile, onClose, onSaved }) {
               <td className="mono" style={{ textAlign: 'right' }}><input value={r.qty} onChange={(e) => setRow(i, 'qty', e.target.value)} style={{ textAlign: 'right' }} /></td>
               <td className="mono" style={{ textAlign: 'right' }}><input value={r.price} onChange={(e) => setRow(i, 'price', e.target.value)} style={{ textAlign: 'right' }} /></td>
               <td className="mono" style={{ textAlign: 'right' }}>{fmt((+r.qty || 0) * (+r.price || 0))}</td>
-              <td><input value={r.dept} placeholder="филиал / департамент" onChange={(e) => setRow(i, 'dept', e.target.value)} /></td>
+              <td>
+                <select value={r.dept} onChange={(e) => setRow(i, 'dept', e.target.value)}
+                  style={{ width: '100%', border: 'none', background: 'transparent', font: 'inherit', color: 'inherit' }}>
+                  <option value="">—</option>
+                  {/* Если подразделения ещё не загрузились, показываем хотя бы то,
+                      что пришло из выдачи — иначе значение молча пропадёт */}
+                  {deps.length === 0 && r.dept && <option value={r.dept}>{r.dept}</option>}
+                  {deps.filter((d) => d.kind === 'dep').length > 0 && (
+                    <optgroup label="Департаменты и управления">
+                      {deps.filter((d) => d.kind === 'dep').map((d) => <option key={d.id} value={d.name}>{d.name}</option>)}
+                    </optgroup>
+                  )}
+                  {deps.filter((d) => d.kind === 'branch').length > 0 && (
+                    <optgroup label="Филиалы">
+                      {deps.filter((d) => d.kind === 'branch').map((d) => <option key={d.id} value={d.name}>{d.name}</option>)}
+                    </optgroup>
+                  )}
+                </select>
+              </td>
             </tr>)}</tbody>
           </table>
           <div style={{ textAlign: 'right', fontSize: 13, marginTop: 4 }}>
