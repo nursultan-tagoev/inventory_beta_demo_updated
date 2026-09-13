@@ -229,3 +229,91 @@ button:active { transform: scale(.97); }
   /* Шапка раздела переносится, кнопка не жмётся */
   .head-row { flex-wrap: wrap; row-gap: 8px; }
 }
+
+/* ── Таблица акта на телефоне: строка становится карточкой ──
+   Прокрутка вбок не годится: чтобы прочитать позицию целиком,
+   приходится листать туда-сюда. Здесь таблица разбирается на блоки,
+   подписи колонок подставляются из data-label. Печать не затрагивается. */
+@media screen and (max-width: 640px) {
+  .act-tbl, .act-tbl thead, .act-tbl tbody,
+  .act-tbl tr, .act-tbl th, .act-tbl td { display: block; }
+
+  .act-tbl { min-width: 0 !important; width: 100% !important; border: none !important; }
+  .act-tbl thead { display: none; }
+
+  .act-tbl tr {
+    border: 1px solid var(--brd);
+    border-radius: 11px;
+    padding: 11px 12px;
+    margin-bottom: 9px;
+    background: var(--sur);
+  }
+
+  .act-tbl td {
+    border: none !important;
+    padding: 3px 0 !important;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+    font-size: 12.5px;
+    text-align: left !important;
+  }
+
+  /* Подпись колонки слева, значение справа */
+  .act-tbl td::before {
+    content: attr(data-label);
+    color: var(--tx3);
+    flex-shrink: 0;
+  }
+
+  /* Наименование — крупно и во всю ширину, без подписи */
+  .act-tbl td[data-label="Наименование"] {
+    display: block;
+    font-size: 13.5px;
+    font-weight: 600;
+    line-height: 1.35;
+    margin-bottom: 5px;
+  }
+  .act-tbl td[data-label="Наименование"]::before { content: none; }
+
+  /* Номер строки — мелко сверху */
+  .act-tbl td[data-label="№"] {
+    display: block;
+    font-size: 10.5px;
+    color: var(--tx3);
+  }
+  .act-tbl td[data-label="№"]::before { content: 'Позиция '; }
+
+  /* Итог по строке отделяем чертой */
+  .act-tbl td[data-label="Итого (сом)"] {
+    margin-top: 5px;
+    padding-top: 6px !important;
+    border-top: 1px dashed var(--brd) !important;
+    font-weight: 600;
+    font-size: 13px;
+  }
+
+  .act-tbl td input, .act-tbl td select {
+    text-align: right;
+    max-width: 58%;
+    font-size: 12.5px;
+  }
+  .act-tbl td[data-label="Наименование"] input { max-width: 100%; text-align: left; }
+
+  /* Прокрутку отключаем — разворачивать больше нечего */
+  .table-x { overflow-x: visible; }
+  .table-x > table { min-width: 0; }
+
+  /* Заголовок акта не должен занимать треть экрана */
+  .act-sheet .ff { font-size: 17px !important; line-height: 1.25; }
+}
+
+@media screen and (max-width: 640px) {
+  /* Блок «Утверждаю» на телефоне во всю ширину, а не колонкой справа */
+  .approve-row { justify-content: stretch !important; margin-bottom: 18px !important; }
+  .approve-row > div { width: 100% !important; }
+
+  /* Подписная часть в столбик — две колонки по 120px нечитаемы */
+  .sign-row { flex-direction: column; gap: 18px !important; }
+}
