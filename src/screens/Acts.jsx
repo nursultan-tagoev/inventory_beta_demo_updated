@@ -5,6 +5,7 @@ import ReceiptSign from '../components/ReceiptSign'
 import { signersOf, currentSigner } from '../lib/signing'
 import { Badge, Spin } from '../components/ui'
 import { fmt } from '../lib/format'
+import ActSheet from '../components/ActSheet'
 
 const ST = { draft: ['Черновик', 'slate'], awaiting_sign: ['Ждёт подписи получателя', 'amber'], signed: ['Подписан', 'green'], signed_manual: ['Подписан (скан)', 'green'], annulled: ['Аннулирован', 'red'], declined: ['Отказ', 'red'] }
 
@@ -133,96 +134,10 @@ function ActView({ act, data, onClose, onChanged }) {
           </div>
         )}
         {act.annulled && <div className="no-print" style={{ background: 'var(--rd-l)', border: '1px solid var(--rd)', borderRadius: 10, padding: '11px 14px', marginBottom: 12, fontSize: 12.5, color: 'var(--rd-m)' }}>Акт аннулирован{act.annul_reason ? `: ${act.annul_reason}` : ''}. Остаток возвращён.</div>}
-        <div id="act-print" style={{ background: '#fff', color: '#14171D', borderRadius: 8, padding: '28px 32px', boxShadow: 'var(--sh3)' }}>
-          {/* Утверждающий — по форме банка */}
-          <div className="approve-row" style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 26 }}>
-            <div style={{ width: 300, maxWidth: '100%', fontSize: 12.5, lineHeight: 1.75 }}>
-              <div style={{ fontWeight: 700 }}>Утверждаю</div>
-              <div>Главный бухгалтер ОАО «Бакай Банк»</div>
-              <div style={{ marginTop: 16, display: 'flex', alignItems: 'flex-end', gap: 8 }}>
-                <span style={{ borderBottom: '1px solid #14171D', width: 92, height: 20 }} />
-                <span style={{ flex: 1, borderBottom: '1px solid #14171D', height: 20 }} />
-              </div>
-              <div style={{ display: 'flex', gap: 8, fontSize: 10.5, color: '#98A0AE' }}>
-                <span style={{ width: 92, textAlign: 'center' }}>подпись</span>
-                <span>расшифровка</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="act-sheet" style={{ textAlign: 'center', margin: '0 0 6px' }}>
-            <div className="ff" style={{ fontSize: 23 }}>
-              Акт {isRet ? 'возврата товарно-материальных ценностей' : 'приема-передачи товарно-материальных ценностей'}
-            </div>
-            <div style={{ fontSize: 12, color: '#5A6472', marginTop: 4 }}>
-              № <b className="mono" style={{ color: '#14171D' }}>{act.number}</b>
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: 12.5, margin: '14px 0 18px' }}>
-            <span>г. Бишкек</span>
-            <span>{today}</span>
-          </div>
-
-          <div className="form-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, fontSize: 12.5, marginBottom: 8 }}>
-            <div>
-              <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', color: '#98A0AE' }}>{isRet ? 'Возвращает' : 'Передал (МОЛ)'}</div>
-              {isRet ? act.recipient_name : act.giver_name}
-              {act.giver_position && <div style={{ fontSize: 11, color: '#5A6472' }}>{act.giver_position}</div>}
-            </div>
-            <div>
-              <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', color: '#98A0AE' }}>Принял</div>
-              {isRet ? act.giver_name : act.recipient_name}
-              {act.recipient_position && <div style={{ fontSize: 11, color: '#5A6472' }}>{act.recipient_position}</div>}
-            </div>
-          </div>
-
-          {act.extra_signers && (
-            <div style={{ fontSize: 12.5, marginBottom: 8 }}>
-              <span style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', color: '#98A0AE' }}>Также передали: </span>
-              {act.extra_signers}
-            </div>
-          )}
-
-          <div style={{ fontSize: 12.5, color: '#5A6472', marginBottom: 6 }}>Основание: {act.basis || '—'}</div>
-          {items === null ? <div style={{ padding: 20 }}>Загрузка…</div> : (
-            <div className="table-x"><table className="act-tbl"><thead><tr>
-              <th style={{ width: 24 }}>№</th>
-              <th style={{ width: 92 }}>Артикул</th>
-              <th>Наименование</th>
-              <th style={{ width: 54, textAlign: 'right' }}>Кол-во</th>
-              <th style={{ width: 86, textAlign: 'right' }}>Стоимость за 1 шт (сом)</th>
-              <th style={{ width: 86, textAlign: 'right' }}>Итого (сом)</th>
-              <th style={{ width: 130 }}>Подразделение</th>
-            </tr></thead>
-              <tbody>{items.map((it, i) => <tr key={it.id}>
-                <td data-label="№" style={{ textAlign: 'center' }}>{i + 1}</td>
-                <td data-label="Артикул">{it.sku || '—'}</td>
-                <td data-label="Наименование">{it.name}</td>
-                <td data-label="Количество" className="mono" style={{ textAlign: 'right' }}>{it.qty}</td>
-                <td data-label="За единицу" className="mono" style={{ textAlign: 'right' }}>{fmt(it.price)}</td>
-                <td data-label="Итого (сом)" className="mono" style={{ textAlign: 'right' }}>{fmt(it.sum)}</td>
-                <td data-label="Подразделение">{it.dept || '—'}</td>
-              </tr>)}</tbody>
-            </table></div>
-          )}
-          <div style={{ textAlign: 'right', fontSize: 13, marginTop: 4 }}>Итого на сумму <b className="mono">{fmt(act.total_sum)} сом</b></div>
-
-          <div className="sign-row" style={{ display: 'flex', justifyContent: 'space-between', marginTop: 26, fontSize: 12, gap: 24 }}>
-            <div style={{ flex: 1 }}>
-              <div style={{ marginBottom: 3 }}>{isRet ? 'Возвращает' : 'Передал'}</div>
-              {act.giver_position && <div style={{ fontSize: 10.5, color: '#5A6472' }}>{act.giver_position}</div>}
-              <div style={{ borderBottom: '1px solid #14171D', height: 22 }} />
-              <div style={{ fontSize: 10, color: '#98A0AE', marginTop: 3 }}>подпись · {isRet ? act.recipient_name : act.giver_name}</div>
-            </div>
-            <div style={{ flex: 1 }}>
-              <div style={{ marginBottom: 3 }}>Принял</div>
-              {act.recipient_position && <div style={{ fontSize: 10.5, color: '#5A6472' }}>{act.recipient_position}</div>}
-              <div style={{ borderBottom: '1px solid #14171D', height: 22 }} />
-              <div style={{ fontSize: 10, color: '#98A0AE', marginTop: 3 }}>подпись · {isRet ? act.giver_name : act.recipient_name}</div>
-            </div>
-          </div>
-          <div style={{ fontSize: 10.5, color: '#98A0AE', marginTop: 14 }}>Дата получения: ______________</div>
+        <div id="act-print" style={{ borderRadius: 8, overflow: 'hidden', boxShadow: 'var(--sh3)' }}>
+          {items === null
+            ? <div style={{ padding: 40, textAlign: 'center', background: '#fff', color: '#5A5A5A' }}>Загрузка…</div>
+            : <ActSheet act={act} items={items} />}
         </div>
       </div>
     </div>
