@@ -135,8 +135,8 @@ function ActView({ act, data, onClose, onChanged }) {
         {act.annulled && <div className="no-print" style={{ background: 'var(--rd-l)', border: '1px solid var(--rd)', borderRadius: 10, padding: '11px 14px', marginBottom: 12, fontSize: 12.5, color: 'var(--rd-m)' }}>Акт аннулирован{act.annul_reason ? `: ${act.annul_reason}` : ''}. Остаток возвращён.</div>}
         <div id="act-print" style={{ background: '#fff', color: '#14171D', borderRadius: 8, padding: '28px 32px', boxShadow: 'var(--sh3)' }}>
           {/* Утверждающий — по форме банка */}
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 26 }}>
-            <div style={{ width: 300, fontSize: 12.5, lineHeight: 1.75 }}>
+          <div className="approve-row" style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 26 }}>
+            <div style={{ width: 300, maxWidth: '100%', fontSize: 12.5, lineHeight: 1.75 }}>
               <div style={{ fontWeight: 700 }}>Утверждаю</div>
               <div>Главный бухгалтер ОАО «Бакай Банк»</div>
               <div style={{ marginTop: 16, display: 'flex', alignItems: 'flex-end', gap: 8 }}>
@@ -150,7 +150,7 @@ function ActView({ act, data, onClose, onChanged }) {
             </div>
           </div>
 
-          <div style={{ textAlign: 'center', margin: '0 0 6px' }}>
+          <div className="act-sheet" style={{ textAlign: 'center', margin: '0 0 6px' }}>
             <div className="ff" style={{ fontSize: 23 }}>
               Акт {isRet ? 'возврата товарно-материальных ценностей' : 'приема-передачи товарно-материальных ценностей'}
             </div>
@@ -164,7 +164,7 @@ function ActView({ act, data, onClose, onChanged }) {
             <span>{today}</span>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, fontSize: 12.5, marginBottom: 8 }}>
+          <div className="form-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, fontSize: 12.5, marginBottom: 8 }}>
             <div>
               <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', color: '#98A0AE' }}>{isRet ? 'Возвращает' : 'Передал (МОЛ)'}</div>
               {isRet ? act.recipient_name : act.giver_name}
@@ -196,19 +196,19 @@ function ActView({ act, data, onClose, onChanged }) {
               <th style={{ width: 130 }}>Подразделение</th>
             </tr></thead>
               <tbody>{items.map((it, i) => <tr key={it.id}>
-                <td style={{ textAlign: 'center' }}>{i + 1}</td>
-                <td>{it.sku || '—'}</td>
-                <td>{it.name}</td>
-                <td className="mono" style={{ textAlign: 'right' }}>{it.qty}</td>
-                <td className="mono" style={{ textAlign: 'right' }}>{fmt(it.price)}</td>
-                <td className="mono" style={{ textAlign: 'right' }}>{fmt(it.sum)}</td>
-                <td>{it.dept || '—'}</td>
+                <td data-label="№" style={{ textAlign: 'center' }}>{i + 1}</td>
+                <td data-label="Артикул">{it.sku || '—'}</td>
+                <td data-label="Наименование">{it.name}</td>
+                <td data-label="Количество" className="mono" style={{ textAlign: 'right' }}>{it.qty}</td>
+                <td data-label="За единицу" className="mono" style={{ textAlign: 'right' }}>{fmt(it.price)}</td>
+                <td data-label="Итого (сом)" className="mono" style={{ textAlign: 'right' }}>{fmt(it.sum)}</td>
+                <td data-label="Подразделение">{it.dept || '—'}</td>
               </tr>)}</tbody>
             </table></div>
           )}
           <div style={{ textAlign: 'right', fontSize: 13, marginTop: 4 }}>Итого на сумму <b className="mono">{fmt(act.total_sum)} сом</b></div>
 
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 26, fontSize: 12, gap: 24 }}>
+          <div className="sign-row" style={{ display: 'flex', justifyContent: 'space-between', marginTop: 26, fontSize: 12, gap: 24 }}>
             <div style={{ flex: 1 }}>
               <div style={{ marginBottom: 3 }}>{isRet ? 'Возвращает' : 'Передал'}</div>
               {act.giver_position && <div style={{ fontSize: 10.5, color: '#5A6472' }}>{act.giver_position}</div>}
