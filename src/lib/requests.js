@@ -161,6 +161,10 @@ export async function issueRequest(req, warehouseId, approvedQty, freeByWh, prof
   const { data: number, error: numErr } = await supabase.rpc('next_act_number', { p_prefix: 'АВ' })
   if (numErr) return { error: 'Номер акта: ' + numErr.message }
 
+  // Подразделение берём у автора заявки — он же и получатель
+  const { data: author } = await supabase.from('profiles').select('dept').eq('id', req.author_id).maybeSingle()
+  const dept = author?.dept || null
+
   const total = lines.reduce((a, it) => a + it.give * (it.price || 0), 0)
   const { data: act, error: actErr } = await supabase.from('acts').insert({
     number, type: 'out', act_date: new Date().toISOString().slice(0, 10),
@@ -176,7 +180,7 @@ export async function issueRequest(req, warehouseId, approvedQty, freeByWh, prof
     await supabase.from('act_items').insert({
       act_id: act.id, product_id: it.product_id, warehouse_id: wid,
       name: it.name || '', sku: it.sku || null, unit: 'шт',
-      qty: it.give, price: it.price || 0, sum: it.give * (it.price || 0),
+      qty: it.give, price: it.price || 0, sum: it.give * (it.price || 0), dept,
     })
     const { error: mErr } = await supabase.from('movements').insert({
       type: 'out', product_id: it.product_id, qty: it.give, warehouse_id: wid,
