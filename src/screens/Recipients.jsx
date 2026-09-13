@@ -21,7 +21,12 @@ export default function Recipients({ data, can }) {
       {can('edit') && <div className="card" style={{ padding: 18, marginBottom: 16 }}>
         <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr auto', gap: 10, alignItems: 'end' }}>
           <Field label="Имя"><Input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} placeholder="Полное имя" /></Field>
-          <Field label="Департамент"><Input value={f.dept} onChange={(e) => setF({ ...f, dept: e.target.value })} placeholder="отдел или управление" /></Field>
+          <Field label="Департамент">
+            <Select value={f.dept} onChange={(e) => setF({ ...f, dept: e.target.value })}>
+              <option value="">—</option>
+              {(data.departments || []).map((d) => <option key={d.id} value={d.name}>{d.name}</option>)}
+            </Select>
+          </Field>
           <Field label="Филиал"><Select value={f.branch_id} onChange={(e) => setF({ ...f, branch_id: e.target.value })}><option value="">—</option>{branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</Select></Field>
           <Btn onClick={add} loading={loading}>Добавить</Btn>
         </div>
