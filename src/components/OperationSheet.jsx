@@ -27,7 +27,7 @@ export default function OperationSheet({ type, data, profile, can, onDone }) {
   const [dictating, setDictating] = useState(false)
   const [act, setAct] = useState(null)
   const [f, setF] = useState({
-    product_id: '', qty: 1, recipient_id: '', branch_id: '', dept: '',
+    product_id: '', qty: 1, recipient_id: '', branch_id: '', dept: '', is_test: false,
     warehouse_id: warehouses[0]?.id || '', warehouse_to_id: '', location_id: '',
     supplier_id: suppliers[0]?.id || '', purpose: '', due_date: '', sz: '', condition: 'хорошее', direction_id: '', notes: '',
     on_time: true, has_defects: false, defects: 0, delivery_comment: '',
@@ -351,6 +351,15 @@ export default function OperationSheet({ type, data, profile, can, onDone }) {
             )}
           </Select>
         </Field>}
+        {/* Тестовая операция: помечается, чтобы перед запуском убрать одним фильтром */}
+        <label style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '11px 13px', borderRadius: 11, background: f.is_test ? 'var(--am-l)' : 'var(--bg)', cursor: 'pointer', marginBottom: 4 }}>
+          <input type="checkbox" checked={f.is_test} onChange={(e) => up('is_test', e.target.checked)}
+            style={{ width: 18, height: 18, minHeight: 18, accentColor: 'var(--am)' }} />
+          <span style={{ fontSize: 12.5, color: f.is_test ? 'var(--am-m)' : 'var(--tx2)' }}>
+            Тестовая операция — пометить для удаления перед запуском
+          </span>
+        </label>
+
         {type === 'return' && <Field label="Состояние"><Select value={f.condition} onChange={(e) => up('condition', e.target.value)}><option value="хорошее">Хорошее</option><option value="б/у">Б/у</option><option value="брак">Брак</option></Select></Field>}
         <div style={{ display: 'flex', gap: 8 }}><Btn v="secondary" onClick={() => setStep(1)}>← Назад</Btn><Btn onClick={next} style={{ flex: 1 }}>Далее →</Btn></div>
       </div>}
