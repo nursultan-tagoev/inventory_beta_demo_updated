@@ -203,3 +203,29 @@ button:active { transform: scale(.97); }
   /* Нижнее меню не должно перекрывать содержимое */
   .bottom-nav { padding-bottom: env(safe-area-inset-bottom, 0px); }
 }
+
+/* ── Телефон: плотные экраны ─────────────────────────────────
+   Обрезка многоточием на узком экране съедает смысл — вместо неё
+   две строки. Ряды кнопок в столбик, чтобы не уезжали за край. */
+.clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+@media (max-width: 640px) {
+  /* Кнопки действий: во всю ширину, по одной в ряд */
+  .btn-row { flex-direction: column; align-items: stretch; }
+  .btn-row > * { width: 100%; }
+
+  /* Формы: одна колонка вместо двух */
+  .form-2col { grid-template-columns: 1fr !important; }
+
+  /* Таблицы актов и сверок прокручиваются, а не сплющиваются */
+  .table-x { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .table-x > table { min-width: 560px; }
+
+  /* Шапка раздела переносится, кнопка не жмётся */
+  .head-row { flex-wrap: wrap; row-gap: 8px; }
+}
