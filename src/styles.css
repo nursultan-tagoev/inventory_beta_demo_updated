@@ -57,9 +57,9 @@ input,select,textarea{font-family:inherit;outline:none;color:inherit}
   .print-root { display: block !important; background: #fff !important; color: #14171D !important;
     margin: 0 !important; padding: 0 !important; }
   .print-root * { color: #14171D !important; visibility: visible !important; }
-  .print-root .act-tbl { width: 100%; border-collapse: collapse; font-size: 11.5px; }
-  .print-root .act-tbl th { background: #F1F1F4 !important; border: 1px solid #B8B8C0 !important; padding: 5px 6px; text-align: left; }
-  .print-root .act-tbl td { border: 1px solid #B8B8C0 !important; padding: 4px 6px; }
+  /* Бланк сам задаёт рамки и отступы — общие правила его не трогают */
+  .print-root .act-tbl:not(.act-sheet-print .act-tbl) { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+  .print-root .act-sheet-print { background: #fff !important; }
   .print-root .no-print { display: none !important; }
   .no-print { display: none !important; }
   @page { size: A4; margin: 12mm; }
