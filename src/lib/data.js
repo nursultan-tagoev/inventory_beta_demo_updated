@@ -9,7 +9,7 @@ const EMPTY = {
   categories: [], directions: [], productTypes: [], locations: [],
   warehouses: [], campaigns: [], requests: [], reservations: [], profiles: [],
   acts: [], actSigners: [], externals: [], reqApprovers: [], reqMessages: [],
-  deliveries: [], inventories: [],
+  deliveries: [], inventories: [], departments: [],
   stock: {}, stockByWh: {}, freeByWh: {}, resvByWh: {}, flows: {}, checkouts: [],
   loading: true, error: null,
 }
@@ -28,7 +28,7 @@ export const AFFECTS = {
   act:       ['acts', 'requests'],
   chat:      ['messages'],
   users:     ['profiles'],
-  refs:      ['refs', 'products'],
+  refs:      ['refs', 'products', 'departments'],
   catalog:   ['products', 'stock'],
 }
 
@@ -150,6 +150,12 @@ const FETCH = {
   async deliveries() {
     const { data } = await supabase.from('deliveries').select('*').order('created_at', { ascending: false }).limit(300)
     return { deliveries: data || [] }
+  },
+
+  async departments() {
+    const { data } = await supabase.from('departments').select('*')
+      .eq('is_active', true).order('kind').order('name')
+    return { departments: data || [] }
   },
 
   async inventories() {
