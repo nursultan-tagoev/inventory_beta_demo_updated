@@ -3,6 +3,8 @@ import { Btn, useToast } from './ui'
 import { fmt } from '../lib/format'
 import { createAct } from '../lib/acts'
 import { supabase } from '../supabaseClient'
+import ActSheet, { amountInWords } from './ActSheet'
+import { printDoc } from '../lib/print'
 
 function SignPad({ label, onRef }) {
   const ref = useRef(null); const draw = useRef(false); const [signed, setSigned] = useState(false)
@@ -15,60 +17,126 @@ function SignPad({ label, onRef }) {
 }
 
 export default function ActModal({ init, profile, onClose, onSaved }) {
-  // Подразделения нужны для выбора в строках; компонент вызывается из разных
-  // мест и data не получает, поэтому тянет справочник сам
+  const toast = useToast()
+  const isRet = init.type === 'return'
+
+  /* Два режима: заполнение и предпросмотр бланка.
+     Раньше бланк редактировали прямо на нём — на телефоне это разваливалось. */
+  const [view, setView] = useState('form')
+
+  // Справочник подразделений: компонент вызывается из разных мест и data не получает
   const [deps, setDeps] = useState([])
   useEffect(() => {
     supabase.from('departments').select('id,name,kind').eq('is_active', true)
       .order('kind').order('name').then(({ data }) => setDeps(data || []))
   }, [])
-  const toast = useToast()
-  const today = new Date().toLocaleDateString('ru-RU', { day: '2-digit', month: 'long', year: 'numeric' })
-  const isRet = init.type === 'return'
-  const [org, setOrg] = useState('Отдел маркетинга')
-  // Утверждающий — главный бухгалтер, ФИО вписывается вручную
-  const [approver, setApprover] = useState('')
-  const [actKind, setActKind] = useState(init.type === 'return' ? 'возврата товарно-материальных ценностей' : 'приема-передачи товарно-материальных ценностей')
-  const [city, setCity] = useState('г. Бишкек')
-  const [giverPos, setGiverPos] = useState('')
-  const [recvPos, setRecvPos] = useState('')
-  // Иногда передают несколько человек — добавляются вручную
-  const [extra, setExtra] = useState([])
-  const addExtra = () => setExtra((l) => [...l, { name: '', pos: '' }])
-  const setExtraAt = (i, k, v) => setExtra((l) => l.map((x, j) => (j === i ? { ...x, [k]: v } : x)))
-  const [branch, setBranch] = useState(init.branchName || 'Центральный филиал')
-  const [giver, setGiver] = useState('')
-  const [recv, setRecv] = useState(init.recipient || '')
-  const [basis, setBasis] = useState(init.purpose ? 'Цель: ' + init.purpose : 'Служебная записка № ___')
-  const [showInv, setShowInv] = useState(true)
+
+  const [f, setF] = useState({
+    act_kind: isRet ? 'возврата товарно-материальных ценностей' : 'приёма-передачи товарно-материальных ценностей',
+    city: 'г. Бишкек',
+    approver_position: 'Главный бухгалтер',
+    approver_name: '',
+    giver_name: '', giver_position: '',
+    giver2_name: '', giver2_position: '',
+    recipient_name: init.recipient || '', recipient_position: '',
+    recipient2_name: '', recipient2_position: '',
+    basis: init.purpose ? 'Цель: ' + init.purpose : 'Служебная записка № ___',
+  })
+  const up = (k, v) => setF((s) => ({ ...s, [k]: v }))
+
+  const [rows, setRows] = useState(init.items.map((it) => ({
+    name: it.name, sku: it.sku || '', unit: 'шт', qty: it.qty, price: it.price || 0,
+    dept: init.dept || '', product_id: it.product_id, warehouse_id: it.warehouse_id,
+  })))
+  const setRow = (i, k, v) => setRows((rs) => rs.map((r, j) => (j === i ? { ...r, [k]: v } : r)))
+
   const [mode, setMode] = useState('e')
-  const [rows, setRows] = useState(init.items.map((it) => ({ name: it.name, sku: it.sku || '', inv: '', unit: 'шт', qty: it.qty, price: it.price || 0, cond: 'новое', dept: init.dept || '', product_id: it.product_id, warehouse_id: it.warehouse_id })))
   const [scan, setScan] = useState(null)
   const [savedNo, setSavedNo] = useState(null)
   const [saving, setSaving] = useState(false)
   const sigG = useRef(null), sigR = useRef(null)
-  const setRow = (i, k, v) => setRows((rs) => rs.map((r, j) => j === i ? { ...r, [k]: v } : r))
+  const sheetRef = useRef(null)
+
   const total = rows.reduce((a, r) => a + (+r.qty || 0) * (+r.price || 0), 0)
-  const totalQty = rows.reduce((a, r) => a + (+r.qty || 0), 0)
+
+  // Предпросмотр собирается из тех же полей, что уйдут в базу
+  const preview = {
+    ...f, number: savedNo || (isRet ? 'АЗ' : 'АВ') + '-…',
+    type: isRet ? 'return' : 'out', act_date: new Date().toISOString().slice(0, 10),
+    total_sum: total,
+  }
+  const previewItems = rows.map((r, i) => ({
+    id: i, name: r.name, sku: r.sku, dept: r.dept,
+    qty: +r.qty || 0, price: +r.price || 0, sum: (+r.qty || 0) * (+r.price || 0),
+  }))
 
   const save = async () => {
-    if (savedNo) return toast('Акт ' + savedNo + ' уже сохранён', 'error')   // повторно не создаём
+    if (savedNo) return toast('Акт ' + savedNo + ' уже сохранён', 'error')
+    if (!f.giver_name.trim()) return toast('Укажите, кто передал', 'error')
+    if (!f.recipient_name.trim()) return toast('Укажите, кто принял', 'error')
     setSaving(true)
     try {
       const res = await createAct({
-        act: { type: isRet ? 'return' : 'out', act_date: new Date().toISOString().slice(0, 10), recipient_id: init.recipient_id || null, recipient_name: recv, giver_name: giver, giver_position: giverPos || null, recipient_position: recvPos || null, extra_signers: extra.filter((e) => e.name.trim()).map((e) => [e.name, e.pos].filter(Boolean).join(' — ')).join('; ') || null, basis, total_sum: total, sign_mode: mode === 'e' ? 'electronic' : 'manual', branch_id: init.branch_id || null, source_act_id: init.source_act_id || null, created_by: profile.id },
+        act: {
+          type: isRet ? 'return' : 'out',
+          act_date: new Date().toISOString().slice(0, 10),
+          recipient_id: init.recipient_id || null,
+          act_kind: f.act_kind, city: f.city,
+          approver_position: f.approver_position || null, approver_name: f.approver_name || null,
+          giver_name: f.giver_name, giver_position: f.giver_position || null,
+          giver2_name: f.giver2_name || null, giver2_position: f.giver2_position || null,
+          recipient_name: f.recipient_name, recipient_position: f.recipient_position || null,
+          recipient2_name: f.recipient2_name || null, recipient2_position: f.recipient2_position || null,
+          basis: f.basis, total_sum: total,
+          sign_mode: mode === 'e' ? 'electronic' : 'manual',
+          branch_id: init.branch_id || null, source_act_id: init.source_act_id || null,
+          created_by: profile.id,
+        },
         items: rows, sigGiver: sigG.current?.() || null, sigRecipient: sigR.current?.() || null, scanFile: scan,
       })
       setSavedNo(res.number)
       toast('Акт ' + res.number + ' сохранён')
       onSaved?.(res)
+      setView('preview')
     } catch (e) { toast(e.message, 'error') }
     setSaving(false)
   }
 
+  /* ── Оформление формы ── */
+  const inp = {
+    width: '100%', minHeight: 42, padding: '0 12px', borderRadius: 10,
+    border: '1.5px solid var(--brd)', background: 'var(--sur)', fontSize: 14, color: 'var(--tx)',
+  }
+  const small = { ...inp, minHeight: 40, fontSize: 13 }
+  const lbl = (t) => <div style={{ fontSize: 12, color: 'var(--tx3)', marginBottom: 4 }}>{t}</div>
+  const Block = ({ title, extra, children }) => (
+    <div style={{ padding: '14px 15px', borderBottom: '1px solid var(--brd)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 11 }}>
+        <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '.05em', color: 'var(--tx3)' }}>{title}</span>
+        {extra && <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--tx3)' }}>{extra}</span>}
+      </div>
+      {children}
+    </div>
+  )
+
+  // Карточка подписанта: ФИО и должность, обе правятся
+  const Signer = ({ nameKey, posKey, removable }) => (
+    <div style={{ border: '1px solid var(--brd)', borderRadius: 10, padding: 11, marginBottom: 9, position: 'relative' }}>
+      <input value={f[nameKey]} onChange={(e) => up(nameKey, e.target.value)}
+        placeholder="Ф.И.О." style={{ ...small, marginBottom: 8 }} />
+      <input value={f[posKey]} onChange={(e) => up(posKey, e.target.value)}
+        placeholder="должность" style={small} />
+      {removable && (
+        <button onClick={() => { up(nameKey, ''); up(posKey, '') }}
+          style={{ position: 'absolute', top: 7, right: 7, width: 26, height: 26, color: 'var(--tx3)', fontSize: 15 }}>×</button>
+      )}
+    </div>
+  )
+
   return (
     <div className="act-overlay" onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 1200, background: 'rgba(8,10,14,.5)', backdropFilter: 'blur(3px)', overflow: 'auto', padding: '24px 12px' }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: 800, margin: '0 auto' }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: view === 'preview' ? 820 : 460, margin: '0 auto' }}>
+
         {savedNo && (
           <div className="no-print" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 15px', marginBottom: 12, borderRadius: 12, background: 'var(--gr-l)', border: '1px solid var(--gr)' }}>
             <span style={{ fontSize: 18 }}>✓</span>
@@ -79,163 +147,140 @@ export default function ActModal({ init, profile, onClose, onSaved }) {
           </div>
         )}
 
-        <div className="no-print" style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-          <button onClick={() => setShowInv((v) => !v)} style={{ height: 34, padding: '0 13px', borderRadius: 9, border: `1px solid ${showInv ? 'var(--ink)' : 'var(--brd2)'}`, background: showInv ? 'var(--ink-l)' : 'var(--sur)', color: showInv ? 'var(--ink)' : 'var(--tx2)', fontSize: 12.5, fontWeight: 600 }}>Артикул</button>
-          <div style={{ display: 'inline-flex', background: 'var(--sur2)', borderRadius: 9, padding: 3 }}>
-            {[['e', 'Эл. подпись'], ['m', 'Ручная']].map(([v, l]) => <button key={v} onClick={() => setMode(v)} style={{ height: 28, padding: '0 12px', borderRadius: 7, fontSize: 12, fontWeight: mode === v ? 600 : 400, background: mode === v ? 'var(--sur)' : 'transparent', color: mode === v ? 'var(--tx)' : 'var(--tx2)' }}>{l}</button>)}
-          </div>
-          <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-            <Btn v="secondary" size="sm" onClick={() => window.print()}>🖨 Печать / PDF</Btn>
-            {!savedNo
-              ? <Btn size="sm" onClick={save} loading={saving}>Сохранить акт</Btn>
-              : <Btn size="sm" onClick={() => onClose(savedNo)}>Готово — к актам</Btn>}
-            <Btn v="secondary" size="sm" onClick={() => onClose(savedNo)}>Закрыть</Btn>
-          </div>
+        {/* Переключатель режимов */}
+        <div className="no-print" style={{ display: 'flex', gap: 7, marginBottom: 12 }}>
+          <button onClick={() => setView('form')} style={{ flex: 1, minHeight: 42, borderRadius: 10, fontSize: 13.5, fontWeight: 600,
+            background: view === 'form' ? 'var(--ink)' : 'var(--sur)', color: view === 'form' ? '#fff' : 'var(--tx2)' }}>Заполнение</button>
+          <button onClick={() => setView('preview')} style={{ flex: 1, minHeight: 42, borderRadius: 10, fontSize: 13.5, fontWeight: 600,
+            background: view === 'preview' ? 'var(--ink)' : 'var(--sur)', color: view === 'preview' ? '#fff' : 'var(--tx2)' }}>Бланк</button>
+          <button onClick={onClose} className="no-print" style={{ minHeight: 42, padding: '0 14px', borderRadius: 10, background: 'var(--sur)', color: 'var(--tx2)', fontSize: 13.5 }}>Закрыть</button>
         </div>
 
-        <div id="act-print" style={{ background: '#fff', color: '#14171D', borderRadius: 8, padding: '46px 54px', boxShadow: 'var(--sh3)' }}>
-          {/* Утверждающий — справа сверху, по форме банка */}
-          <div className="approve-row" style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 26 }}>
-            <div style={{ width: 300, maxWidth: '100%', fontSize: 12.5, lineHeight: 1.75 }}>
-              <div style={{ fontWeight: 700 }}>Утверждаю</div>
-              <div>Главный бухгалтер ОАО «Бакай Банк»</div>
-              <div style={{ marginTop: 16, display: 'flex', alignItems: 'flex-end', gap: 8 }}>
-                <span style={{ borderBottom: '1px solid #14171D', width: 92, height: 20 }} />
-                <input className="act-in" value={approver} onChange={(e) => setApprover(e.target.value)}
-                  placeholder="Ф.И.О." style={{ flex: 1, fontSize: 12.5 }} />
+        {view === 'form' ? (
+          <div className="card" style={{ overflow: 'hidden' }}>
+            <Block title="ДОКУМЕНТ">
+              {lbl('Вид акта')}
+              <input value={f.act_kind} onChange={(e) => up('act_kind', e.target.value)} style={{ ...inp, marginBottom: 11 }} />
+              <div style={{ display: 'flex', gap: 9 }}>
+                <div style={{ flex: 1 }}>{lbl('Город')}<input value={f.city} onChange={(e) => up('city', e.target.value)} style={inp} /></div>
+                <div style={{ flex: 1 }}>{lbl('Дата')}<input value={new Date().toLocaleDateString('ru-RU')} readOnly style={{ ...inp, color: 'var(--tx3)' }} /></div>
               </div>
-              <div style={{ display: 'flex', gap: 8, fontSize: 10.5, color: '#98A0AE' }}>
-                <span style={{ width: 92, textAlign: 'center' }}>подпись</span>
-                <span>расшифровка</span>
-              </div>
-            </div>
-          </div>
+            </Block>
 
-          <div className="act-sheet" style={{ textAlign: 'center', margin: '0 0 6px' }}>
-            <div className="ff" style={{ fontSize: 23 }}>
-              Акт <input className="act-in" value={actKind} onChange={(e) => setActKind(e.target.value)}
-                style={{ width: '68%', fontSize: 23, textAlign: 'center' }} />
-            </div>
-            <div style={{ fontSize: 12, color: '#5A6472', marginTop: 4 }}>
-              № <b className="mono" style={{ color: '#14171D' }}>{savedNo || (isRet ? 'АЗ' : 'АВ') + '-…'}</b>
-            </div>
-          </div>
+            <Block title="УТВЕРЖДАЕТ">
+              <input value={f.approver_position} onChange={(e) => up('approver_position', e.target.value)}
+                placeholder="должность" style={{ ...inp, marginBottom: 9 }} />
+              <input value={f.approver_name} onChange={(e) => up('approver_name', e.target.value)}
+                placeholder="Ф.И.О." style={inp} />
+            </Block>
 
-          {/* Город слева, дата справа — как в бумажных актах */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: 12.5, margin: '14px 0 18px' }}>
-            <input className="act-in" value={city} onChange={(e) => setCity(e.target.value)} style={{ width: 150 }} />
-            <span>{today}</span>
-          </div>
+            <Block title={isRet ? 'ВЕРНУЛИ' : 'ПЕРЕДАЛИ'} extra={f.giver2_name ? '2 из 2' : null}>
+              <Signer nameKey="giver_name" posKey="giver_position" />
+              {f.giver2_name || f.giver2_position
+                ? <Signer nameKey="giver2_name" posKey="giver2_position" removable />
+                : <button onClick={() => up('giver2_name', ' ')} style={{ width: '100%', minHeight: 42, borderRadius: 10, border: '1px dashed var(--brd)', background: 'var(--bg)', color: 'var(--tx3)', fontSize: 13 }}>＋ Ещё подписант</button>}
+            </Block>
 
-          <div className="form-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18, fontSize: 13, marginBottom: 6 }}>
-            <div>
-              <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', color: '#98A0AE' }}>{isRet ? 'Возвращает' : 'Передал (МОЛ)'}</div>
-              <input className="act-in" value={isRet ? recv : giver} onChange={(e) => (isRet ? setRecv : setGiver)(e.target.value)} style={{ width: '100%' }} />
-              <input className="act-in" value={giverPos} onChange={(e) => setGiverPos(e.target.value)}
-                placeholder="должность" style={{ width: '100%', fontSize: 11.5, color: '#5A6472' }} />
-            </div>
-            <div>
-              <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', color: '#98A0AE' }}>Принял</div>
-              <input className="act-in" value={isRet ? giver : recv} onChange={(e) => (isRet ? setGiver : setRecv)(e.target.value)} style={{ width: '100%' }} />
-              <input className="act-in" value={recvPos} onChange={(e) => setRecvPos(e.target.value)}
-                placeholder="должность" style={{ width: '100%', fontSize: 11.5, color: '#5A6472' }} />
-            </div>
-          </div>
-          {extra.map((e, i) => (
-            <div key={i} className="form-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 12, alignItems: 'end', marginBottom: 4 }}>
-              <div>
-                <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', color: '#98A0AE' }}>Также передал</div>
-                <input className="act-in" value={e.name} onChange={(ev) => setExtraAt(i, 'name', ev.target.value)} placeholder="Ф.И.О." style={{ width: '100%' }} />
-              </div>
-              <input className="act-in" value={e.pos} onChange={(ev) => setExtraAt(i, 'pos', ev.target.value)} placeholder="должность" style={{ width: '100%', fontSize: 11.5, color: '#5A6472' }} />
-              <button className="no-print" onClick={() => setExtra((l) => l.filter((_, j) => j !== i))}
-                style={{ color: '#98A0AE', fontSize: 15, padding: '0 6px' }}>×</button>
-            </div>
-          ))}
-          <button className="no-print" onClick={addExtra}
-            style={{ fontSize: 11.5, color: '#5A6472', padding: '4px 0', marginBottom: 6 }}>＋ Добавить передавшего</button>
+            <Block title="ПРИНЯЛИ" extra={f.recipient2_name ? '2 из 2' : null}>
+              <Signer nameKey="recipient_name" posKey="recipient_position" />
+              {f.recipient2_name || f.recipient2_position
+                ? <Signer nameKey="recipient2_name" posKey="recipient2_position" removable />
+                : <button onClick={() => up('recipient2_name', ' ')} style={{ width: '100%', minHeight: 42, borderRadius: 10, border: '1px dashed var(--brd)', background: 'var(--bg)', color: 'var(--tx3)', fontSize: 13 }}>＋ Ещё подписант</button>}
+            </Block>
 
-          <div style={{ fontSize: 12.5, color: '#5A6472', margin: '6px 0' }}>Основание: <input className="act-in" value={basis} onChange={(e) => setBasis(e.target.value)} style={{ width: '70%' }} /></div>
+            <Block title="ОСНОВАНИЕ">
+              <input value={f.basis} onChange={(e) => up('basis', e.target.value)} style={inp} />
+            </Block>
 
-          <div className="table-x"><table className="act-tbl">
-            <thead><tr>
-              <th style={{ width: 24 }}>№</th>
-              {showInv && <th style={{ width: 92 }}>Артикул</th>}
-              <th>Наименование</th>
-              <th style={{ width: 52, textAlign: 'right' }}>Кол-во</th>
-              <th style={{ width: 86, textAlign: 'right' }}>Стоимость за 1 шт (сом)</th>
-              <th style={{ width: 86, textAlign: 'right' }}>Итого (сом)</th>
-              <th style={{ width: 130 }}>Подразделение</th>
-            </tr></thead>
-            <tbody>{rows.map((r, i) => <tr key={i}>
-              <td data-label="№" style={{ textAlign: 'center' }}>{i + 1}</td>
-              {showInv && <td data-label="Артикул"><input value={r.sku} placeholder="—" onChange={(e) => setRow(i, 'sku', e.target.value)} /></td>}
-              <td data-label="Наименование"><input value={r.name} onChange={(e) => setRow(i, 'name', e.target.value)} /></td>
-              <td data-label="Количество" className="mono" style={{ textAlign: 'right' }}><input value={r.qty} onChange={(e) => setRow(i, 'qty', e.target.value)} style={{ textAlign: 'right' }} /></td>
-              <td data-label="За единицу" className="mono" style={{ textAlign: 'right' }}><input value={r.price} onChange={(e) => setRow(i, 'price', e.target.value)} style={{ textAlign: 'right' }} /></td>
-              <td data-label="Итого (сом)" className="mono" style={{ textAlign: 'right' }}>{fmt((+r.qty || 0) * (+r.price || 0))}</td>
-              <td data-label="Подразделение">
-                <select value={r.dept} onChange={(e) => setRow(i, 'dept', e.target.value)}
-                  style={{ width: '100%', border: 'none', background: 'transparent', font: 'inherit', color: 'inherit' }}>
-                  <option value="">—</option>
-                  {/* Если подразделения ещё не загрузились, показываем хотя бы то,
-                      что пришло из выдачи — иначе значение молча пропадёт */}
-                  {deps.length === 0 && r.dept && <option value={r.dept}>{r.dept}</option>}
-                  {deps.filter((d) => d.kind === 'dep').length > 0 && (
-                    <optgroup label="Департаменты и управления">
-                      {deps.filter((d) => d.kind === 'dep').map((d) => <option key={d.id} value={d.name}>{d.name}</option>)}
-                    </optgroup>
-                  )}
-                  {deps.filter((d) => d.kind === 'branch').length > 0 && (
-                    <optgroup label="Филиалы">
-                      {deps.filter((d) => d.kind === 'branch').map((d) => <option key={d.id} value={d.name}>{d.name}</option>)}
-                    </optgroup>
-                  )}
-                </select>
-              </td>
-            </tr>)}</tbody>
-          </table></div>
-          <div style={{ textAlign: 'right', fontSize: 13, marginTop: 4 }}>
-            Итого: <b className="mono">{rows.length}</b> поз., <b className="mono">{totalQty}</b> ед.,
-            на сумму <b className="mono">{fmt(total)} сом</b>
-          </div>
-
-          {extra.filter((e) => e.name.trim()).length > 0 && (
-            <div className="form-2col" style={{ marginTop: 18, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 26 }}>
-              {extra.filter((e) => e.name.trim()).map((e, i) => (
-                <div key={i} style={{ fontSize: 13 }}>
-                  Передал: <b>{e.name}</b>
-                  {e.pos && <div style={{ fontSize: 11, color: '#5A6472' }}>{e.pos}</div>}
-                  <div style={{ borderBottom: '1px solid #14171D', height: 32, marginTop: 8 }} />
-                  <div style={{ fontSize: 10, color: '#98A0AE' }}>подпись / дата</div>
+            <Block title="ПОЗИЦИИ" extra={rows.length + ' шт'}>
+              {rows.map((r, i) => (
+                <div key={i} style={{ border: '1px solid var(--brd)', borderRadius: 10, padding: 11, marginBottom: 9 }}>
+                  <div style={{ fontSize: 14, fontWeight: 500, lineHeight: 1.35, marginBottom: 9 }}>{r.name}</div>
+                  <Row label="Артикул">
+                    <input value={r.sku} onChange={(e) => setRow(i, 'sku', e.target.value)} placeholder="—" style={{ ...small, width: '56%', textAlign: 'right' }} />
+                  </Row>
+                  <Row label="Подразделение">
+                    <select value={r.dept} onChange={(e) => setRow(i, 'dept', e.target.value)} style={{ ...small, width: '56%', fontSize: 12 }}>
+                      <option value="">—</option>
+                      {deps.length === 0 && r.dept && <option value={r.dept}>{r.dept}</option>}
+                      {deps.filter((d) => d.kind === 'dep').length > 0 && (
+                        <optgroup label="Департаменты и управления">
+                          {deps.filter((d) => d.kind === 'dep').map((d) => <option key={d.id} value={d.name}>{d.name}</option>)}
+                        </optgroup>
+                      )}
+                      {deps.filter((d) => d.kind === 'branch').length > 0 && (
+                        <optgroup label="Филиалы">
+                          {deps.filter((d) => d.kind === 'branch').map((d) => <option key={d.id} value={d.name}>{d.name}</option>)}
+                        </optgroup>
+                      )}
+                    </select>
+                  </Row>
+                  <Row label="Количество">
+                    <input value={r.qty} onChange={(e) => setRow(i, 'qty', e.target.value)} style={{ ...small, width: 80, textAlign: 'right' }} />
+                  </Row>
+                  <Row label="Цена, сом">
+                    <input value={r.price} onChange={(e) => setRow(i, 'price', e.target.value)} style={{ ...small, width: 80, textAlign: 'right' }} />
+                  </Row>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, paddingTop: 8, marginTop: 6, borderTop: '1px dashed var(--brd)' }}>
+                    <span style={{ fontWeight: 500 }}>Сумма</span>
+                    <span className="mono" style={{ fontWeight: 600 }}>{fmt((+r.qty || 0) * (+r.price || 0))}</span>
+                  </div>
                 </div>
               ))}
-            </div>
-          )}
-
-          <div style={{ marginTop: 24 }}>
-            {mode === 'e'
-              ? <div className="form-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 26 }}>
-                <div><div style={{ fontSize: 12, color: '#5A6472', marginBottom: 6 }}>{isRet ? 'Возвращает' : 'Передал'}: <b>{isRet ? recv : giver}</b></div><SignPad label="Подпись" onRef={(fn) => (sigG.current = fn)} /></div>
-                <div><div style={{ fontSize: 12, color: '#5A6472', marginBottom: 6 }}>Принял: <b>{isRet ? giver : recv}</b></div><SignPad label="Подпись" onRef={(fn) => (sigR.current = fn)} /></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '10px 2px 0' }}>
+                <span style={{ fontSize: 14, fontWeight: 500 }}>Итого</span>
+                <span className="mono" style={{ fontSize: 17, fontWeight: 600 }}>{fmt(total)} сом</span>
               </div>
-              : <div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 26, marginBottom: 12 }}>
-                  <div style={{ fontSize: 13 }}>{isRet ? 'Возвращает' : 'Передал'}: <b>{isRet ? recv : giver}</b>
-                    {giverPos && <div style={{ fontSize: 11, color: '#5A6472' }}>{giverPos}</div>}
-                    <div style={{ borderBottom: '1px solid #14171D', height: 32, marginTop: 8 }} /><div style={{ fontSize: 10, color: '#98A0AE' }}>подпись / дата</div></div>
-                  <div style={{ fontSize: 13 }}>Принял: <b>{isRet ? giver : recv}</b><div style={{ borderBottom: '1px solid #14171D', height: 32, marginTop: 8 }} /><div style={{ fontSize: 10, color: '#98A0AE' }}>подпись / дата</div></div>
+              <div style={{ fontSize: 12, color: 'var(--tx3)', lineHeight: 1.55, marginTop: 4 }}>{amountInWords(total)}</div>
+            </Block>
+
+            <Block title="ПОДПИСАНИЕ">
+              <div style={{ display: 'flex', gap: 7, marginBottom: 11 }}>
+                <button onClick={() => setMode('e')} style={{ flex: 1, minHeight: 40, borderRadius: 9, fontSize: 12.5,
+                  background: mode === 'e' ? 'var(--ink-l)' : 'var(--sur)', color: mode === 'e' ? 'var(--ink)' : 'var(--tx3)', fontWeight: mode === 'e' ? 600 : 400 }}>На экране</button>
+                <button onClick={() => setMode('m')} style={{ flex: 1, minHeight: 40, borderRadius: 9, fontSize: 12.5,
+                  background: mode === 'm' ? 'var(--ink-l)' : 'var(--sur)', color: mode === 'm' ? 'var(--ink)' : 'var(--tx3)', fontWeight: mode === 'm' ? 600 : 400 }}>Скан с бумаги</button>
+              </div>
+              {mode === 'e' ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 11 }}>
+                  <SignPad label={isRet ? 'Вернул' : 'Передал'} onRef={(fn) => (sigG.current = fn)} />
+                  <SignPad label="Принял" onRef={(fn) => (sigR.current = fn)} />
                 </div>
-                <div className="no-print" style={{ fontSize: 12, color: '#5A6472', padding: '10px 12px', background: '#F6F7F9', borderRadius: 8, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-                  <span>Скачайте PDF, подпишите и загрузите скан:</span>
-                  <label style={{ cursor: 'pointer', padding: '6px 12px', border: '1px solid #CBD1DA', borderRadius: 8, fontWeight: 600 }}>Выбрать файл<input type="file" accept="image/*,application/pdf" style={{ display: 'none' }} onChange={(e) => setScan(e.target.files?.[0] || null)} /></label>
-                  {scan && <span style={{ color: '#0E9E72', fontWeight: 600 }}>✓ {scan.name}</span>}
-                </div>
-              </div>}
+              ) : (
+                <label style={{ display: 'block', padding: '14px 12px', border: '1px dashed var(--brd)', borderRadius: 10, textAlign: 'center', cursor: 'pointer', fontSize: 12.5, color: 'var(--tx2)' }}>
+                  {scan ? '✓ ' + scan.name : 'Распечатайте бланк, подпишите и загрузите скан'}
+                  <input type="file" accept="image/*,application/pdf" style={{ display: 'none' }} onChange={(e) => setScan(e.target.files?.[0] || null)} />
+                </label>
+              )}
+            </Block>
+
+            <div style={{ padding: '14px 15px', display: 'flex', flexDirection: 'column', gap: 9 }}>
+              <Btn v="secondary" onClick={() => setView('preview')} style={{ minHeight: 46 }}>Предпросмотр бланка</Btn>
+              {!savedNo && <Btn onClick={save} loading={saving} style={{ minHeight: 46 }}>Сохранить акт</Btn>}
+            </div>
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 20, fontSize: 10.5, color: '#98A0AE' }}><span>М.П.</span><span>{savedNo ? 'Сохранён: ' + savedNo : 'Черновик — нажмите «Сохранить акт»'}</span></div>
-        </div>
+        ) : (
+          <>
+            <div id="act-print" style={{ borderRadius: 8, overflow: 'hidden', boxShadow: 'var(--sh3)' }}>
+              <ActSheet act={preview} items={previewItems} innerRef={sheetRef} />
+            </div>
+            <div className="no-print" style={{ display: 'flex', gap: 9, marginTop: 12, flexWrap: 'wrap' }}>
+              <Btn v="secondary" onClick={() => printDoc(sheetRef.current)} style={{ flex: 1, minWidth: 140, minHeight: 46 }}>Печать</Btn>
+              {!savedNo && <Btn onClick={save} loading={saving} style={{ flex: 1, minWidth: 140, minHeight: 46 }}>Сохранить акт</Btn>}
+            </div>
+          </>
+        )}
       </div>
+    </div>
+  )
+}
+
+// Строка «подпись — поле» внутри карточки позиции
+function Row({ label, children }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13, padding: '3px 0' }}>
+      <span style={{ color: 'var(--tx3)' }}>{label}</span>
+      {children}
     </div>
   )
 }
