@@ -54,7 +54,7 @@ export default function Items({ data, can, profile }) {
 
   return (
     <div style={{ maxWidth: 1120, margin: '0 auto', padding: 24, animation: 'fadeUp .3s ease' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
+      <div className="head-row" style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
         <span className="ff" style={{ fontSize: 21, fontWeight: 600 }}>Товары</span>
         <span style={{ fontSize: 12.5, color: 'var(--tx3)' }}>{list.length} позиций</span>
         <div style={{ marginLeft: 'auto', display: 'inline-flex', background: 'var(--sur2)', borderRadius: 9, padding: 3 }}>
@@ -94,7 +94,7 @@ export default function Items({ data, can, profile }) {
 
       {add && <div className="card" style={{ padding: 18, marginBottom: 16, border: '1.5px solid var(--ink)' }}>
         <div style={{ fontWeight: 600, marginBottom: 12 }}>Новый товар</div>
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: 10, marginBottom: 12 }}>
+        <div className="form-2col" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: 10, marginBottom: 12 }}>
           <Field label="Название"><Input value={nf.name} onChange={(e) => setNf({ ...nf, name: e.target.value })} autoFocus /></Field>
           <Field label="Артикул"><Input value={nf.sku} onChange={(e) => setNf({ ...nf, sku: e.target.value })} /></Field>
           <Field label="Тип размерности">
@@ -129,7 +129,7 @@ export default function Items({ data, can, profile }) {
           <Field label="Поставщик"><Select value={nf.supplier_id} onChange={(e) => setNf({ ...nf, supplier_id: e.target.value })}><option value="">—</option>{suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</Select></Field>
         </div>
         <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--ink)', margin: '4px 0 8px' }}>Цепочка (Направление → Тип → Кампания)</div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 4 }}>
+        <div className="form-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 4 }}>
           <Field label="Направление"><Select value={nf.direction_id} onChange={(e) => setNf({ ...nf, direction_id: e.target.value, product_type_id: '', campaign_id: '' })}><option value="">—</option>{directions.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}</Select></Field>
           <Field label="Тип"><Select value={nf.product_type_id} onChange={(e) => setNf({ ...nf, product_type_id: e.target.value, campaign_id: '' })}><option value="">—</option>{productTypes.filter((t) => !nf.direction_id || t.direction_id == nf.direction_id).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</Select></Field>
           <Field label="Кампания"><Select value={nf.campaign_id} onChange={(e) => setNf({ ...nf, campaign_id: e.target.value })}><option value="">— без категории —</option>{campaigns.filter((c) => !nf.product_type_id || c.product_type_id == nf.product_type_id).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</Select></Field>

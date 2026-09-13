@@ -137,7 +137,7 @@ export default function Inventory({ data, profile }) {
 
   return (
     <div style={{ maxWidth: 1000, margin: '0 auto', padding: '24px 20px 80px', animation: 'fadeUp .3s ease' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+      <div className="head-row" style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
         <div className="ff" style={{ fontSize: 21, fontWeight: 600 }}>Инвентаризация</div>
         <Btn size="sm" v="secondary" onClick={() => setDefect(true)} style={{ marginLeft: 'auto', minHeight: 40 }}>Брак по поставке</Btn>
       </div>
@@ -217,7 +217,7 @@ export default function Inventory({ data, profile }) {
 
             {/* Таблица позиций */}
             <div style={{ border: '1px solid var(--brd)', borderRadius: 11, overflow: 'hidden' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 62px 62px 62px', gap: 6, padding: '9px 11px', background: 'var(--bg)', fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.03em', color: 'var(--tx3)' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 54px 62px 54px', gap: 6, padding: '9px 11px', background: 'var(--bg)', fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.03em', color: 'var(--tx3)' }}>
                 <span>Товар</span><span style={{ textAlign: 'center' }}>Учёт</span>
                 <span style={{ textAlign: 'center' }}>Факт</span><span style={{ textAlign: 'center' }}>Разн.</span>
               </div>
@@ -228,7 +228,7 @@ export default function Inventory({ data, profile }) {
                 const has = f !== '' && f !== null && f !== undefined
                 const d = has ? Number(f) - sys : null
                 return (
-                  <div key={r.product_id} style={{ display: 'grid', gridTemplateColumns: '1fr 62px 62px 62px', gap: 6, alignItems: 'center', padding: '8px 11px', borderTop: '1px solid var(--brd)' }}>
+                  <div key={r.product_id} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 54px 62px 54px', gap: 6, alignItems: 'center', padding: '8px 11px', borderTop: '1px solid var(--brd)' }}>
                     <span style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pName(r.product_id)}</span>
                     <span className="mono" style={{ fontSize: 12, textAlign: 'center', color: 'var(--tx3)' }}>{sys}</span>
                     {open.inv.status === 'draft' ? (
@@ -262,7 +262,7 @@ export default function Inventory({ data, profile }) {
 
             {/* Действия */}
             {open.inv.status === 'draft' && (
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <div className="btn-row" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <Btn v="secondary" onClick={doSaveFact} disabled={busy} style={{ minHeight: 46 }}>{busy ? 'Сохраняем…' : 'Сохранить черновик'}</Btn>
                 <Btn onClick={doCompare} disabled={busy} style={{ flex: 1, minWidth: 150, minHeight: 46 }}>{busy ? 'Считаем…' : 'Сравнить с учётом'}</Btn>
               </div>

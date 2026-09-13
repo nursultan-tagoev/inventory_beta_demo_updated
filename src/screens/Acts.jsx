@@ -37,7 +37,7 @@ export default function Acts({ data, profile }) {
 
   return (
     <div style={{ maxWidth: 1000, margin: '0 auto', padding: 24, animation: 'fadeUp .3s ease' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+      <div className="head-row" style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
         <span className="ff" style={{ fontSize: 20, fontWeight: 600 }}>Акты приёма-передачи</span>
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Поиск по номеру или получателю…" style={{ marginLeft: 'auto', height: 38, padding: '0 14px', borderRadius: 11, border: '1px solid var(--brd2)', background: 'var(--sur)', fontSize: 14, minWidth: 240 }} />
       </div>
@@ -186,7 +186,7 @@ function ActView({ act, data, onClose, onChanged }) {
 
           <div style={{ fontSize: 12.5, color: '#5A6472', marginBottom: 6 }}>Основание: {act.basis || '—'}</div>
           {items === null ? <div style={{ padding: 20 }}>Загрузка…</div> : (
-            <table className="act-tbl"><thead><tr>
+            <div className="table-x"><table className="act-tbl"><thead><tr>
               <th style={{ width: 24 }}>№</th>
               <th style={{ width: 92 }}>Артикул</th>
               <th>Наименование</th>
@@ -204,7 +204,7 @@ function ActView({ act, data, onClose, onChanged }) {
                 <td className="mono" style={{ textAlign: 'right' }}>{fmt(it.sum)}</td>
                 <td>{it.dept || '—'}</td>
               </tr>)}</tbody>
-            </table>
+            </table></div>
           )}
           <div style={{ textAlign: 'right', fontSize: 13, marginTop: 4 }}>Итого на сумму <b className="mono">{fmt(act.total_sum)} сом</b></div>
 

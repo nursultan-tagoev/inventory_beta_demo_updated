@@ -205,7 +205,7 @@ export default function Requests({ data, profile, can, draftItems, onDraftUsed }
                   {onMe && <Badge color="ink">на вашей стороне</Badge>}
                   {msgCount > 0 && <span style={{ fontSize: 10, color: 'var(--pu)' }}>💬 {msgCount}</span>}
                 </div>
-                <div style={{ fontSize: 13.5, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <div className="clamp-2" style={{ fontSize: 13.5, fontWeight: 600, lineHeight: 1.35 }}>
                   {r.items.map((it) => `${it.approved_qty ?? it.qty} × ${pName(it.product_id)}`).join(' · ')}
                 </div>
                 <div style={{ fontSize: 11, color: 'var(--tx3)', marginTop: 2 }}>
@@ -350,7 +350,7 @@ export default function Requests({ data, profile, can, draftItems, onDraftUsed }
                       «{r.cancel_reason}» · {new Date(r.cancel_requested_at).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                     </div>
                     {isAdmin && (
-                      <div style={{ display: 'flex', gap: 7, marginTop: 10, flexWrap: 'wrap' }}>
+                      <div className="btn-row" style={{ display: 'flex', gap: 7, marginTop: 10, flexWrap: 'wrap' }}>
                         <Btn size="sm" onClick={async () => {
                           patchRequest(r.id, { status: 'rejected' })
                           const { error } = await confirmCancel(r, profile)
@@ -374,7 +374,7 @@ export default function Requests({ data, profile, can, draftItems, onDraftUsed }
 
                 {/* Админ: выдать */}
                 {isAdmin && r.status === 'approved' && r.sent_at && !r.cancel_requested_at && (
-                  <div style={{ display: 'flex', gap: 7, marginBottom: 10, flexWrap: 'wrap' }}>
+                  <div className="btn-row" style={{ display: 'flex', gap: 7, marginBottom: 10, flexWrap: 'wrap' }}>
                     <Btn onClick={() => setIssue(r)} style={{ flex: 1, minWidth: 150, minHeight: 46 }}>📤 Выдать — оформить акт</Btn>
                     <Btn v="secondary" onClick={() => setReject({ req: r, mode: 'reject' })} style={{ minHeight: 46 }}>Отклонить</Btn>
                   </div>
@@ -382,7 +382,7 @@ export default function Requests({ data, profile, can, draftItems, onDraftUsed }
 
                 {/* Заявитель */}
                 {r.author_id === me && (
-                  <div style={{ display: 'flex', gap: 7, marginBottom: 10, flexWrap: 'wrap' }}>
+                  <div className="btn-row" style={{ display: 'flex', gap: 7, marginBottom: 10, flexWrap: 'wrap' }}>
                     {['issued', 'partial'].includes(r.status) && <Btn size="sm" onClick={async () => { await setStatus(r.id, 'received'); await clearFor('request', r.id, me); toast('Получение подтверждено'); invalidate(AFFECTS.send) }} style={{ minHeight: 44 }}>Подтвердить получение</Btn>}
                     {r.status === 'partial' && <Btn size="sm" v="secondary" onClick={async () => { await closePartial(r.id); toast('Завершено'); invalidate(AFFECTS.issue) }} style={{ minHeight: 44 }}>Хватит, завершить</Btn>}
                     {['new', 'revision'].includes(r.status) && !chain.some((a) => a.status === 'approved') && (
@@ -401,7 +401,7 @@ export default function Requests({ data, profile, can, draftItems, onDraftUsed }
                 <RequestChat req={r} data={data} profile={profile} compact />
 
                 {/* Архив и удаление */}
-                <div style={{ display: 'flex', gap: 7, marginTop: 10, flexWrap: 'wrap' }}>
+                <div className="btn-row" style={{ display: 'flex', gap: 7, marginTop: 10, flexWrap: 'wrap' }}>
                   {canArchive(r, profile) && !r.archived && <button onClick={() => doArchive(r)} style={{ fontSize: 11.5, color: 'var(--tx3)', minHeight: 38, padding: '0 10px' }}>В архив</button>}
                   {canDelete(r, profile, chain) && <button onClick={() => setConfirmDel(r)} style={{ fontSize: 11.5, color: 'var(--rd-m)', minHeight: 38, padding: '0 10px' }}>Удалить</button>}
                 </div>
@@ -534,7 +534,7 @@ function RequestForm({ data, profile, editReq, draftItems, onDone }) {
       </div>
 
       <div className="card" style={{ padding: 14, background: 'var(--bg)', display: 'flex', flexDirection: 'column', gap: 11 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 10 }}>
+        <div className="form-2col" style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 10 }}>
           <div>{lbl('Номер служебной записки', true)}<input value={f.sz_number} onChange={(e) => up('sz_number', e.target.value)} placeholder="СЗ-2026-0142" style={inp} /></div>
           <div>{lbl('Дата согласования', true)}<input type="date" value={f.sz_date} onChange={(e) => up('sz_date', e.target.value)} style={inp} /></div>
         </div>
