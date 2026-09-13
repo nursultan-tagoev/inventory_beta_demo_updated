@@ -18,7 +18,7 @@ const PALETTE = [
 ]
 
 export default function Movements({ data, profile, can }) {
-  const { toast } = useToast()
+  const toast = useToast()
   const { movements, products, recipients, warehouses, branches, campaigns, productTypes, directions, requests, profiles } = data
   const role = profile?.role
   const isAdmin = ['admin', 'warehouse'].includes(role)
