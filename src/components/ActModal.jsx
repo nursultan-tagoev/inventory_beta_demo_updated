@@ -95,8 +95,8 @@ export default function ActModal({ init, profile, onClose, onSaved }) {
 
         <div id="act-print" style={{ background: '#fff', color: '#14171D', borderRadius: 8, padding: '46px 54px', boxShadow: 'var(--sh3)' }}>
           {/* Утверждающий — справа сверху, по форме банка */}
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 26 }}>
-            <div style={{ width: 300, fontSize: 12.5, lineHeight: 1.75 }}>
+          <div className="approve-row" style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 26 }}>
+            <div style={{ width: 300, maxWidth: '100%', fontSize: 12.5, lineHeight: 1.75 }}>
               <div style={{ fontWeight: 700 }}>Утверждаю</div>
               <div>Главный бухгалтер ОАО «Бакай Банк»</div>
               <div style={{ marginTop: 16, display: 'flex', alignItems: 'flex-end', gap: 8 }}>
@@ -111,7 +111,7 @@ export default function ActModal({ init, profile, onClose, onSaved }) {
             </div>
           </div>
 
-          <div style={{ textAlign: 'center', margin: '0 0 6px' }}>
+          <div className="act-sheet" style={{ textAlign: 'center', margin: '0 0 6px' }}>
             <div className="ff" style={{ fontSize: 23 }}>
               Акт <input className="act-in" value={actKind} onChange={(e) => setActKind(e.target.value)}
                 style={{ width: '68%', fontSize: 23, textAlign: 'center' }} />
@@ -127,7 +127,7 @@ export default function ActModal({ init, profile, onClose, onSaved }) {
             <span>{today}</span>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18, fontSize: 13, marginBottom: 6 }}>
+          <div className="form-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18, fontSize: 13, marginBottom: 6 }}>
             <div>
               <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', color: '#98A0AE' }}>{isRet ? 'Возвращает' : 'Передал (МОЛ)'}</div>
               <input className="act-in" value={isRet ? recv : giver} onChange={(e) => (isRet ? setRecv : setGiver)(e.target.value)} style={{ width: '100%' }} />
@@ -142,7 +142,7 @@ export default function ActModal({ init, profile, onClose, onSaved }) {
             </div>
           </div>
           {extra.map((e, i) => (
-            <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 12, alignItems: 'end', marginBottom: 4 }}>
+            <div key={i} className="form-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 12, alignItems: 'end', marginBottom: 4 }}>
               <div>
                 <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', color: '#98A0AE' }}>Также передал</div>
                 <input className="act-in" value={e.name} onChange={(ev) => setExtraAt(i, 'name', ev.target.value)} placeholder="Ф.И.О." style={{ width: '100%' }} />
@@ -168,13 +168,13 @@ export default function ActModal({ init, profile, onClose, onSaved }) {
               <th style={{ width: 130 }}>Подразделение</th>
             </tr></thead>
             <tbody>{rows.map((r, i) => <tr key={i}>
-              <td style={{ textAlign: 'center' }}>{i + 1}</td>
-              {showInv && <td><input value={r.sku} placeholder="—" onChange={(e) => setRow(i, 'sku', e.target.value)} /></td>}
-              <td><input value={r.name} onChange={(e) => setRow(i, 'name', e.target.value)} /></td>
-              <td className="mono" style={{ textAlign: 'right' }}><input value={r.qty} onChange={(e) => setRow(i, 'qty', e.target.value)} style={{ textAlign: 'right' }} /></td>
-              <td className="mono" style={{ textAlign: 'right' }}><input value={r.price} onChange={(e) => setRow(i, 'price', e.target.value)} style={{ textAlign: 'right' }} /></td>
-              <td className="mono" style={{ textAlign: 'right' }}>{fmt((+r.qty || 0) * (+r.price || 0))}</td>
-              <td>
+              <td data-label="№" style={{ textAlign: 'center' }}>{i + 1}</td>
+              {showInv && <td data-label="Артикул"><input value={r.sku} placeholder="—" onChange={(e) => setRow(i, 'sku', e.target.value)} /></td>}
+              <td data-label="Наименование"><input value={r.name} onChange={(e) => setRow(i, 'name', e.target.value)} /></td>
+              <td data-label="Количество" className="mono" style={{ textAlign: 'right' }}><input value={r.qty} onChange={(e) => setRow(i, 'qty', e.target.value)} style={{ textAlign: 'right' }} /></td>
+              <td data-label="За единицу" className="mono" style={{ textAlign: 'right' }}><input value={r.price} onChange={(e) => setRow(i, 'price', e.target.value)} style={{ textAlign: 'right' }} /></td>
+              <td data-label="Итого (сом)" className="mono" style={{ textAlign: 'right' }}>{fmt((+r.qty || 0) * (+r.price || 0))}</td>
+              <td data-label="Подразделение">
                 <select value={r.dept} onChange={(e) => setRow(i, 'dept', e.target.value)}
                   style={{ width: '100%', border: 'none', background: 'transparent', font: 'inherit', color: 'inherit' }}>
                   <option value="">—</option>
@@ -201,7 +201,7 @@ export default function ActModal({ init, profile, onClose, onSaved }) {
           </div>
 
           {extra.filter((e) => e.name.trim()).length > 0 && (
-            <div style={{ marginTop: 18, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 26 }}>
+            <div className="form-2col" style={{ marginTop: 18, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 26 }}>
               {extra.filter((e) => e.name.trim()).map((e, i) => (
                 <div key={i} style={{ fontSize: 13 }}>
                   Передал: <b>{e.name}</b>
@@ -215,7 +215,7 @@ export default function ActModal({ init, profile, onClose, onSaved }) {
 
           <div style={{ marginTop: 24 }}>
             {mode === 'e'
-              ? <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 26 }}>
+              ? <div className="form-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 26 }}>
                 <div><div style={{ fontSize: 12, color: '#5A6472', marginBottom: 6 }}>{isRet ? 'Возвращает' : 'Передал'}: <b>{isRet ? recv : giver}</b></div><SignPad label="Подпись" onRef={(fn) => (sigG.current = fn)} /></div>
                 <div><div style={{ fontSize: 12, color: '#5A6472', marginBottom: 6 }}>Принял: <b>{isRet ? giver : recv}</b></div><SignPad label="Подпись" onRef={(fn) => (sigR.current = fn)} /></div>
               </div>
