@@ -2,8 +2,8 @@ import { useState, useMemo } from 'react'
 import { Btn, Sheet, useToast } from '../components/ui'
 import { TL } from '../lib/format'
 import { fullName } from '../lib/attrs'
-import { cancelMovement, restoreMovement, deleteMovement, canCancelMovement, canHardDelete } from '../lib/cleanup'
 import OperationSheet from '../components/OperationSheet'
+import { cancelMovement, restoreMovement, deleteMovement, canCancelMovement, canHardDelete } from '../lib/cleanup'
 
 const SEC = 'var(--sec-mov)', SEC_L = 'var(--sec-mov-l)'
 const ICO = { in: '📥', out: '📤', return: '🔄', writeoff: '🗑', transfer: '⇄', defect: '⚠️', adjust_up: '📈', adjust_down: '📉' }
@@ -133,18 +133,13 @@ export default function Movements({ data, profile, can }) {
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pName(m.product_id)}</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 3 }}>
-            {bc && seeAll && <span style={{ fontSize: 10.5, padding: '2px 8px', borderRadius: 20, background: bc[0], color: bc[1], whiteSpace: 'nowrap' }}>{bName(m.branch_id)}</span>}
+            {bc && seeAll && <span style={{ fontSize: 9.5, padding: '2px 8px', borderRadius: 20, background: bc[0], color: bc[1], whiteSpace: 'nowrap' }}>{bName(m.branch_id)}</span>}
             {personName(m) && <span style={{ fontSize: 10.5, color: 'var(--tx3)' }}>{personName(m)}</span>}
-            {isManager && initiator(m) && <span style={{ fontSize: 10.5, padding: '2px 8px', borderRadius: 20, background: 'var(--sur2)', color: 'var(--tx3)', whiteSpace: 'nowrap' }}>заявку подал: {initiator(m)}</span>}
+            {isManager && initiator(m) && <span style={{ fontSize: 9.5, padding: '2px 8px', borderRadius: 20, background: 'var(--sur2)', color: 'var(--tx3)', whiteSpace: 'nowrap' }}>заявку подал: {initiator(m)}</span>}
             {m.type === 'transfer' && <span style={{ fontSize: 10.5, color: 'var(--tx3)' }}>{whName(m.warehouse_id)} → {whName(m.warehouse_to_id)}</span>}
             {rn && <span className="mono" style={{ fontSize: 10, color: SEC }}>заявка №{rn}</span>}
-            {m.annul_of_act && <span style={{ fontSize: 10.5, padding: '1px 7px', borderRadius: 20, background: 'var(--rd-l)', color: 'var(--rd-m)' }}>аннулирование</span>}
-            {m.is_test && <span style={{ fontSize: 10.5, padding: '1px 7px', borderRadius: 20, background: 'var(--am-l)', color: 'var(--am-m)', fontWeight: 600 }}>тест</span>}
-            {m.cancelled_at && <span style={{ fontSize: 10.5, padding: '1px 7px', borderRadius: 20, background: 'var(--rd-l)', color: 'var(--rd-m)', fontWeight: 600 }}>отменено</span>}
+            {m.annul_of_act && <span style={{ fontSize: 9.5, padding: '1px 7px', borderRadius: 20, background: 'var(--rd-l)', color: 'var(--rd-m)' }}>аннулирование</span>}
           </div>
-          {m.cancelled_at && m.cancel_reason && (
-            <div style={{ fontSize: 10.5, color: 'var(--rd-m)', marginTop: 3 }}>«{m.cancel_reason}»</div>
-          )}
         </div>
         <div style={{ textAlign: 'right', flexShrink: 0 }}>
           {(() => {
@@ -260,7 +255,10 @@ export default function Movements({ data, profile, can }) {
       ))}
 
       <Sheet open={!!sheet} onClose={() => setSheet(null)} title={sheet ? TL[sheet] : ''}>
-        <Sheet open={!!act} onClose={() => { setAct(null); setWhy('') }}
+        {sheet && <OperationSheet type={sheet} data={data} profile={profile} onDone={() => { setSheet(null); data.invalidate(['movements', 'stock', 'deliveries']) }} />}
+      </Sheet>
+
+      <Sheet open={!!act} onClose={() => { setAct(null); setWhy('') }}
         title={act?.kind === 'delete' ? 'Удалить движение' : 'Отменить движение'}>
         {act && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -287,10 +285,9 @@ export default function Movements({ data, profile, can }) {
             )}
 
             <Btn size="lg" onClick={async () => {
-              const fn = act.kind === 'delete'
-                ? deleteMovement(act.mv, profile)
-                : cancelMovement(act.mv, profile, why)
-              const { error } = await fn
+              const { error } = act.kind === 'delete'
+                ? await deleteMovement(act.mv, profile)
+                : await cancelMovement(act.mv, profile, why)
               if (error) return toast(error, 'error')
               toast(act.kind === 'delete' ? 'Движение удалено' : 'Движение отменено')
               setAct(null); setWhy('')
@@ -300,9 +297,6 @@ export default function Movements({ data, profile, can }) {
             </Btn>
           </div>
         )}
-      </Sheet>
-
-      {sheet && <OperationSheet type={sheet} data={data} profile={profile} onDone={() => { setSheet(null); data.invalidate(['movements', 'stock', 'deliveries']) }} />}
       </Sheet>
     </div>
   )
