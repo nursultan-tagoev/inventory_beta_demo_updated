@@ -27,7 +27,7 @@ export default function OperationSheet({ type, data, profile, can, onDone }) {
   const [dictating, setDictating] = useState(false)
   const [act, setAct] = useState(null)
   const [f, setF] = useState({
-    product_id: '', qty: 1, recipient_id: '', branch_id: '',
+    product_id: '', qty: 1, recipient_id: '', branch_id: '', dept: '',
     warehouse_id: warehouses[0]?.id || '', warehouse_to_id: '', location_id: '',
     supplier_id: suppliers[0]?.id || '', purpose: '', due_date: '', sz: '', condition: 'хорошее', direction_id: '', notes: '',
     on_time: true, has_defects: false, defects: 0, delivery_comment: '',
@@ -127,7 +127,7 @@ export default function OperationSheet({ type, data, profile, can, onDone }) {
     if (error) return toast(error, 'error')
     toast(TL[type] + ' сохранена')
     if ((type === 'out' || type === 'return') && selProd) {
-      setAct({ type, items: [{ name: fullName(selProd), sku: selProd.sku, price: selProd.price, qty: Number(f.qty), product_id: selProd.id, warehouse_id: Number(f.warehouse_id) }], recipient: selRec?.name || '', recipient_id: selRec?.id || null, purpose: f.purpose, branch_id: f.branch_id || selRec?.branch_id || null, branchName: branches.find((b) => b.id === (f.branch_id || selRec?.branch_id))?.name, dept: selRec?.dept || '' })
+      setAct({ type, items: [{ name: fullName(selProd), sku: selProd.sku, price: selProd.price, qty: Number(f.qty), product_id: selProd.id, warehouse_id: Number(f.warehouse_id) }], recipient: selRec?.name || '', recipient_id: selRec?.id || null, purpose: f.purpose, branch_id: f.branch_id || selRec?.branch_id || null, branchName: branches.find((b) => b.id === (f.branch_id || selRec?.branch_id))?.name, dept: f.dept || selRec?.dept || '' })
     } else { onDone() }
   }
   const next = () => { if (step < steps) setStep(step + 1); else setConfirm(true) }
@@ -308,9 +308,16 @@ export default function OperationSheet({ type, data, profile, can, onDone }) {
 
       {step === 2 && (type === 'out' || type === 'return') && <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <Field label={type === 'out' ? 'Получатель' : 'Возврат от'}>
-          <Select value={f.recipient_id} onChange={(e) => { if (e.target.value === 'new') setShowNewRec(true); else { up('recipient_id', e.target.value); const r = recipients.find((x) => x.id == e.target.value); if (r?.branch_id) up('branch_id', r.branch_id) } }}>
+          <Select value={f.recipient_id} onChange={(e) => {
+            if (e.target.value === 'new') { setShowNewRec(true); return }
+            up('recipient_id', e.target.value)
+            const r = recList.find((x) => x.id == e.target.value)
+            // Департамент и филиал подтягиваются из карточки получателя
+            if (r?.branch_id) up('branch_id', r.branch_id)
+            up('dept', r?.dept || '')
+          }}>
             <option value="">— выбрать —</option>
-            {recList.map((r) => <option key={r.id} value={r.id}>{r.name}{r.branch_id ? ` (${branches.find((b) => b.id === r.branch_id)?.name || ''})` : ''}</option>)}
+            {recList.map((r) => <option key={r.id} value={r.id}>{r.name}{r.dept ? ` · ${r.dept}` : ''}</option>)}
             <option value="new">➕ Добавить получателя</option>
           </Select>
         </Field>
@@ -322,12 +329,11 @@ export default function OperationSheet({ type, data, profile, can, onDone }) {
           </div>
           <div style={{ display: 'flex', gap: 8 }}><Btn size="sm" onClick={createRecipient}>Сохранить</Btn><Btn size="sm" v="secondary" onClick={() => setShowNewRec(false)}>Отмена</Btn></div>
         </div>}
-        {/* Филиал-адресат — куда уходит товар */}
-        {type === 'out' && branches.length > 0 && <Field label="Филиал-адресат (куда)">
-          <Select value={f.branch_id} onChange={(e) => up('branch_id', e.target.value)}>
-            <option value="">— выбрать филиал —</option>
-            {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-          </Select>
+        {/* Подразделение — кому предназначен товар. Подставляется из карточки
+            получателя, но правится: бывает, что получает один, а для другого отдела. */}
+        {type === 'out' && <Field label="Подразделение">
+          <Input value={f.dept} onChange={(e) => up('dept', e.target.value)}
+            placeholder={selRec?.dept ? selRec.dept : 'отдел или управление'} />
         </Field>}
         {type === 'return' && <Field label="Состояние"><Select value={f.condition} onChange={(e) => up('condition', e.target.value)}><option value="хорошее">Хорошее</option><option value="б/у">Б/у</option><option value="брак">Брак</option></Select></Field>}
         <div style={{ display: 'flex', gap: 8 }}><Btn v="secondary" onClick={() => setStep(1)}>← Назад</Btn><Btn onClick={next} style={{ flex: 1 }}>Далее →</Btn></div>
