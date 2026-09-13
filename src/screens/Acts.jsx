@@ -155,6 +155,7 @@ function ActView({ act, data, onClose, onChanged, profile }) {
                 const { error } = await deleteAct(act, profile)
                 setDelBusy(false)
                 if (error) return alert(error)
+                data?.invalidate?.(['acts', 'movements', 'stock'])
                 onChanged?.()
               }} style={{ height: 40, padding: '0 16px', borderRadius: 9, border: 'none', background: 'var(--rd)', color: '#fff', fontSize: 13, fontWeight: 600 }}>
                 {delBusy ? 'Удаляю…' : 'Удалить насовсем'}
