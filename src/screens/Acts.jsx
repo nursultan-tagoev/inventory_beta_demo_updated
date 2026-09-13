@@ -5,6 +5,7 @@ import ReceiptSign from '../components/ReceiptSign'
 import { signersOf, currentSigner } from '../lib/signing'
 import { Badge, Spin } from '../components/ui'
 import { fmt } from '../lib/format'
+import { deleteAct, deletePreview, canHardDelete } from '../lib/cleanup'
 import ActSheet from '../components/ActSheet'
 
 const ST = { draft: ['Черновик', 'slate'], awaiting_sign: ['Ждёт подписи получателя', 'amber'], signed: ['Подписан', 'green'], signed_manual: ['Подписан (скан)', 'green'], annulled: ['Аннулирован', 'red'], declined: ['Отказ', 'red'] }
@@ -67,7 +68,7 @@ export default function Acts({ data, profile }) {
       )}
 
       {signAct && <ReceiptSign act={signAct} data={data} profile={profile} onClose={() => setSignAct(null)} onDone={() => { setSignAct(null); load() }} />}
-      {open && <ActView act={open} data={data} onClose={() => setOpen(null)} onChanged={() => { load(); setOpen(null) }} />}
+      {open && <ActView act={open} data={data} profile={profile} onClose={() => setOpen(null)} onChanged={() => { load(); setOpen(null) }} />}
     </div>
   )
 }
@@ -93,7 +94,9 @@ function SigProgress({ act, data }) {
   )
 }
 
-function ActView({ act, data, onClose, onChanged }) {
+function ActView({ act, data, onClose, onChanged, profile }) {
+  const [del, setDel] = useState(null)     // предпросмотр удаления
+  const [delBusy, setDelBusy] = useState(false)
   const [items, setItems] = useState(null)
   const [annulling, setAnnulling] = useState(false)
   const [reason, setReason] = useState('')
@@ -116,6 +119,10 @@ function ActView({ act, data, onClose, onChanged }) {
         <div className="no-print" style={{ display: 'flex', gap: 8, marginBottom: 12, justifyContent: 'flex-end' }}>
           {!act.annulled && <button onClick={() => setAnnulling(!annulling)} style={{ height: 34, padding: '0 14px', borderRadius: 9, border: '1px solid var(--rd)', background: 'var(--rd-l)', color: 'var(--rd-m)', fontSize: 12.5, fontWeight: 600 }}>Аннулировать</button>}
           <button onClick={() => printDoc('act-print')} style={{ height: 34, padding: '0 14px', borderRadius: 9, border: '1px solid var(--brd2)', background: 'var(--sur)', fontSize: 12.5, fontWeight: 600 }}>🖨 Печать / PDF</button>
+          {canHardDelete(profile?.role) && (
+            <button onClick={async () => setDel(await deletePreview(act))}
+              style={{ height: 34, padding: '0 14px', borderRadius: 9, border: '1px solid var(--rd)', background: 'var(--sur)', color: 'var(--rd-m)', fontSize: 12.5, fontWeight: 600 }}>Удалить</button>
+          )}
           <button onClick={onClose} style={{ height: 34, padding: '0 14px', borderRadius: 9, border: '1px solid var(--brd2)', background: 'var(--sur)', fontSize: 12.5, fontWeight: 600 }}>Закрыть</button>
         </div>
         {annulling && !act.annulled && (
@@ -130,6 +137,29 @@ function ActView({ act, data, onClose, onChanged }) {
             <div style={{ display: 'flex', gap: 8 }}>
               <button onClick={doAnnul} disabled={busy || !reason.trim()} style={{ flex: 1, height: 40, borderRadius: 9, border: 'none', background: 'var(--rd)', color: '#fff', fontSize: 13, fontWeight: 600, opacity: busy || !reason.trim() ? 0.6 : 1 }}>{busy ? 'Аннулирую…' : 'Аннулировать и вернуть остаток'}</button>
               <button onClick={() => setAnnulling(false)} style={{ height: 40, padding: '0 16px', borderRadius: 9, border: '1px solid var(--brd2)', background: 'var(--sur)', fontSize: 13 }}>Отмена</button>
+            </div>
+          </div>
+        )}
+        {del && (
+          <div className="no-print" style={{ background: 'var(--rd-l)', border: '1px solid var(--rd)', borderRadius: 12, padding: '13px 15px', marginBottom: 12 }}>
+            <div style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--rd-m)', marginBottom: 6 }}>Удалить акт {act.number} насовсем?</div>
+            <div style={{ fontSize: 12, color: 'var(--tx2)', lineHeight: 1.6, marginBottom: 10 }}>
+              Уйдут: акт, {del.items} позиц. и {del.movements} движ.
+              {del.backToStock > 0 && <> На склад вернётся <b>{del.backToStock}</b> ед.</>}
+              {del.offStock > 0 && <> Со склада уйдёт <b>{del.offStock}</b> ед.</>}
+              <br />Восстановить будет нельзя. Для боевых документов используйте аннулирование — оно оставляет след.
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button disabled={delBusy} onClick={async () => {
+                setDelBusy(true)
+                const { error } = await deleteAct(act, profile)
+                setDelBusy(false)
+                if (error) return alert(error)
+                onChanged?.()
+              }} style={{ height: 40, padding: '0 16px', borderRadius: 9, border: 'none', background: 'var(--rd)', color: '#fff', fontSize: 13, fontWeight: 600 }}>
+                {delBusy ? 'Удаляю…' : 'Удалить насовсем'}
+              </button>
+              <button onClick={() => setDel(null)} style={{ height: 40, padding: '0 16px', borderRadius: 9, border: '1px solid var(--brd2)', background: 'var(--sur)', fontSize: 13 }}>Отмена</button>
             </div>
           </div>
         )}
