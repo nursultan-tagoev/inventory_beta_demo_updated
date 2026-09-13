@@ -6,7 +6,11 @@ export function printDoc(elementOrId) {
 
   const host = document.createElement('div')
   host.className = 'print-root'
-  host.innerHTML = el.innerHTML
+
+  /* Клонируем сам элемент, а не его внутренности: у корневого блока
+     свои стили — поля, шрифт, фон. При копировании innerHTML они терялись,
+     и на печать уходил голый текст. */
+  host.appendChild(el.cloneNode(true))
   document.body.appendChild(host)
 
   const cleanup = () => {
