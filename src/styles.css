@@ -317,3 +317,20 @@ button:active { transform: scale(.97); }
   /* Подписная часть в столбик — две колонки по 120px нечитаемы */
   .sign-row { flex-direction: column; gap: 18px !important; }
 }
+
+/* ── Печатный бланк акта ──────────────────────────────────────
+   Бланк — документ, а не экран: на телефоне он ужимается по ширине,
+   но остаётся таблицей. Разворот в карточки здесь не нужен —
+   для заполнения есть отдельная форма. */
+@media screen and (max-width: 640px) {
+  .act-sheet-print { padding: 22px 16px !important; }
+  .act-sheet-print table { font-size: 9px !important; }
+  .act-sheet-print table th,
+  .act-sheet-print table td { padding: 4px 3px !important; }
+  .act-sheet-print .sign-row { flex-direction: column; gap: 22px !important; }
+  .act-sheet-print .approve-row { text-align: left !important; }
+}
+
+@media print {
+  .act-sheet-print { padding: 0 !important; box-shadow: none !important; }
+}
