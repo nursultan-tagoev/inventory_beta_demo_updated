@@ -17,11 +17,11 @@ function Credentials({ login, password, onClose }) {
       <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--gr-m)', marginBottom: 8 }}>Доступ создан — передайте его человеку</div>
       <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', marginBottom: 10 }}>
         <div>
-          <div style={{ fontSize: 9.5, color: 'var(--tx3)', textTransform: 'uppercase' }}>Логин</div>
+          <div style={{ fontSize: 10.5, color: 'var(--tx3)', textTransform: 'uppercase' }}>Логин</div>
           <div className="mono" style={{ fontSize: 14, fontWeight: 600 }}>{login}</div>
         </div>
         <div>
-          <div style={{ fontSize: 9.5, color: 'var(--tx3)', textTransform: 'uppercase' }}>Временный пароль</div>
+          <div style={{ fontSize: 10.5, color: 'var(--tx3)', textTransform: 'uppercase' }}>Временный пароль</div>
           <div className="mono" style={{ fontSize: 14, fontWeight: 600, letterSpacing: '.06em' }}>{password}</div>
         </div>
       </div>
@@ -45,7 +45,7 @@ export default function Users({ data }) {
   const [cred, setCred] = useState(null)
   const [confirm, setConfirm] = useState(null)
   const [q, setQ] = useState('')
-  const [f, setF] = useState({ full_name: '', role: 'employee', branch_id: '', manager_id: '', position: '' })
+  const [f, setF] = useState({ full_name: '', role: 'employee', branch_id: '', manager_id: '', position: '', dept: '' })
 
   const heads = (profiles || []).filter((p) => p.role === 'manager' && p.is_active !== false)
   const up = (k, v) => setF((s) => ({ ...s, [k]: v }))
@@ -65,14 +65,14 @@ export default function Users({ data }) {
     }
     setBusy(true)
     const { data: d, error } = await createUser({
-      full_name: f.full_name.trim(), role: f.role,
+      full_name: f.full_name.trim(), role: f.role, dept: f.dept || null,
       branch_id: f.branch_id ? Number(f.branch_id) : null,
-      manager_id: f.manager_id || null, position: f.position || null,
+      manager_id: f.manager_id || null, position: f.position || null, dept: f.dept || null,
     })
     setBusy(false)
     if (error) return toast(typeof error === 'string' ? error : JSON.stringify(error), 'error')
     setCred({ login: d.email, password: d.password })
-    setF({ full_name: '', role: 'employee', branch_id: '', manager_id: '', position: '' })
+    setF({ full_name: '', role: 'employee', branch_id: '', manager_id: '', position: '', dept: '' })
     setAdd(false); invalidate('profiles')
   }
 
@@ -131,6 +131,21 @@ export default function Users({ data }) {
               </Select>
             </Field>
           )}
+          <Field label="Подразделение — попадёт в акт при выдаче">
+            <Select value={f.dept} onChange={(e) => up('dept', e.target.value)}>
+              <option value="">—</option>
+              {(data.departments || []).filter((d) => d.kind === 'dep').length > 0 && (
+                <optgroup label="Департаменты и управления">
+                  {(data.departments || []).filter((d) => d.kind === 'dep').map((d) => <option key={d.id} value={d.name}>{d.name}</option>)}
+                </optgroup>
+              )}
+              {(data.departments || []).filter((d) => d.kind === 'branch').length > 0 && (
+                <optgroup label="Филиалы">
+                  {(data.departments || []).filter((d) => d.kind === 'branch').map((d) => <option key={d.id} value={d.name}>{d.name}</option>)}
+                </optgroup>
+              )}
+            </Select>
+          </Field>
           <Field label="Должность">
             <Input value={f.position} onChange={(e) => up('position', e.target.value)} placeholder="Специалист отдела маркетинга" />
           </Field>
@@ -155,9 +170,9 @@ export default function Users({ data }) {
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
                   <span style={{ fontSize: 12.5, fontWeight: 600 }}>{p.full_name || p.email}</span>
-                  <span style={{ fontSize: 9, padding: '2px 7px', borderRadius: 20, background: bg, color: fg }}>{ROLE[p.role]}</span>
-                  {off && <span style={{ fontSize: 9, padding: '2px 7px', borderRadius: 20, background: 'var(--rd-l)', color: 'var(--rd-m)' }}>отключён</span>}
-                  {p.must_change_password && !off && <span style={{ fontSize: 9, padding: '2px 7px', borderRadius: 20, background: 'var(--am-l)', color: 'var(--am-m)' }}>не менял пароль</span>}
+                  <span style={{ fontSize: 10.5, padding: '2px 7px', borderRadius: 20, background: bg, color: fg }}>{ROLE[p.role]}</span>
+                  {off && <span style={{ fontSize: 10.5, padding: '2px 7px', borderRadius: 20, background: 'var(--rd-l)', color: 'var(--rd-m)' }}>отключён</span>}
+                  {p.must_change_password && !off && <span style={{ fontSize: 10.5, padding: '2px 7px', borderRadius: 20, background: 'var(--am-l)', color: 'var(--am-m)' }}>не менял пароль</span>}
                 </div>
                 <div className="mono" style={{ fontSize: 10, color: 'var(--tx3)', marginTop: 2 }}>
                   {p.email}{p.branch_id ? ' · ' + bName(p.branch_id) : ''}

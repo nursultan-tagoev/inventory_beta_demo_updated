@@ -108,17 +108,17 @@ export default function Sidebar({ view, setView, profile, onLogout, badges = {},
         {mainItems.map((n) => (
           <button key={n.id} data-tour={'mnav-' + n.id} onClick={() => setView(n.id)}
             style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, padding: '8px 2px', color: view === n.id ? 'var(--ink)' : 'var(--tx3)' }}>
-            <div style={{ position: 'relative' }}><Ico k={n.id} s={21} />{badges[n.id] > 0 && <span style={{ position: 'absolute', top: -4, right: -8, minWidth: 15, height: 15, padding: '0 3px', borderRadius: 8, background: 'var(--ink)', color: '#fff', fontSize: 9, fontWeight: 700, display: 'grid', placeItems: 'center' }}>{badges[n.id]}</span>}</div>
-            <span style={{ fontSize: 9.5, fontWeight: view === n.id ? 600 : 500 }}>{n.label}</span>
+            <div style={{ position: 'relative' }}><Ico k={n.id} s={21} />{badges[n.id] > 0 && <span style={{ position: 'absolute', top: -4, right: -8, minWidth: 15, height: 15, padding: '0 3px', borderRadius: 8, background: 'var(--ink)', color: '#fff', fontSize: 10.5, fontWeight: 700, display: 'grid', placeItems: 'center' }}>{badges[n.id]}</span>}</div>
+            <span style={{ fontSize: 10.5, fontWeight: view === n.id ? 600 : 500 }}>{n.label}</span>
           </button>
         ))}
         <button onClick={() => setMore(true)} data-tour="mnav-more"
           style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, padding: '8px 2px', color: more ? 'var(--ink)' : 'var(--tx3)' }}>
           <div style={{ position: 'relative', width: 21, height: 21, display: 'grid', placeItems: 'center' }}>
             <span style={{ fontSize: 17, lineHeight: 1 }}>⋯</span>
-            {restBadge > 0 && <span style={{ position: 'absolute', top: -4, right: -8, minWidth: 15, height: 15, padding: '0 3px', borderRadius: 8, background: 'var(--ink)', color: '#fff', fontSize: 9, fontWeight: 700, display: 'grid', placeItems: 'center' }}>{restBadge}</span>}
+            {restBadge > 0 && <span style={{ position: 'absolute', top: -4, right: -8, minWidth: 15, height: 15, padding: '0 3px', borderRadius: 8, background: 'var(--ink)', color: '#fff', fontSize: 10.5, fontWeight: 700, display: 'grid', placeItems: 'center' }}>{restBadge}</span>}
           </div>
-          <span style={{ fontSize: 9.5, fontWeight: more ? 600 : 500 }}>Ещё</span>
+          <span style={{ fontSize: 10.5, fontWeight: more ? 600 : 500 }}>Ещё</span>
         </button>
       </nav>
 

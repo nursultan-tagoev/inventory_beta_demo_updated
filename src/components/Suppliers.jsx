@@ -151,7 +151,7 @@ export default function Suppliers({ data, toast: t }) {
                         ['Брака всего', `${st.totalDef} шт`, st.totalDef ? 'var(--rd-m)' : ''],
                         ['Доля брака', `${st.defRate}%`, st.defRate > 5 ? 'var(--rd-m)' : st.defRate > 0 ? 'var(--am-m)' : 'var(--gr-m)']].map(([l, v, c]) => (
                         <div key={l} style={{ background: 'var(--bg)', borderRadius: 10, padding: '9px 11px' }}>
-                          <div style={{ fontSize: 9.5, color: 'var(--tx3)' }}>{l}</div>
+                          <div style={{ fontSize: 10.5, color: 'var(--tx3)' }}>{l}</div>
                           <div className="mono" style={{ fontSize: 14, fontWeight: 600, color: c || 'var(--tx)' }}>{v}</div>
                         </div>
                       ))}
@@ -181,7 +181,7 @@ export default function Suppliers({ data, toast: t }) {
                               <span className="mono" style={{ fontSize: 10, color: 'var(--tx3)' }}>
                                 {new Date(d.created_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
                               </span>
-                              <span style={{ fontSize: 9.5, padding: '2px 8px', borderRadius: 20, background: d.on_time ? 'var(--gr-l)' : 'var(--am-l)', color: d.on_time ? 'var(--gr-m)' : 'var(--am-m)' }}>
+                              <span style={{ fontSize: 10.5, padding: '2px 8px', borderRadius: 20, background: d.on_time ? 'var(--gr-l)' : 'var(--am-l)', color: d.on_time ? 'var(--gr-m)' : 'var(--am-m)' }}>
                                 {d.on_time ? 'в срок' : 'опоздание'}
                               </span>
                             </div>
@@ -197,7 +197,7 @@ export default function Suppliers({ data, toast: t }) {
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 6, marginTop: 7 }}>
                                   {cells.map(([l, v, c]) => (
                                     <div key={l} style={{ background: 'var(--bg)', borderRadius: 8, padding: '6px 8px', textAlign: 'center' }}>
-                                      <div style={{ fontSize: 8.5, color: 'var(--tx3)', textTransform: 'uppercase', letterSpacing: '.03em' }}>{l}</div>
+                                      <div style={{ fontSize: 10.5, color: 'var(--tx3)', textTransform: 'uppercase', letterSpacing: '.03em' }}>{l}</div>
                                       <div className="mono" style={{ fontSize: 12.5, fontWeight: 600, color: c }}>{v}</div>
                                     </div>
                                   ))}

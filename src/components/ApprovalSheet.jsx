@@ -183,8 +183,8 @@ export default function ApprovalSheet({ req, data, profile, onClose, onDone }) {
               <div style={{ paddingBottom: i < chain.length - 1 ? 10 : 0, flex: 1 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
                   <span style={{ fontSize: 13, fontWeight: 600 }}>{a.approver_name || '—'}</span>
-                  {!a.in_system && <span style={{ fontSize: 9.5, padding: '1px 7px', borderRadius: 20, background: 'var(--am-l)', color: 'var(--am-m)' }}>вне системы</span>}
-                  {cur && a.id === cur.id && <span style={{ fontSize: 9.5, padding: '1px 7px', borderRadius: 20, background: 'var(--ink-l)', color: 'var(--ink)' }}>сейчас</span>}
+                  {!a.in_system && <span style={{ fontSize: 10.5, padding: '1px 7px', borderRadius: 20, background: 'var(--am-l)', color: 'var(--am-m)' }}>вне системы</span>}
+                  {cur && a.id === cur.id && <span style={{ fontSize: 10.5, padding: '1px 7px', borderRadius: 20, background: 'var(--ink-l)', color: 'var(--ink)' }}>сейчас</span>}
                 </div>
                 <div style={{ fontSize: 11, color: 'var(--tx3)' }}>
                   {a.approver_role}

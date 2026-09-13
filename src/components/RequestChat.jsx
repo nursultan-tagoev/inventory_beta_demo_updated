@@ -68,8 +68,8 @@ export default function RequestChat({ req, data, profile, compact }) {
               <div style={{ minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3, flexDirection: me ? 'row-reverse' : 'row' }}>
                   <span style={{ fontSize: 10.5, fontWeight: 600, color: fg }}>{me ? 'Вы' : (name || '').replace(/@.*$/, '')}</span>
-                  {roleLabel && <span style={{ fontSize: 8.5, padding: '1px 6px', borderRadius: 20, background: bg, color: fg, whiteSpace: 'nowrap' }}>{roleLabel}</span>}
-                  <span style={{ fontSize: 9.5, color: 'var(--tx3)' }}>{new Date(m.created_at).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+                  {roleLabel && <span style={{ fontSize: 10.5, padding: '1px 6px', borderRadius: 20, background: bg, color: fg, whiteSpace: 'nowrap' }}>{roleLabel}</span>}
+                  <span style={{ fontSize: 10.5, color: 'var(--tx3)' }}>{new Date(m.created_at).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
                 </div>
                 <div style={{ padding: '9px 12px', borderRadius: me ? '13px 4px 13px 13px' : '4px 13px 13px 13px',
                   background: me ? 'var(--ink-l)' : bg, border: `1px solid ${me ? 'transparent' : bg}`,

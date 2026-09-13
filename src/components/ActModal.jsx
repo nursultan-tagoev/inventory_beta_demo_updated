@@ -104,7 +104,7 @@ export default function ActModal({ init, profile, onClose, onSaved }) {
                 <input className="act-in" value={approver} onChange={(e) => setApprover(e.target.value)}
                   placeholder="Ф.И.О." style={{ flex: 1, fontSize: 12.5 }} />
               </div>
-              <div style={{ display: 'flex', gap: 8, fontSize: 9.5, color: '#98A0AE' }}>
+              <div style={{ display: 'flex', gap: 8, fontSize: 10.5, color: '#98A0AE' }}>
                 <span style={{ width: 92, textAlign: 'center' }}>подпись</span>
                 <span>расшифровка</span>
               </div>

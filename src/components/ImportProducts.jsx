@@ -194,7 +194,7 @@ export default function ImportProducts({ data, onClose, onDone }) {
                       {r.error || [r.direction, r.type, r.campaign].filter(Boolean).join(' · ') || 'без иерархии'}
                     </div>
                   </div>
-                  <span style={{ fontSize: 9.5, padding: '2px 8px', borderRadius: 20, whiteSpace: 'nowrap', background: TONE[r.status][0], color: TONE[r.status][1] }}>
+                  <span style={{ fontSize: 10.5, padding: '2px 8px', borderRadius: 20, whiteSpace: 'nowrap', background: TONE[r.status][0], color: TONE[r.status][1] }}>
                     {TONE[r.status][2]}
                   </span>
                 </div>
