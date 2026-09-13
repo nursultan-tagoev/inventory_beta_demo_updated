@@ -83,6 +83,7 @@ export default async function handler(req, res) {
         id: created.user.id, full_name: fullName, email,
         role: payload.role, branch_id: payload.branch_id || null,
         manager_id: payload.manager_id || null, position: payload.position || null,
+        dept: payload.dept || null,
         is_active: true, must_change_password: true,
       }
       const { error: e2 } = await sb.from('profiles').upsert(row, { onConflict: 'id' })
