@@ -157,7 +157,7 @@ export default function ActModal({ init, profile, onClose, onSaved }) {
 
           <div style={{ fontSize: 12.5, color: '#5A6472', margin: '6px 0' }}>Основание: <input className="act-in" value={basis} onChange={(e) => setBasis(e.target.value)} style={{ width: '70%' }} /></div>
 
-          <table className="act-tbl">
+          <div className="table-x"><table className="act-tbl">
             <thead><tr>
               <th style={{ width: 24 }}>№</th>
               {showInv && <th style={{ width: 92 }}>Артикул</th>}
@@ -194,7 +194,7 @@ export default function ActModal({ init, profile, onClose, onSaved }) {
                 </select>
               </td>
             </tr>)}</tbody>
-          </table>
+          </table></div>
           <div style={{ textAlign: 'right', fontSize: 13, marginTop: 4 }}>
             Итого: <b className="mono">{rows.length}</b> поз., <b className="mono">{totalQty}</b> ед.,
             на сумму <b className="mono">{fmt(total)} сом</b>
