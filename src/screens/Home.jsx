@@ -167,7 +167,11 @@ export default function Home({ data, profile, can, setView }) {
       <div className="home-panels" style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 16 }}>
         <div className="card" style={{ overflow: 'hidden' }}>
           <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--brd)', fontWeight: 600, fontSize: 14.5 }}>{['admin','director'].includes(role) ? 'Последние движения' : role === 'manager' ? 'Движения моего филиала' : 'Что я получал'}</div>
-          {recent.length === 0 && <div style={{ padding: 34, textAlign: 'center', color: 'var(--tx3)', fontSize: 13 }}>Пока пусто.</div>}
+          {recent.length === 0 && (
+            <div style={{ padding: 34, textAlign: 'center', color: 'var(--tx3)', fontSize: 12.5, lineHeight: 1.6 }}>
+              Операций пока не было.<br />Они появятся после первого прихода или выдачи.
+            </div>
+          )}
           {recent.map((m, i) => (
             <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 18px', borderBottom: i < recent.length - 1 ? '1px solid var(--brd)' : 'none' }}>
               <Badge color={{ in: 'green', out: 'ink', return: 'purple', writeoff: 'red', transfer: 'amber' }[m.type]}>{TL[m.type]}</Badge>

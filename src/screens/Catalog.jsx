@@ -106,7 +106,7 @@ export default function Catalog({ data, profile, onRequest }) {
               {attrsLine(p) && <div style={{ fontSize: 10.5, color: 'var(--tx3)', marginTop: 2 }}>{attrsLine(p)}</div>}
               {chain && <div style={{ fontSize: 10, color: 'var(--tx3)', marginTop: 2 }}>{chain}</div>}
               <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 9 }}>
-                <span style={{ fontSize: 9.5, padding: '2px 8px', borderRadius: 20, background: bg, color: col }}>{lbl}</span>
+                <span style={{ fontSize: 10.5, padding: '2px 8px', borderRadius: 20, background: bg, color: col }}>{lbl}</span>
                 {!disabled && <span style={{ marginLeft: 'auto', fontSize: 11, color: SEC }}>запросить →</span>}
               </div>
             </div>
@@ -147,7 +147,7 @@ export default function Catalog({ data, profile, onRequest }) {
                   <div style={{ fontSize: 14, fontWeight: 600 }}>{pick.name}</div>
                   {chain && <div style={{ fontSize: 10.5, color: 'var(--tx3)' }}>{chain}</div>}
                 </div>
-                <span style={{ fontSize: 9.5, padding: '2px 9px', borderRadius: 20, background: bg, color: col }}>{lbl}</span>
+                <span style={{ fontSize: 10.5, padding: '2px 9px', borderRadius: 20, background: bg, color: col }}>{lbl}</span>
               </div>
               <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', color: 'var(--tx3)', marginBottom: 7 }}>Сколько нужно</div>
               <div style={{ display: 'flex', gap: 9, alignItems: 'center', marginBottom: 14 }}>

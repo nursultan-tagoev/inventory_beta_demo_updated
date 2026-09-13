@@ -8,6 +8,7 @@ import { push, clearFor } from '../lib/notify'
 import ApprovalSheet from '../components/ApprovalSheet'
 import RequestChat from '../components/RequestChat'
 import { fullName } from '../lib/attrs'
+import { fmt } from '../lib/format'
 
 const SEC = 'var(--sec-req)', SEC_L = 'var(--sec-req-l)'
 const ST = {
@@ -40,6 +41,10 @@ export default function Requests({ data, profile, can, draftItems, onDraftUsed }
   useEffect(() => { if (draftItems?.length) { setEditReq(null); setForm(true) } }, [draftItems])
 
   const pName = (id) => fullName(products.find((p) => p.id === id)) || '—'
+  const reqSum = (r) => (r.items || []).reduce((a, it) => {
+    const p = products.find((x) => x.id === it.product_id)
+    return a + (it.approved_qty ?? it.qty) * (Number(p?.price) || 0)
+  }, 0)
   const bName = (id) => branches.find((b) => b.id === id)?.name || ''
   const uName = (id) => { const p = profiles.find((x) => x.id === id); return p?.full_name || p?.email || '' }
 
@@ -227,6 +232,13 @@ export default function Requests({ data, profile, can, draftItems, onDraftUsed }
                     </div>
                   ))}
                   {r.purpose && <div style={{ fontSize: 11.5, color: 'var(--tx3)', marginTop: 6 }}>Цель: {r.purpose}</div>}
+                  {reqSum(r) > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
+                      marginTop: 9, paddingTop: 9, borderTop: '1px dashed var(--brd)', fontSize: 12.5 }}>
+                      <span style={{ color: 'var(--tx3)' }}>Стоимость заявки</span>
+                      <span className="mono" style={{ fontWeight: 600 }}>{fmt(Math.round(reqSum(r)))} сом</span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Основание */}
@@ -267,7 +279,7 @@ export default function Requests({ data, profile, can, draftItems, onDraftUsed }
                         </span>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ fontSize: 12, fontWeight: 500 }}>{a.approver_name}
-                            {!a.in_system && <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 20, background: 'var(--am-l)', color: 'var(--am-m)', marginLeft: 6 }}>вне системы</span>}
+                            {!a.in_system && <span style={{ fontSize: 10.5, padding: '1px 6px', borderRadius: 20, background: 'var(--am-l)', color: 'var(--am-m)', marginLeft: 6 }}>вне системы</span>}
                           </div>
                           <div style={{ fontSize: 10, color: 'var(--tx3)' }}>
                             {a.approver_role}

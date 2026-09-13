@@ -6,12 +6,12 @@ import Users from '../components/Users'
 
 const NAV = [
   { id: 'hier', l: 'Иерархия', ico: '🗂' },
-  { id: 'warehouses', l: 'Склады', ico: '🏬', super: true },
+  { id: 'warehouses', l: 'Склады', ico: '🏬' },
   { id: 'locations', l: 'Места хранения', ico: '📍' },
-  { id: 'branches', l: 'Филиалы', ico: '🗺', super: true },
+  { id: 'branches', l: 'Филиалы', ico: '🗺' },
   { id: 'categories', l: 'Категории', ico: '🏷' },
   { id: 'suppliers', l: 'Поставщики', ico: '🚚' },
-  { id: 'appr', l: 'Согласование', ico: '🧭', super: true },
+  { id: 'appr', l: 'Согласование', ico: '🧭' },
   { id: 'users', l: 'Пользователи', ico: '👥', super: true },
 ]
 
@@ -157,7 +157,7 @@ function Places({ locations, warehouses, ins, del }) {
         </div>
       </div>
       <div className="card" style={{ overflow: 'hidden' }}>
-        {locations.length === 0 && <div style={{ padding: 30, textAlign: 'center', color: 'var(--tx3)', fontSize: 13 }}>Пусто.</div>}
+        {locations.length === 0 && <div style={{ padding: 30, textAlign: 'center', color: 'var(--tx3)', fontSize: 12.5, lineHeight: 1.6 }}>Мест хранения нет.<br />Добавьте полки или зоны, чтобы находить товар на складе.</div>}
         {locations.map((l, i) => (
           <div key={l.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 16px', borderBottom: i < locations.length - 1 ? '1px solid var(--brd)' : 'none', fontSize: 13 }}>
             <span style={{ flex: 1, fontWeight: 500 }}>{l.name}</span>
@@ -391,7 +391,7 @@ function Simple({ title, hint, table, rows, cols, ins, del, upd }) {
         </div>
       </div>
       <div className="card" style={{ overflow: 'hidden' }}>
-        {rows.length === 0 && <div style={{ padding: 30, textAlign: 'center', color: 'var(--tx3)', fontSize: 13 }}>Пусто.</div>}
+        {rows.length === 0 && <div style={{ padding: 30, textAlign: 'center', color: 'var(--tx3)', fontSize: 12.5, lineHeight: 1.6 }}>Записей нет.<br />Добавьте первую в поле выше.</div>}
         {rows.map((r, i) => (
           <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px', borderBottom: i < rows.length - 1 ? '1px solid var(--brd)' : 'none', fontSize: 13 }}>
             {edit && edit.id === r.id ? <>

@@ -217,7 +217,7 @@ export default function Inventory({ data, profile }) {
 
             {/* Таблица позиций */}
             <div style={{ border: '1px solid var(--brd)', borderRadius: 11, overflow: 'hidden' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 62px 62px 62px', gap: 6, padding: '9px 11px', background: 'var(--bg)', fontSize: 9.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.03em', color: 'var(--tx3)' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 62px 62px 62px', gap: 6, padding: '9px 11px', background: 'var(--bg)', fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.03em', color: 'var(--tx3)' }}>
                 <span>Товар</span><span style={{ textAlign: 'center' }}>Учёт</span>
                 <span style={{ textAlign: 'center' }}>Факт</span><span style={{ textAlign: 'center' }}>Разн.</span>
               </div>
@@ -250,11 +250,11 @@ export default function Inventory({ data, profile }) {
             {open.inv.status !== 'draft' && (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 8 }}>
                 <div style={{ background: 'var(--bg)', borderRadius: 10, padding: '9px 11px' }}>
-                  <div style={{ fontSize: 9, color: 'var(--tx3)', textTransform: 'uppercase' }}>Расхождений</div>
+                  <div style={{ fontSize: 10.5, color: 'var(--tx3)', textTransform: 'uppercase' }}>Расхождений</div>
                   <div className="mono" style={{ fontSize: 15, fontWeight: 600, color: diffs.length ? 'var(--am-m)' : 'var(--gr-m)' }}>{diffs.length}</div>
                 </div>
                 <div style={{ background: 'var(--bg)', borderRadius: 10, padding: '9px 11px' }}>
-                  <div style={{ fontSize: 9, color: 'var(--tx3)', textTransform: 'uppercase' }}>На сумму</div>
+                  <div style={{ fontSize: 10.5, color: 'var(--tx3)', textTransform: 'uppercase' }}>На сумму</div>
                   <div className="mono" style={{ fontSize: 15, fontWeight: 600, color: sumDiff < 0 ? 'var(--rd-m)' : 'var(--tx)' }}>{fmt(Math.round(sumDiff))} с</div>
                 </div>
               </div>

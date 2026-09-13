@@ -33,7 +33,7 @@ function BarChart({ rows, series, height = 170 }) {
         {/* Ось значений */}
         <div style={{ display: 'flex', flexDirection: 'column-reverse', justifyContent: 'space-between', height, paddingBottom: 20 }}>
           {ticks.map((t, i) => (
-            <span key={i} className="mono" style={{ fontSize: 9, color: 'var(--tx3)', lineHeight: 1 }}>{fmt(Math.round(t))}</span>
+            <span key={i} className="mono" style={{ fontSize: 10.5, color: 'var(--tx3)', lineHeight: 1 }}>{fmt(Math.round(t))}</span>
           ))}
         </div>
         <div style={{ flex: 1, position: 'relative' }}>
@@ -49,7 +49,7 @@ function BarChart({ rows, series, height = 170 }) {
                     const v = r[sr.key] || 0
                     return (
                       <div key={sr.key} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', height: '100%' }}>
-                        <span className="mono" style={{ fontSize: 9, fontWeight: 700, color: sr.color, marginBottom: 3, whiteSpace: 'nowrap' }}>
+                        <span className="mono" style={{ fontSize: 10.5, fontWeight: 700, color: sr.color, marginBottom: 3, whiteSpace: 'nowrap' }}>
                           {v ? fmt(Math.round(v)) : ''}
                         </span>
                         <div title={`${sr.label}: ${fmt(Math.round(v))}`}
@@ -80,7 +80,7 @@ function BarChart({ rows, series, height = 170 }) {
 function Kpi({ label, value, sub, spark, tone }) {
   return (
     <div className="card" style={{ padding: 15, minWidth: 0 }}>
-      <div style={{ fontSize: 9.5, color: 'var(--tx3)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 5 }}>{label}</div>
+      <div style={{ fontSize: 10.5, color: 'var(--tx3)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 5 }}>{label}</div>
       <div className="mono ff" style={{ fontSize: 22, fontWeight: 600, lineHeight: 1.1, overflow: 'hidden', textOverflow: 'ellipsis' }}>{value}</div>
       {sub && <div style={{ fontSize: 11, marginTop: 4, color: tone === 'up' ? 'var(--gr-m)' : tone === 'down' ? 'var(--rd-m)' : 'var(--tx3)' }}>{sub}</div>}
       {spark && <div style={{ marginTop: 8 }}><Spark points={spark} /></div>}

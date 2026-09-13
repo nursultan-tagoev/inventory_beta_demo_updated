@@ -79,7 +79,7 @@ function SigProgress({ act, data }) {
     <div style={{ display: 'flex', alignItems: 'center', gap: 0, margin: '4px 0 3px' }}>
       {chain.map((s, i) => (
         <span key={s.id} style={{ display: 'flex', alignItems: 'center' }} title={`${s.signer_name || ''} · ${s.signer_role || ''}`}>
-          <span style={{ width: 15, height: 15, borderRadius: '50%', display: 'grid', placeItems: 'center', fontSize: 9, color: '#fff',
+          <span style={{ width: 15, height: 15, borderRadius: '50%', display: 'grid', placeItems: 'center', fontSize: 10.5, color: '#fff',
             background: s.status === 'signed' ? 'var(--gr)' : s.status === 'declined' ? 'var(--rd)' : (cur && s.id === cur.id) ? 'var(--ink)' : 'var(--sur2)',
             border: s.status === 'waiting' && (!cur || s.id !== cur.id) ? '1px solid var(--brd2)' : 'none' }}>{s.status === 'signed' ? '✓' : s.status === 'declined' ? '×' : ''}</span>
           {i < chain.length - 1 && <span style={{ width: 9, height: 2, background: s.status === 'signed' ? 'var(--gr)' : 'var(--brd)' }} />}
@@ -143,7 +143,7 @@ function ActView({ act, data, onClose, onChanged }) {
                 <span style={{ borderBottom: '1px solid #14171D', width: 92, height: 20 }} />
                 <span style={{ flex: 1, borderBottom: '1px solid #14171D', height: 20 }} />
               </div>
-              <div style={{ display: 'flex', gap: 8, fontSize: 9.5, color: '#98A0AE' }}>
+              <div style={{ display: 'flex', gap: 8, fontSize: 10.5, color: '#98A0AE' }}>
                 <span style={{ width: 92, textAlign: 'center' }}>подпись</span>
                 <span>расшифровка</span>
               </div>

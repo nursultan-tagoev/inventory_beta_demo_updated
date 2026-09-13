@@ -178,7 +178,15 @@ export default function Items({ data, can, profile }) {
           )
         })}
       </div>
-      {list.length === 0 && !add && <div style={{ padding: 60, textAlign: 'center', color: 'var(--tx3)' }}>{q ? 'Ничего не найдено.' : 'Товаров нет. Добавьте первый или оформите приход.'}</div>}
+      {list.length === 0 && !add && (
+        <div className="card" style={{ padding: 40, textAlign: 'center' }}>
+          <div style={{ fontSize: 30, marginBottom: 9 }}>{q ? '🔍' : '📦'}</div>
+          <div style={{ fontSize: 13.5, fontWeight: 600, marginBottom: 4 }}>{q ? 'Ничего не нашлось' : 'Товаров пока нет'}</div>
+          <div style={{ fontSize: 11.5, color: 'var(--tx3)' }}>
+            {q ? 'Попробуйте другое название или артикул' : 'Добавьте первый товар или загрузите номенклатуру списком'}
+          </div>
+        </div>
+      )}
 
       {sel && <ItemModal p={sel} data={data} can={can} onClose={() => setSel(null)} />}
       {imp && <ImportProducts data={data} onClose={() => setImp(false)} onDone={() => { setImp(false); invalidate(['products', 'stock']) }} />}
