@@ -38,10 +38,25 @@ export async function restoreMovement(mv, profile) {
 
 /* ── Что уйдёт при удалении акта ──
    Показываем заранее, чтобы решение было осознанным. */
+async function relatedMovements(act) {
+  const found = new Map()
+  // По номеру акта в примечании — так их создаёт и выдача, и приход
+  const { data: byNote } = await supabase.from('movements')
+    .select('id,qty,type,cancelled_at').ilike('notes', '%' + act.number + '%')
+  for (const m of byNote || []) found.set(m.id, m)
+
+  // И по заявке, если акт оформлен по ней
+  if (act.request_id) {
+    const { data: byReq } = await supabase.from('movements')
+      .select('id,qty,type,cancelled_at').eq('request_id', act.request_id)
+    for (const m of byReq || []) found.set(m.id, m)
+  }
+  return [...found.values()]
+}
+
 export async function deletePreview(act) {
   const { data: items } = await supabase.from('act_items').select('qty').eq('act_id', act.id)
-  const { data: movs } = await supabase.from('movements')
-    .select('id,qty,type').ilike('notes', '%' + act.number + '%')
+  const movs = await relatedMovements(act)
 
   const live = (movs || []).filter((m) => !m.cancelled_at)
   return {
@@ -57,9 +72,8 @@ export async function deletePreview(act) {
 export async function deleteAct(act, profile) {
   if (!canHardDelete(profile?.role)) return { error: 'Удалять может только суперадминистратор' }
 
-  // Движения ищем по номеру акта в примечании — так они и создавались
-  const { data: movs } = await supabase.from('movements').select('id').ilike('notes', '%' + act.number + '%')
-  const ids = (movs || []).map((m) => m.id)
+  const movs = await relatedMovements(act)
+  const ids = movs.map((m) => m.id)
 
   if (ids.length) {
     const { error: e1 } = await supabase.from('movements').delete().in('id', ids)
