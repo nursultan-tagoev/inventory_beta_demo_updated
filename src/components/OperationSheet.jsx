@@ -14,7 +14,7 @@ const ICO = { in: '📥', out: '📤', return: '🔄', writeoff: '🗑', transfe
 
 export default function OperationSheet({ type, data, profile, can, onDone }) {
   const toast = useToast()
-  const { products, recipients, suppliers, branches, directions, productTypes, campaigns, locations, warehouses, stockByWh } = data
+  const { products, recipients, suppliers, branches, directions, productTypes, campaigns, locations, warehouses, stockByWh, departments = [] } = data
   const steps = type === 'in' ? 2 : type === 'writeoff' || type === 'transfer' ? 1 : 3
   const [step, setStep] = useState(1)
   const [loading, setLoading] = useState(false)
@@ -324,16 +324,32 @@ export default function OperationSheet({ type, data, profile, can, onDone }) {
         {showNewRec && <div className="card" style={{ padding: 14, background: 'var(--bg)' }}>
           <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 10, marginBottom: 10 }}>
             <Field label="Имя"><Input value={newRec.name} onChange={(e) => setNewRec({ ...newRec, name: e.target.value })} autoFocus /></Field>
-            <Field label="Департамент"><Input value={newRec.dept} onChange={(e) => setNewRec({ ...newRec, dept: e.target.value })} placeholder="отдел или управление" /></Field>
+            <Field label="Департамент">
+              <Select value={newRec.dept} onChange={(e) => setNewRec({ ...newRec, dept: e.target.value })}>
+                <option value="">—</option>
+                {departments.map((d) => <option key={d.id} value={d.name}>{d.name}</option>)}
+              </Select>
+            </Field>
             <Field label="Филиал"><Select value={newRec.branch_id} onChange={(e) => setNewRec({ ...newRec, branch_id: e.target.value })}><option value="">—</option>{branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</Select></Field>
           </div>
           <div style={{ display: 'flex', gap: 8 }}><Btn size="sm" onClick={createRecipient}>Сохранить</Btn><Btn size="sm" v="secondary" onClick={() => setShowNewRec(false)}>Отмена</Btn></div>
         </div>}
         {/* Подразделение — кому предназначен товар. Подставляется из карточки
             получателя, но правится: бывает, что получает один, а для другого отдела. */}
-        {type === 'out' && <Field label="Подразделение">
-          <Input value={f.dept} onChange={(e) => up('dept', e.target.value)}
-            placeholder={selRec?.dept ? selRec.dept : 'отдел или управление'} />
+        {type === 'out' && <Field label="Подразделение — кому предназначено">
+          <Select value={f.dept} onChange={(e) => up('dept', e.target.value)}>
+            <option value="">— выбрать —</option>
+            {departments.filter((d) => d.kind === 'dep').length > 0 && (
+              <optgroup label="Департаменты и управления">
+                {departments.filter((d) => d.kind === 'dep').map((d) => <option key={d.id} value={d.name}>{d.name}</option>)}
+              </optgroup>
+            )}
+            {departments.filter((d) => d.kind === 'branch').length > 0 && (
+              <optgroup label="Филиалы">
+                {departments.filter((d) => d.kind === 'branch').map((d) => <option key={d.id} value={d.name}>{d.name}</option>)}
+              </optgroup>
+            )}
+          </Select>
         </Field>}
         {type === 'return' && <Field label="Состояние"><Select value={f.condition} onChange={(e) => up('condition', e.target.value)}><option value="хорошее">Хорошее</option><option value="б/у">Б/у</option><option value="брак">Брак</option></Select></Field>}
         <div style={{ display: 'flex', gap: 8 }}><Btn v="secondary" onClick={() => setStep(1)}>← Назад</Btn><Btn onClick={next} style={{ flex: 1 }}>Далее →</Btn></div>
