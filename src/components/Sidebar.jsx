@@ -27,7 +27,8 @@ const MAIN = {
 
 const NAV = [
   { id: 'home', label: 'Главная', roles: ['admin', 'warehouse', 'manager', 'employee', 'director'] },
-  { id: 'catalog', label: 'Каталог', roles: ['manager', 'employee'] },
+  // Одна витрина на всех: склад через неё выдаёт, заявители — просят
+  { id: 'catalog', label: 'Каталог', roles: ['admin', 'warehouse', 'manager', 'employee'] },
   { id: 'items', label: 'Товары', roles: ['admin', 'warehouse', 'director'] },
   { id: 'movements', label: 'Движения', roles: ['admin', 'warehouse', 'manager', 'employee', 'director'] },
   { id: 'requests', label: 'Заявки', roles: ['admin', 'warehouse', 'manager', 'employee', 'director'] },
@@ -46,7 +47,9 @@ const ROLE_RU = { admin: 'Суперадминистратор', warehouse: 'А�
 export default function Sidebar({ view, setView, profile, onLogout, badges = {}, branchName, onTour }) {
   const [more, setMore] = useState(false)
   const role = profile?.role || 'employee'
-  const items = NAV.filter((n) => n.roles.includes(role))
+  const items = NAV.filter((n) => n.roles.includes(role)).map((n) =>
+    // Складу понятнее «Выдача» — рядом есть «Товары», их легко перепутать
+    (n.id === 'catalog' && ['admin', 'warehouse'].includes(role)) ? { ...n, label: 'Выдача' } : n)
   // Четвёрка для нижнего меню и всё остальное — в «Ещё»
   const mainIds = MAIN[role] || MAIN.employee
   const mainItems = mainIds.map((id) => items.find((n) => n.id === id)).filter(Boolean)
