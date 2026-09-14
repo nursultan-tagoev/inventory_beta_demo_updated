@@ -37,7 +37,11 @@ async function requireAdmin(req) {
   if (!token) return { error: 'Нет токена' }
   const sb = admin()
   const { data: u, error } = await sb.auth.getUser(token)
-  if (error || !u?.user) return { error: 'Сессия недействительна' }
+  if (error || !u?.user) {
+    // Пустая ошибка тут почти всегда значит, что служебный ключ не от этого проекта
+    return { error: 'Сессия недействительна' + (error?.message ? ': ' + error.message
+      : '. Проверьте, что SUPABASE_SERVICE_ROLE_KEY относится к тому же проекту, что и VITE_SUPABASE_URL') }
+  }
   const { data: prof } = await sb.from('profiles').select('role, is_active').eq('id', u.user.id).single()
   if (!prof || prof.role !== 'admin' || prof.is_active === false) return { error: 'Недостаточно прав' }
   return { userId: u.user.id }
