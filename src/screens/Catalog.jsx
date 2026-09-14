@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { Btn, Sheet, useToast } from '../components/ui'
 import { chainOf, freeAll } from '../lib/data'
+import { fmt } from '../lib/format'
 
 const SEC = 'var(--sec-cat)', SEC_L = 'var(--sec-cat-l)'
 
@@ -13,6 +14,27 @@ export default function Catalog({ data, profile, onRequest }) {
   const [hier, setHier] = useState({ direction_id: '', product_type_id: '', campaign_id: '' })
   const [draft, setDraft] = useState([])       // черновик заявки
   const [pick, setPick] = useState(null)       // выбранный товар
+
+  /* Корзина: количество правится и на карточке, и в списке внизу */
+  const inDraft = (id) => {
+    const d = draft.find((x) => x.product_id === id)
+    return d ? d.qty : null
+  }
+  const putInDraft = (p, n) => setDraft((s) => [...s, { product_id: p.id, name: p.name, qty: n }])
+  const setQtyFor = (p, v) => {
+    const n = Math.max(0, Number(String(v).replace(/[^0-9]/g, '')) || 0)
+    setDraft((s) => (n === 0 ? s.filter((x) => x.product_id !== p.id)
+      : s.map((x) => (x.product_id === p.id ? { ...x, qty: n } : x))))
+  }
+  // Итог заявки: цены позиций специалисту не показываем, общий масштаб — да
+  const draftSum = draft.reduce((a, d) => {
+    const p = products.find((x) => x.id === d.product_id)
+    return a + d.qty * (Number(p?.price) || 0)
+  }, 0)
+
+  const bump = (id, d) => setDraft((s) => s
+    .map((x) => (x.product_id === id ? { ...x, qty: Math.max(0, x.qty + d) } : x))
+    .filter((x) => x.qty > 0))
   const [qty, setQty] = useState(1)
 
   const types = hier.direction_id ? productTypes.filter((t) => t.direction_id == hier.direction_id) : productTypes
@@ -93,28 +115,48 @@ export default function Catalog({ data, profile, onRequest }) {
         <div style={{ fontSize: 11.5, color: 'var(--tx3)' }}>Попробуйте изменить фильтры</div>
       </div>}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(168px,1fr))', gap: 11 }}>
+      <div className="items-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(168px,1fr))', gap: 11 }}>
         {list.map((p) => {
           const [lbl, bg, col, state] = avail(p)
           const chain = chainOf(p, { directions, productTypes, campaigns })
           const disabled = state === 'bad'
           return (
-            <div key={p.id} onClick={() => !disabled && setPick(p)} className="card"
-              style={{ padding: 13, cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.55 : 1 }}>
+            <div key={p.id} className="card" style={{ padding: 13, opacity: disabled ? 0.55 : 1, display: 'flex', flexDirection: 'column' }}>
               <div style={{ width: 36, height: 36, borderRadius: 11, background: 'var(--sur2)', display: 'grid', placeItems: 'center', fontSize: 17, marginBottom: 8 }}>📦</div>
               <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.3 }}>{p.name}</div>
               {attrsLine(p) && <div style={{ fontSize: 10.5, color: 'var(--tx3)', marginTop: 2 }}>{attrsLine(p)}</div>}
               {chain && <div style={{ fontSize: 10, color: 'var(--tx3)', marginTop: 2 }}>{chain}</div>}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 9 }}>
-                <span style={{ fontSize: 10.5, padding: '2px 8px', borderRadius: 20, background: bg, color: col }}>{lbl}</span>
-                {!disabled && <span style={{ marginLeft: 'auto', fontSize: 11, color: SEC }}>запросить →</span>}
-              </div>
+              <span style={{ fontSize: 10.5, padding: '2px 8px', borderRadius: 20, background: bg, color: col, alignSelf: 'flex-start', marginTop: 9 }}>{lbl}</span>
+
+              {/* Количество меняется прямо здесь — открывать шторку ради одной цифры незачем */}
+              {!disabled && (
+                <div style={{ marginTop: 10 }}>
+                  {inDraft(p.id) === null ? (
+                    <button onClick={() => putInDraft(p, 1)}
+                      style={{ width: '100%', minHeight: 40, borderRadius: 10, background: SEC_L, color: SEC, fontSize: 12.5, fontWeight: 600 }}>
+                      В заявку
+                    </button>
+                  ) : (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <button onClick={() => bump(p.id, -1)}
+                        style={{ width: 38, minHeight: 40, borderRadius: 10, background: 'var(--sur2)', color: 'var(--tx2)', fontSize: 17, fontWeight: 600 }}>−</button>
+                      <input value={inDraft(p.id)} onChange={(e) => setQtyFor(p, e.target.value)}
+                        inputMode="numeric"
+                        style={{ flex: 1, minWidth: 0, minHeight: 40, textAlign: 'center', border: `1.5px solid ${SEC}`, borderRadius: 10, background: 'var(--sur)', fontSize: 14, fontWeight: 600, color: 'var(--tx)' }} />
+                      <button onClick={() => bump(p.id, +1)}
+                        style={{ width: 38, minHeight: 40, borderRadius: 10, background: SEC_L, color: SEC, fontSize: 17, fontWeight: 600 }}>+</button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )
         })}
       </div>
 
       {/* Черновик заявки */}
+      {draft.length > 0 && <div style={{ height: 210 }} />}
+
       {draft.length > 0 && (
         <div className="card" style={{ position: 'fixed', left: 0, right: 0, bottom: 0, borderRadius: '16px 16px 0 0', padding: '14px 18px calc(16px + env(safe-area-inset-bottom))', zIndex: 50, boxShadow: 'var(--sh3)', maxWidth: 640, margin: '0 auto' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 9 }}>
@@ -123,14 +165,27 @@ export default function Catalog({ data, profile, onRequest }) {
           </div>
           <div style={{ maxHeight: 120, overflowY: 'auto', marginBottom: 10 }}>
             {draft.map((d, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '7px 0', borderBottom: '1px solid var(--brd)', fontSize: 12.5 }}>
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 0', borderBottom: '1px solid var(--brd)', fontSize: 12.5 }}>
                 <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.name}</span>
-                <span className="mono" style={{ color: 'var(--tx3)' }}>{d.qty} шт</span>
+                {/* Количество правится и здесь: вернуться к карточке ради цифры неудобно */}
+                <button onClick={() => bump(d.product_id, -1)}
+                  style={{ width: 30, minHeight: 32, borderRadius: 8, background: 'var(--sur2)', color: 'var(--tx2)', fontSize: 15 }}>−</button>
+                <span className="mono" style={{ minWidth: 30, textAlign: 'center', fontWeight: 600 }}>{d.qty}</span>
+                <button onClick={() => bump(d.product_id, +1)}
+                  style={{ width: 30, minHeight: 32, borderRadius: 8, background: SEC_L, color: SEC, fontSize: 15 }}>+</button>
                 <button onClick={() => setDraft((s) => s.filter((_, j) => j !== i))} style={{ color: 'var(--tx3)', fontSize: 14, padding: '0 4px' }}>×</button>
               </div>
             ))}
           </div>
-          <Btn onClick={() => { onRequest && onRequest(draft); setDraft([]) }} style={{ width: '100%', minHeight: 48 }}>Оформить заявку →</Btn>
+          {draftSum > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '2px 0 10px' }}>
+              <span style={{ fontSize: 12, color: 'var(--tx3)' }}>Стоимость заявки</span>
+              <span className="mono" style={{ fontSize: 15, fontWeight: 600 }}>{fmt(Math.round(draftSum))} сом</span>
+            </div>
+          )}
+          <Btn onClick={() => { onRequest && onRequest(draft); setDraft([]) }} style={{ width: '100%', minHeight: 48 }}>
+            Оформить заявку · {draft.reduce((a, d) => a + d.qty, 0)} шт →
+          </Btn>
         </div>
       )}
 
