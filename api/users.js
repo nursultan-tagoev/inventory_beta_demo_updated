@@ -95,6 +95,32 @@ export default async function handler(req, res) {
     }
 
     /* ── Сбросить пароль (почты нет — только так) ── */
+    /* ── Правка профиля ── */
+    if (action === 'update') {
+      if (!payload.id) return res.status(400).json({ error: 'Не указан пользователь' })
+
+      // Роль меняем только на допустимую; суперадмина через форму не назначают
+      if (payload.role && !['warehouse', 'manager', 'employee', 'director'].includes(payload.role)) {
+        return res.status(400).json({ error: 'Недопустимая роль: ' + payload.role })
+      }
+
+      const patch = {}
+      for (const k of ['full_name', 'role', 'branch_id', 'manager_id', 'position', 'dept']) {
+        if (payload[k] !== undefined) patch[k] = payload[k] === '' ? null : payload[k]
+      }
+      if (patch.branch_id) patch.branch_id = Number(patch.branch_id)
+      if (!Object.keys(patch).length) return res.status(400).json({ error: 'Нечего менять' })
+
+      // Себя в другую роль не переводим — иначе можно остаться без суперадмина
+      if (payload.id === gate.userId && patch.role) {
+        return res.status(400).json({ error: 'Нельзя сменить роль самому себе' })
+      }
+
+      const { error } = await sb.from('profiles').update(patch).eq('id', payload.id)
+      if (error) return res.status(400).json({ error: 'Профиль: ' + error.message })
+      return res.status(200).json({ ok: true })
+    }
+
     if (action === 'reset_password') {
       if (!payload.id) return res.status(400).json({ error: 'Не указан пользователь' })
       const password = tempPassword()
