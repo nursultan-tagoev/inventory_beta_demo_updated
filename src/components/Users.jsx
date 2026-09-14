@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Btn, Input, Select, Field, useToast, Confirm } from './ui'
-import { createUser, resetPassword, setActive, loginPreview } from '../lib/users'
+import { createUser, updateUser, resetPassword, setActive, loginPreview } from '../lib/users'
 
 const ROLE = { admin: 'Суперадминистратор', warehouse: 'Администратор склада', manager: 'Руководитель филиала', employee: 'Специалист', director: 'Директор' }
 const RC = { admin: ['#F3E4E4', '#8B2F2F'], warehouse: ['var(--pu-l)', 'var(--pu)'], director: ['var(--am-l)', 'var(--am-m)'], manager: ['#E3F0FB', '#1D5FA8'], employee: ['var(--gr-l)', 'var(--gr-m)'] }
@@ -41,6 +41,7 @@ export default function Users({ data }) {
   const toast = useToast()
   const { profiles, branches, invalidate } = data
   const [add, setAdd] = useState(false)
+  const [edit, setEdit] = useState(null)     // правим профиль: { p, f }
   const [busy, setBusy] = useState(false)
   const [cred, setCred] = useState(null)
   const [confirm, setConfirm] = useState(null)
@@ -178,6 +179,12 @@ export default function Users({ data }) {
                   {p.email}{p.branch_id ? ' · ' + bName(p.branch_id) : ''}
                 </div>
               </div>
+              <button onClick={() => setEdit({ p, f: {
+                full_name: p.full_name === p.email ? '' : (p.full_name || ''),
+                role: p.role, branch_id: p.branch_id || '', manager_id: p.manager_id || '',
+                position: p.position || '', dept: p.dept || '',
+              } })} title="Изменить профиль"
+                style={{ fontSize: 11, color: 'var(--tx3)', minHeight: 38, padding: '0 8px' }}>Изменить</button>
               <button onClick={() => setConfirm({ kind: 'reset', p })} title="Выдать новый пароль"
                 style={{ fontSize: 11, color: 'var(--tx3)', minHeight: 38, padding: '0 8px' }}>Пароль</button>
               <button onClick={() => setConfirm({ kind: 'toggle', p })}
