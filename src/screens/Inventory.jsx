@@ -217,7 +217,7 @@ export default function Inventory({ data, profile }) {
 
             {/* Таблица позиций */}
             <div style={{ border: '1px solid var(--brd)', borderRadius: 11, overflow: 'hidden' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 54px 62px 54px', gap: 6, padding: '9px 11px', background: 'var(--bg)', fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.03em', color: 'var(--tx3)' }}>
+              <div className="inv-head" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 54px 62px 54px', gap: 6, padding: '9px 11px', background: 'var(--bg)', fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.03em', color: 'var(--tx3)' }}>
                 <span>Товар</span><span style={{ textAlign: 'center' }}>Учёт</span>
                 <span style={{ textAlign: 'center' }}>Факт</span><span style={{ textAlign: 'center' }}>Разн.</span>
               </div>
@@ -228,17 +228,19 @@ export default function Inventory({ data, profile }) {
                 const has = f !== '' && f !== null && f !== undefined
                 const d = has ? Number(f) - sys : null
                 return (
-                  <div key={r.product_id} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 54px 62px 54px', gap: 6, alignItems: 'center', padding: '8px 11px', borderTop: '1px solid var(--brd)' }}>
-                    <span style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pName(r.product_id)}</span>
-                    <span className="mono" style={{ fontSize: 12, textAlign: 'center', color: 'var(--tx3)' }}>{sys}</span>
+                  <div key={r.product_id} className="inv-row" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 54px 62px 54px', gap: 6, alignItems: 'center', padding: '8px 11px', borderTop: '1px solid var(--brd)' }}>
+                    <span className="inv-name" style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pName(r.product_id)}</span>
+                    <span className="mono inv-cell" data-label="Учёт" style={{ fontSize: 12, textAlign: 'center', color: 'var(--tx3)' }}>{sys}</span>
                     {open.inv.status === 'draft' ? (
-                      <input type="number" inputMode="numeric" value={fact[r.product_id] ?? ''}
-                        onChange={(e) => setFact({ ...fact, [r.product_id]: e.target.value })}
-                        style={{ width: '100%', minHeight: 36, textAlign: 'center', border: '1.5px solid var(--brd)', borderRadius: 8, background: 'var(--sur)', fontSize: 12.5, color: 'var(--tx)' }} />
+                      <span className="inv-cell" data-label="Факт">
+                        <input type="number" inputMode="numeric" value={fact[r.product_id] ?? ''}
+                          onChange={(e) => setFact({ ...fact, [r.product_id]: e.target.value })}
+                          style={{ width: '100%', minHeight: 36, textAlign: 'center', border: '1.5px solid var(--brd)', borderRadius: 8, background: 'var(--sur)', fontSize: 12.5, color: 'var(--tx)' }} />
+                      </span>
                     ) : (
-                      <span className="mono" style={{ fontSize: 12, textAlign: 'center' }}>{has ? f : '—'}</span>
+                      <span className="mono inv-cell" data-label="Факт" style={{ fontSize: 12, textAlign: 'center' }}>{has ? f : '—'}</span>
                     )}
-                    <span className="mono" style={{ fontSize: 12, textAlign: 'center', fontWeight: 600, color: d === null || d === 0 ? 'var(--tx3)' : d > 0 ? 'var(--gr-m)' : 'var(--rd-m)' }}>
+                    <span className="mono inv-cell" data-label="Разница" style={{ fontSize: 12, textAlign: 'center', fontWeight: 600, color: d === null || d === 0 ? 'var(--tx3)' : d > 0 ? 'var(--gr-m)' : 'var(--rd-m)' }}>
                       {d === null ? '—' : d === 0 ? '0' : d > 0 ? '+' + d : d}
                     </span>
                   </div>

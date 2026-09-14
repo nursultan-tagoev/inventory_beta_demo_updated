@@ -137,7 +137,7 @@ export default function Items({ data, can, profile }) {
         <div style={{ display: 'flex', gap: 8 }}><Btn onClick={save} loading={loading}>Сохранить</Btn><Btn v="secondary" onClick={() => setAdd(false)}>Отмена</Btn></div>
       </div>}
 
-      <div style={{ display: 'grid', gridTemplateColumns: view === 'list' ? '1fr' : 'repeat(auto-fill,minmax(184px,1fr))', gap: view === 'list' ? 8 : 14 }}>
+      <div className={`items-grid ${view === "list" ? "list-view" : ""}`} style={{ display: 'grid', gridTemplateColumns: view === 'list' ? '1fr' : 'repeat(auto-fill,minmax(184px,1fr))', gap: view === 'list' ? 8 : 14 }}>
         {list.map((p) => {
           const s = seeStock ? (stock[p.id] || 0) : null
           const c = s === null ? 'var(--tx3)' : s < 0 ? 'var(--rd)' : s === 0 ? 'var(--tx3)' : s < 5 ? 'var(--am)' : 'var(--gr)'
@@ -265,7 +265,7 @@ function ItemModal({ p, data, can, onClose }) {
           onOk={() => { setConfirmDel(false); removeProduct() }} onCancel={() => setConfirmDel(false)} />}
         {editing && ef && <div style={{ padding: '18px 22px' }}>
           <div className="ff" style={{ fontSize: 15, fontWeight: 600, marginBottom: 14 }}>Изменить товар</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 12, marginBottom: 12 }}>
+          <div className="form-2col" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 12, marginBottom: 12 }}>
             <Field label="Название"><Input value={ef.name} onChange={(e) => setEf({ ...ef, name: e.target.value })} /></Field>
             <Field label="Артикул"><Input value={ef.sku} onChange={(e) => setEf({ ...ef, sku: e.target.value })} /></Field>
             <Field label="Тип размерности">
@@ -297,7 +297,7 @@ function ItemModal({ p, data, can, onClose }) {
             <Field label="Цена"><Input type="number" value={ef.price} onChange={(e) => setEf({ ...ef, price: e.target.value })} /></Field>
           </div>
           <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--ink)', marginBottom: 8 }}>Цепочка (Направление → Тип → Кампания)</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 12 }}>
+          <div className="form-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 12 }}>
             <Field label="Направление"><Select value={ef.direction_id} onChange={(e) => setEf({ ...ef, direction_id: e.target.value, product_type_id: '', campaign_id: '' })}><option value="">—</option>{directions.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}</Select></Field>
             <Field label="Тип"><Select value={ef.product_type_id} onChange={(e) => setEf({ ...ef, product_type_id: e.target.value, campaign_id: '' })}><option value="">—</option>{productTypes.filter((t) => !ef.direction_id || t.direction_id == ef.direction_id).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</Select></Field>
             <Field label="Кампания"><Select value={ef.campaign_id} onChange={(e) => setEf({ ...ef, campaign_id: e.target.value })}><option value="">— без категории —</option>{campaigns.filter((c) => !ef.product_type_id || c.product_type_id == ef.product_type_id).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</Select></Field>
