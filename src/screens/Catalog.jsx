@@ -1,9 +1,10 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { Btn, Sheet, useToast } from '../components/ui'
 import { chainOf, freeAll } from '../lib/data'
 import { fmt } from '../lib/format'
 import { attrsLine } from '../lib/attrs'
 import { issueBasket } from '../lib/issueBasket'
+import { listTemplates, saveTemplate, deleteTemplate, expandTemplate } from '../lib/templates'
 import { supabase } from '../supabaseClient'
 
 const SEC = 'var(--sec-cat)', SEC_L = 'var(--sec-cat-l)'
@@ -15,6 +16,12 @@ export default function Catalog({ data, profile, onRequest }) {
   const isWh = ['admin', 'warehouse'].includes(profile?.role)
   const [issue, setIssue] = useState(null)   // окно оформления выдачи
   const [busy, setBusy] = useState(false)
+
+  /* Шаблоны: заявители набирают одно и то же на каждую акцию */
+  const [tpls, setTpls] = useState([])
+  const [tplOpen, setTplOpen] = useState(false)
+  const [tplName, setTplName] = useState('')
+  useEffect(() => { if (profile?.id) listTemplates(profile.id).then(setTpls) }, [profile?.id])
   const toast = useToast()
   const { products, directions, productTypes, campaigns, freeByWh, stockByWh } = data
   const [q, setQ] = useState('')
@@ -93,6 +100,12 @@ export default function Catalog({ data, profile, onRequest }) {
     <div style={{ maxWidth: 1000, margin: '0 auto', padding: '20px 18px 90px', animation: 'fadeUp .3s ease' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 11, marginBottom: 13, flexWrap: 'wrap' }}>
         <span className="ff" style={{ fontSize: 20, fontWeight: 600 }}>{isWh ? 'Выдача' : 'Каталог'}</span>
+        {!isWh && (
+          <button onClick={() => setTplOpen(true)}
+            style={{ marginLeft: 'auto', minHeight: 38, padding: '0 13px', borderRadius: 9, border: '1px solid var(--brd)', background: 'var(--sur)', color: 'var(--tx2)', fontSize: 12.5, fontWeight: 600 }}>
+            Шаблоны{tpls.length ? ` · ${tpls.length}` : ''}
+          </button>
+        )}
         <span style={{ fontSize: 12, color: 'var(--tx3)' }}>что можно запросить</span>
       </div>
 
@@ -191,6 +204,12 @@ export default function Catalog({ data, profile, onRequest }) {
               <span className="mono" style={{ fontSize: 15, fontWeight: 600 }}>{fmt(Math.round(draftSum))} сом</span>
             </div>
           )}
+          {!isWh && draft.length > 0 && (
+            <button onClick={() => { setTplName(''); setTplOpen('save') }}
+              style={{ width: '100%', minHeight: 38, marginBottom: 8, borderRadius: 9, border: '1px dashed var(--brd)', background: 'var(--bg)', color: 'var(--tx3)', fontSize: 12 }}>
+              Сохранить набор как шаблон
+            </button>
+          )}
           {isWh ? (
             <Btn onClick={() => setIssue({ recipient_id: '', dept: '', basis: '', warehouse_id: '', is_test: false })}
               style={{ width: '100%', minHeight: 48 }}>
@@ -203,6 +222,77 @@ export default function Catalog({ data, profile, onRequest }) {
           )}
         </div>
       )}
+
+      {/* Шаблоны заявок */}
+      <Sheet open={!!tplOpen} onClose={() => setTplOpen(false)} title={tplOpen === 'save' ? 'Сохранить шаблон' : 'Мои шаблоны'}>
+        {tplOpen === 'save' ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ padding: '10px 13px', background: 'var(--bg)', borderRadius: 11, fontSize: 11.5, color: 'var(--tx2)', lineHeight: 1.55 }}>
+              Сохранится состав, а не количества — при следующей акции подставите набор и поправите цифры.
+            </div>
+            <div>
+              <div style={{ fontSize: 12, color: 'var(--tx3)', marginBottom: 4 }}>Название</div>
+              <input value={tplName} onChange={(e) => setTplName(e.target.value)} autoFocus
+                placeholder="Конференция, базовый набор"
+                style={{ width: '100%', minHeight: 44, padding: '0 12px', borderRadius: 11, border: '1.5px solid var(--brd)', background: 'var(--sur)', fontSize: 13.5, color: 'var(--tx)' }} />
+            </div>
+            <div style={{ background: 'var(--bg)', borderRadius: 11, padding: 12 }}>
+              <div style={{ fontSize: 10.5, color: 'var(--tx3)', textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: 7 }}>Состав · {draft.length} поз.</div>
+              {draft.map((d) => (
+                <div key={d.product_id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, padding: '2px 0' }}>
+                  <span>{d.name}</span><span className="mono" style={{ color: 'var(--tx3)' }}>{d.qty}</span>
+                </div>
+              ))}
+            </div>
+            <Btn size="lg" loading={busy} onClick={async () => {
+              setBusy(true)
+              const { error } = await saveTemplate({ name: tplName, items: draft, profile })
+              setBusy(false)
+              if (error) return toast(error, 'error')
+              toast('Шаблон сохранён')
+              setTplOpen(false)
+              listTemplates(profile.id).then(setTpls)
+            }} style={{ minHeight: 50 }}>Сохранить</Btn>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {tpls.length === 0 && (
+              <div style={{ padding: 30, textAlign: 'center', color: 'var(--tx3)', fontSize: 12.5, lineHeight: 1.6 }}>
+                Шаблонов пока нет.<br />Наберите заявку и сохраните набор — в следующий раз подставите одной кнопкой.
+              </div>
+            )}
+            {tpls.map((t) => (
+              <div key={t.id} className="card" style={{ padding: 13 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 7 }}>
+                  <span style={{ fontSize: 13.5, fontWeight: 600, flex: 1 }}>{t.name}</span>
+                  <span style={{ fontSize: 11, color: 'var(--tx3)' }}>{(t.items || []).length} поз.</span>
+                  <button onClick={async () => {
+                    const { error } = await deleteTemplate(t.id)
+                    if (error) return toast(error, 'error')
+                    setTpls((l) => l.filter((x) => x.id !== t.id))
+                    toast('Шаблон удалён')
+                  }} style={{ color: 'var(--tx3)', fontSize: 15, padding: '0 4px' }}>×</button>
+                </div>
+                <div style={{ fontSize: 11.5, color: 'var(--tx3)', lineHeight: 1.5, marginBottom: 10 }}>
+                  {(t.items || []).map((it) => {
+                    const p = products.find((x) => x.id === it.product_id)
+                    return `${it.qty} × ${p?.name || 'товар удалён'}`
+                  }).join(' · ')}
+                </div>
+                <Btn size="sm" v="secondary" onClick={() => {
+                  const { items, missing } = expandTemplate(t, products)
+                  if (!items.length) return toast('Все товары из шаблона недоступны', 'error')
+                  setDraft(items)
+                  setTplOpen(false)
+                  toast(missing.length
+                    ? `Подставлено ${items.length} поз., ${missing.length} недоступно`
+                    : 'Набор подставлен — поправьте количества')
+                }} style={{ width: '100%', minHeight: 42 }}>Подставить в заявку</Btn>
+              </div>
+            ))}
+          </div>
+        )}
+      </Sheet>
 
       {/* Оформление выдачи: получателя и основание указываем один раз на весь набор */}
       <Sheet open={!!issue} onClose={() => setIssue(null)} title="Кому выдаём">

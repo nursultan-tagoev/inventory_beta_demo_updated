@@ -36,9 +36,11 @@ export default function Requests({ data, profile, can, draftItems, onDraftUsed }
   const [confirmDel, setConfirmDel] = useState(null)
   const [cancelReq, setCancelReq] = useState(null)
   const [cancelWhy, setCancelWhy] = useState('')
+  const [repeat, setRepeat] = useState(null)   // состав повторяемой заявки
 
   // черновик из каталога
   useEffect(() => { if (draftItems?.length) { setEditReq(null); setForm(true) } }, [draftItems])
+  useEffect(() => { if (repeat?.length) { setEditReq(null); setForm(true) } }, [repeat])
 
   const pName = (id) => fullName(products.find((p) => p.id === id)) || '—'
   const reqSum = (r) => (r.items || []).reduce((a, it) => {
@@ -402,6 +404,19 @@ export default function Requests({ data, profile, can, draftItems, onDraftUsed }
 
                 {/* Архив и удаление */}
                 <div className="btn-row" style={{ display: 'flex', gap: 7, marginTop: 10, flexWrap: 'wrap' }}>
+                  {r.author_id === me && (r.items || []).length > 0 && (
+                    <button onClick={() => {
+                      // Состав тот же, количества правятся в форме
+                      const items = r.items
+                        .map((it) => {
+                          const p = products.find((x) => x.id === it.product_id && !x.archived)
+                          return p ? { product_id: p.id, name: p.name, qty: it.approved_qty ?? it.qty } : null
+                        })
+                        .filter(Boolean)
+                      if (!items.length) return toast('Товары из этой заявки недоступны', 'error')
+                      setRepeat(items)
+                    }} style={{ fontSize: 11.5, color: 'var(--tx3)', minHeight: 38, padding: '0 10px' }}>Повторить</button>
+                  )}
                   {canArchive(r, profile) && !r.archived && <button onClick={() => doArchive(r)} style={{ fontSize: 11.5, color: 'var(--tx3)', minHeight: 38, padding: '0 10px' }}>В архив</button>}
                   {canDelete(r, profile, chain) && <button onClick={() => setConfirmDel(r)} style={{ fontSize: 11.5, color: 'var(--rd-m)', minHeight: 38, padding: '0 10px' }}>Удалить</button>}
                 </div>
@@ -412,9 +427,9 @@ export default function Requests({ data, profile, can, draftItems, onDraftUsed }
       })}
 
       {/* Формы */}
-      <Sheet open={form} onClose={() => { setForm(false); onDraftUsed && onDraftUsed() }} title={editReq ? 'Изменить заявку' : 'Новая заявка'}>
-        {form && <RequestForm data={data} profile={profile} editReq={editReq} draftItems={draftItems}
-          onDone={() => { setForm(false); onDraftUsed && onDraftUsed(); invalidate(['requests', 'approvers', 'reservations']) }} />}
+      <Sheet open={form} onClose={() => { setForm(false); setRepeat(null); onDraftUsed && onDraftUsed() }} title={editReq ? 'Изменить заявку' : 'Новая заявка'}>
+        {form && <RequestForm data={data} profile={profile} editReq={editReq} draftItems={repeat || draftItems}
+          onDone={() => { setForm(false); setRepeat(null); onDraftUsed && onDraftUsed(); invalidate(['requests', 'approvers', 'reservations']) }} />}
       </Sheet>
 
       {issue && <IssueModal req={issue} data={data} profile={profile} onClose={() => setIssue(null)} onDone={() => { setIssue(null); invalidate(AFFECTS.issue) }} />}
