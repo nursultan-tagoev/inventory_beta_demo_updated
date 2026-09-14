@@ -2,17 +2,24 @@ import { useState, useMemo } from 'react'
 import { Btn, Sheet, useToast } from '../components/ui'
 import { chainOf, freeAll } from '../lib/data'
 import { fmt } from '../lib/format'
+import { attrsLine } from '../lib/attrs'
+import { issueBasket } from '../lib/issueBasket'
+import { supabase } from '../supabaseClient'
 
 const SEC = 'var(--sec-cat)', SEC_L = 'var(--sec-cat-l)'
 
 /* Каталог для заявителей: что можно запросить.
    Точных остатков нет — только метка наличия. */
 export default function Catalog({ data, profile, onRequest }) {
+  /* Одна витрина на всех, но действие разное: заявитель просит, склад выдаёт */
+  const isWh = ['admin', 'warehouse'].includes(profile?.role)
+  const [issue, setIssue] = useState(null)   // окно оформления выдачи
+  const [busy, setBusy] = useState(false)
   const toast = useToast()
   const { products, directions, productTypes, campaigns, freeByWh, stockByWh } = data
   const [q, setQ] = useState('')
   const [hier, setHier] = useState({ direction_id: '', product_type_id: '', campaign_id: '' })
-  const [draft, setDraft] = useState([])       // черновик заявки
+  const [draft, setDraft] = useState([])       // корзина: заявка или выдача
   const [pick, setPick] = useState(null)       // выбранный товар
 
   /* Корзина: количество правится и на карточке, и в списке внизу */
@@ -61,9 +68,10 @@ export default function Catalog({ data, profile, onRequest }) {
   // Метка наличия без цифр
   const avail = (p) => {
     const free = freeAll(freeByWh, stockByWh, p.id)
-    if (free <= 0) return ['нет', 'var(--sur2)', 'var(--tx3)', 'bad']
-    if (free <= 10) return ['мало', 'var(--am-l)', 'var(--am-m)', 'warn']
-    return ['есть', 'var(--gr-l)', 'var(--gr-m)', 'ok']
+    // Складу нужны цифры, заявителю — метка: точный остаток его только смущает
+    if (free <= 0) return [isWh ? 'нет на складе' : 'нет', 'var(--sur2)', 'var(--tx3)', 'bad']
+    if (free <= 10) return [isWh ? `осталось ${free}` : 'мало', 'var(--am-l)', 'var(--am-m)', 'warn']
+    return [isWh ? `на складе ${free}` : 'есть', 'var(--gr-l)', 'var(--gr-m)', 'ok']
   }
 
   const addToDraft = () => {
@@ -84,7 +92,7 @@ export default function Catalog({ data, profile, onRequest }) {
   return (
     <div style={{ maxWidth: 1000, margin: '0 auto', padding: '20px 18px 90px', animation: 'fadeUp .3s ease' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 11, marginBottom: 13, flexWrap: 'wrap' }}>
-        <span className="ff" style={{ fontSize: 20, fontWeight: 600 }}>Каталог</span>
+        <span className="ff" style={{ fontSize: 20, fontWeight: 600 }}>{isWh ? 'Выдача' : 'Каталог'}</span>
         <span style={{ fontSize: 12, color: 'var(--tx3)' }}>что можно запросить</span>
       </div>
 
@@ -183,11 +191,101 @@ export default function Catalog({ data, profile, onRequest }) {
               <span className="mono" style={{ fontSize: 15, fontWeight: 600 }}>{fmt(Math.round(draftSum))} сом</span>
             </div>
           )}
-          <Btn onClick={() => { onRequest && onRequest(draft); setDraft([]) }} style={{ width: '100%', minHeight: 48 }}>
-            Оформить заявку · {draft.reduce((a, d) => a + d.qty, 0)} шт →
-          </Btn>
+          {isWh ? (
+            <Btn onClick={() => setIssue({ recipient_id: '', dept: '', basis: '', warehouse_id: '', is_test: false })}
+              style={{ width: '100%', minHeight: 48 }}>
+              Выдать · {draft.reduce((a, d) => a + d.qty, 0)} шт →
+            </Btn>
+          ) : (
+            <Btn onClick={() => { onRequest && onRequest(draft); setDraft([]) }} style={{ width: '100%', minHeight: 48 }}>
+              Оформить заявку · {draft.reduce((a, d) => a + d.qty, 0)} шт →
+            </Btn>
+          )}
         </div>
       )}
+
+      {/* Оформление выдачи: получателя и основание указываем один раз на весь набор */}
+      <Sheet open={!!issue} onClose={() => setIssue(null)} title="Кому выдаём">
+        {issue && (() => {
+          const rec = (data.recipients || []).find((r) => r.id == issue.recipient_id)
+          const total = draftSum
+          const set = (k, v) => setIssue((s) => ({ ...s, [k]: v }))
+          const inp = { width: '100%', minHeight: 44, padding: '0 12px', borderRadius: 11, border: '1.5px solid var(--brd)', background: 'var(--sur)', fontSize: 13.5, color: 'var(--tx)' }
+          const lbl = (t) => <div style={{ fontSize: 12, color: 'var(--tx3)', marginBottom: 4 }}>{t}</div>
+
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div>{lbl('Получатель')}
+                <select value={issue.recipient_id} onChange={(e) => {
+                  set('recipient_id', e.target.value)
+                  const r = (data.recipients || []).find((x) => x.id == e.target.value)
+                  set('dept', r?.dept || '')
+                }} style={inp}>
+                  <option value="">— выбрать —</option>
+                  {(data.recipients || []).map((r) => (
+                    <option key={r.id} value={r.id}>{r.name}{r.dept ? ' · ' + r.dept : ''}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>{lbl('Подразделение')}
+                <select value={issue.dept} onChange={(e) => set('dept', e.target.value)} style={inp}>
+                  <option value="">—</option>
+                  {(data.departments || []).map((d) => <option key={d.id} value={d.name}>{d.name}</option>)}
+                </select>
+              </div>
+
+              <div>{lbl('Основание')}
+                <input value={issue.basis} onChange={(e) => set('basis', e.target.value)} placeholder="Служебная записка № ___" style={inp} />
+              </div>
+
+              <div>{lbl('Склад')}
+                <select value={issue.warehouse_id} onChange={(e) => set('warehouse_id', e.target.value)} style={inp}>
+                  <option value="">— выбрать —</option>
+                  {(data.warehouses || []).map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+                </select>
+              </div>
+
+              <div style={{ background: 'var(--bg)', borderRadius: 11, padding: 12 }}>
+                <div style={{ fontSize: 10.5, color: 'var(--tx3)', textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: 7 }}>Будет выдано</div>
+                {draft.map((d) => (
+                  <div key={d.product_id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, padding: '2px 0' }}>
+                    <span>{d.name}</span><span className="mono" style={{ fontWeight: 500 }}>{d.qty}</span>
+                  </div>
+                ))}
+                {total > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, paddingTop: 7, marginTop: 5, borderTop: '1px dashed var(--brd)' }}>
+                    <span style={{ fontWeight: 500 }}>Итого</span>
+                    <span className="mono" style={{ fontWeight: 600 }}>{fmt(Math.round(total))} сом</span>
+                  </div>
+                )}
+              </div>
+
+              <label style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '11px 13px', borderRadius: 11, background: issue.is_test ? 'var(--am-l)' : 'var(--bg)', cursor: 'pointer' }}>
+                <input type="checkbox" checked={issue.is_test} onChange={(e) => set('is_test', e.target.checked)}
+                  style={{ width: 18, height: 18, minHeight: 18, accentColor: 'var(--am)' }} />
+                <span style={{ fontSize: 12.5, color: issue.is_test ? 'var(--am-m)' : 'var(--tx2)' }}>Тестовая операция</span>
+              </label>
+
+              <Btn size="lg" loading={busy} onClick={async () => {
+                if (!rec) return toast('Выберите получателя', 'error')
+                if (!issue.warehouse_id) return toast('Выберите склад', 'error')
+                setBusy(true)
+                const { data: res, error } = await issueBasket({
+                  basket: draft, warehouseId: issue.warehouse_id,
+                  recipient: { id: rec.id, name: rec.name, branch_id: rec.branch_id, profile_id: rec.profile_id },
+                  dept: issue.dept, basis: issue.basis, profile, products, isTest: issue.is_test,
+                })
+                setBusy(false)
+                if (error) return toast(error, 'error')
+                toast('Выдано · акт ' + res.act.number)
+                setDraft([]); setIssue(null)
+                data.invalidate(['movements', 'stock', 'acts'])
+              }} style={{ minHeight: 50 }}>Выдать и оформить акт</Btn>
+            </div>
+          )
+        })()}
+      </Sheet>
 
       {/* Выбор количества */}
       <Sheet open={!!pick} onClose={() => { setPick(null); setQty(1) }} title={pick?.name || ''}>
