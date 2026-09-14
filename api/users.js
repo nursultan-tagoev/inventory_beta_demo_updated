@@ -36,12 +36,24 @@ async function requireAdmin(req) {
   const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '')
   if (!token) return { error: 'Нет токена' }
   const sb = admin()
-  const { data: u, error } = await sb.auth.getUser(token)
-  if (error || !u?.user) {
-    // Пустая ошибка тут почти всегда значит, что служебный ключ не от этого проекта
-    return { error: 'Сессия недействительна' + (error?.message ? ': ' + error.message
-      : '. Проверьте, что SUPABASE_SERVICE_ROLE_KEY относится к тому же проекту, что и VITE_SUPABASE_URL') }
+
+  /* Токен проверяем прямым запросом, а не через sb.auth.getUser(token):
+     библиотека смотрит на локальную сессию клиента, которой на сервере нет,
+     и отвечает «Auth session missing». */
+  let u
+  try {
+    const r = await fetch(`${URL}/auth/v1/user`, {
+      headers: { apikey: SERVICE, Authorization: `Bearer ${token}` },
+    })
+    if (!r.ok) {
+      const t = await r.text()
+      return { error: `Сессия недействительна (${r.status})` + (t ? ': ' + t.slice(0, 160) : '') }
+    }
+    u = { user: await r.json() }
+  } catch (e) {
+    return { error: 'Не удалось проверить сессию: ' + e.message }
   }
+  if (!u?.user?.id) return { error: 'Сессия недействительна' }
   const { data: prof } = await sb.from('profiles').select('role, is_active').eq('id', u.user.id).single()
   if (!prof || prof.role !== 'admin' || prof.is_active === false) return { error: 'Недостаточно прав' }
   return { userId: u.user.id }
