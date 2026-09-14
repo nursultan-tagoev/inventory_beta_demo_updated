@@ -196,6 +196,71 @@ export default function Users({ data }) {
         })}
       </div>
 
+      {edit && (
+        <div onClick={() => setEdit(null)} style={{ position: 'fixed', inset: 0, zIndex: 1300, background: 'rgba(8,10,14,.5)', backdropFilter: 'blur(3px)', display: 'grid', placeItems: 'center', padding: 16, overflow: 'auto' }}>
+          <div onClick={(e) => e.stopPropagation()} className="card" style={{ width: '100%', maxWidth: 420, padding: 20 }}>
+            <div className="ff" style={{ fontSize: 17, fontWeight: 600, marginBottom: 3 }}>Изменить профиль</div>
+            <div className="mono" style={{ fontSize: 11, color: 'var(--tx3)', marginBottom: 16 }}>{edit.p.email}</div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 11 }}>
+              <Field label="ФИО — Фамилия Имя">
+                <Input value={edit.f.full_name} onChange={(e) => setEdit({ ...edit, f: { ...edit.f, full_name: e.target.value } })} placeholder="Асанов Нурбек" />
+              </Field>
+
+              <Field label="Роль">
+                <Select value={edit.f.role} onChange={(e) => setEdit({ ...edit, f: { ...edit.f, role: e.target.value } })}>
+                  {edit.p.role === 'admin'
+                    ? <option value="admin">Суперадминистратор</option>
+                    : ['warehouse', 'manager', 'employee', 'director'].map((v) => <option key={v} value={v}>{ROLE[v]}</option>)}
+                </Select>
+              </Field>
+
+              {['employee', 'manager'].includes(edit.f.role) && (
+                <Field label="Филиал">
+                  <Select value={edit.f.branch_id} onChange={(e) => setEdit({ ...edit, f: { ...edit.f, branch_id: e.target.value } })}>
+                    <option value="">—</option>
+                    {(branches || []).map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+                  </Select>
+                </Field>
+              )}
+
+              {edit.f.role === 'employee' && (
+                <Field label="Руководитель — если не выбрать, заявки уйдут главе филиала">
+                  <Select value={edit.f.manager_id} onChange={(e) => setEdit({ ...edit, f: { ...edit.f, manager_id: e.target.value } })}>
+                    <option value="">—</option>
+                    {heads.map((h) => <option key={h.id} value={h.id}>{h.full_name || h.email}</option>)}
+                  </Select>
+                </Field>
+              )}
+
+              <Field label="Подразделение — попадёт в акт при выдаче">
+                <Select value={edit.f.dept} onChange={(e) => setEdit({ ...edit, f: { ...edit.f, dept: e.target.value } })}>
+                  <option value="">—</option>
+                  {(data.departments || []).filter((d) => d.kind === 'dep').map((d) => <option key={d.id} value={d.name}>{d.name}</option>)}
+                  {(data.departments || []).filter((d) => d.kind === 'branch').map((d) => <option key={d.id} value={d.name}>{d.name}</option>)}
+                </Select>
+              </Field>
+
+              <Field label="Должность">
+                <Input value={edit.f.position} onChange={(e) => setEdit({ ...edit, f: { ...edit.f, position: e.target.value } })} placeholder="Главный специалист по складу" />
+              </Field>
+
+              <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                <Btn loading={busy} onClick={async () => {
+                  setBusy(true)
+                  const { error } = await updateUser({ id: edit.p.id, ...edit.f })
+                  setBusy(false)
+                  if (error) return toast(typeof error === 'string' ? error : JSON.stringify(error), 'error')
+                  toast('Профиль обновлён')
+                  setEdit(null); invalidate('profiles')
+                }} style={{ flex: 1, minHeight: 46 }}>Сохранить</Btn>
+                <Btn v="secondary" onClick={() => setEdit(null)} style={{ minHeight: 46 }}>Отмена</Btn>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {confirm && <Confirm
         danger={confirm.kind === 'toggle' && confirm.p?.is_active !== false}
         title={confirm?.kind === 'reset' ? 'Выдать новый пароль?' : confirm?.p?.is_active === false ? 'Включить доступ?' : 'Отключить доступ?'}
