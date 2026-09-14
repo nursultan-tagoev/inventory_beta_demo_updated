@@ -40,8 +40,8 @@ class ErrorBoundary extends React.Component {
 }
 
 const ROLE_VIEWS = {
-  admin: ['home', 'items', 'movements', 'requests', 'acts', 'inventory', 'lucy', 'recipients', 'reports', 'settings'],
-  warehouse: ['home', 'items', 'movements', 'requests', 'acts', 'inventory', 'lucy', 'recipients', 'reports', 'settings'],
+  admin: ['home', 'catalog', 'items', 'movements', 'requests', 'acts', 'inventory', 'lucy', 'recipients', 'reports', 'settings'],
+  warehouse: ['home', 'catalog', 'items', 'movements', 'requests', 'acts', 'inventory', 'lucy', 'recipients', 'reports', 'settings'],
   manager: ['home', 'catalog', 'movements', 'requests', 'acts', 'reports', 'lucy'],
   director: ['home', 'items', 'movements', 'requests', 'acts', 'inventory', 'reports'],
   employee: ['home', 'catalog', 'movements', 'requests', 'acts', 'lucy'],
