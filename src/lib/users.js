@@ -39,6 +39,7 @@ async function call(action, payload) {
 }
 
 export const createUser = (payload) => call('create', payload)
+export const updateUser = (payload) => call('update', payload)
 export const resetPassword = (id) => call('reset_password', { id })
 export const setActive = (id, is_active) => call('set_active', { id, is_active })
 
