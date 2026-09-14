@@ -15,17 +15,30 @@ export function loginPreview(fullName) {
   return translit(parts[1]).slice(0, 1) + translit(parts[0])
 }
 
+async function send(action, payload, token) {
+  return fetch('/api/users', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+    body: JSON.stringify({ action, payload }),
+  })
+}
+
 async function call(action, payload) {
   const { data: sess } = await supabase.auth.getSession()
-  const token = sess?.session?.access_token
+  let token = sess?.session?.access_token
   if (!token) return { error: 'Сессия истекла — войдите заново' }
+
   let res
   try {
-    res = await fetch('/api/users', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-      body: JSON.stringify({ action, payload }),
-    })
+    res = await send(action, payload, token)
+
+    /* Токен мог протухнуть, пока вкладка была открыта: обновляем и повторяем.
+       Один раз — если и после этого отказ, дело не в сроке действия. */
+    if (res.status === 403) {
+      const { data: fresh } = await supabase.auth.refreshSession()
+      const t2 = fresh?.session?.access_token
+      if (t2 && t2 !== token) { token = t2; res = await send(action, payload, token) }
+    }
   } catch (e) { return { error: 'Сервер недоступен' } }
   let d = {}, raw = ''
   try { raw = await res.text(); d = raw ? JSON.parse(raw) : {} } catch (e) { d = {} }
