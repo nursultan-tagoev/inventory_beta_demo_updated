@@ -334,3 +334,46 @@ button:active { transform: scale(.97); }
 @media print {
   .act-sheet-print { padding: 0 !important; box-shadow: none !important; }
 }
+
+/* ── Сверка на телефоне: строка становится карточкой ──
+   Четыре колонки в 320 точек не читаются, а поле факта надо
+   нажимать пальцем стоя у стеллажа — оно должно быть крупным. */
+@media screen and (max-width: 640px) {
+  .inv-head { display: none !important; }
+
+  .inv-row {
+    display: block !important;
+    padding: 12px !important;
+  }
+  .inv-name {
+    display: block !important;
+    font-size: 13.5px !important;
+    font-weight: 600;
+    line-height: 1.35;
+    white-space: normal !important;
+    overflow: visible !important;
+    margin-bottom: 9px;
+  }
+  .inv-cell {
+    display: flex !important;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 0;
+    font-size: 13px !important;
+    text-align: right !important;
+  }
+  .inv-cell::before {
+    content: attr(data-label);
+    color: var(--tx3);
+    font-family: var(--f);
+    font-weight: 400;
+  }
+  .inv-cell input { max-width: 96px; min-height: 42px !important; font-size: 15px !important; }
+}
+
+/* Карточки товаров: на узком экране минимум 184px давал одну колонку
+   с огромными пустотами — фиксируем две */
+@media screen and (max-width: 640px) {
+  .items-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10 !important; }
+  .items-grid.list-view { grid-template-columns: 1fr; }
+}
