@@ -53,6 +53,16 @@ export default function App() {
   const [profile, setProfile] = useState(null)
   const [profErr, setProfErr] = useState(null)
   const [tour, setTour] = useState(false)
+
+  /* Переход по наклейке: /s/АРТИКУЛ открывает карточку товара.
+     Адрес чистим сразу, чтобы обновление страницы не открывало его снова. */
+  const [scanSku, setScanSku] = useState(() => {
+    if (typeof window === 'undefined') return null
+    const m = window.location.pathname.match(/^\/s\/(.+)$/)
+    if (!m) return null
+    try { window.history.replaceState({}, '', '/') } catch (e) {}
+    return decodeURIComponent(m[1])
+  })
   const [view, setView] = useState('home')
   const [assistAuto, setAssistAuto] = useState(false)
   const [draftItems, setDraftItems] = useState(null)
@@ -98,6 +108,11 @@ export default function App() {
       setProfile((p) => (p ? { ...p, onboarded_at: at } : p))
     }
   }
+
+  useEffect(() => {
+    if (!scanSku || !profile) return
+    setView(ROLE_VIEWS[profile.role]?.includes('items') ? 'items' : 'catalog')
+  }, [scanSku, profile])
 
   const data = useAppData(profile)
   const logout = async () => { await supabase.auth.signOut(); setView('home') }
@@ -154,8 +169,8 @@ export default function App() {
 
   const SCREENS = {
     home: <Home data={data} profile={profile} can={can} setView={setView} />,
-    items: <Items data={data} can={can} profile={profile} />,
-    catalog: <Catalog data={data} profile={profile} onRequest={(draft) => { setDraftItems(draft); setView('requests') }} />,
+    items: <Items data={data} can={can} profile={profile} scanSku={scanSku} onScanUsed={() => setScanSku(null)} />,
+    catalog: <Catalog data={data} profile={profile} scanSku={scanSku} onScanUsed={() => setScanSku(null)} onRequest={(draft) => { setDraftItems(draft); setView('requests') }} />,
     movements: <Movements data={data} profile={profile} can={can} />,
     recipients: <Recipients data={data} can={can} />,
     reports: <Reports data={data} profile={profile} />,
