@@ -11,11 +11,19 @@ const SEC = 'var(--sec-cat)', SEC_L = 'var(--sec-cat-l)'
 
 /* Каталог для заявителей: что можно запросить.
    Точных остатков нет — только метка наличия. */
-export default function Catalog({ data, profile, onRequest }) {
+export default function Catalog({ data, profile, onRequest, scanSku, onScanUsed }) {
   /* Одна витрина на всех, но действие разное: заявитель просит, склад выдаёт */
   const isWh = ['admin', 'warehouse'].includes(profile?.role)
   const [issue, setIssue] = useState(null)   // окно оформления выдачи
   const [busy, setBusy] = useState(false)
+
+  // Пришли по наклейке — показываем товар в поиске
+  useEffect(() => {
+    if (!scanSku || !products?.length) return
+    const p = products.find((x) => (x.sku || '').toUpperCase() === scanSku.toUpperCase())
+    setQ(p ? p.name : scanSku)
+    onScanUsed?.()
+  }, [scanSku, products])
 
   /* Шаблоны: заявители набирают одно и то же на каждую акцию */
   const [tpls, setTpls] = useState([])

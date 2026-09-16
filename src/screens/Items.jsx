@@ -9,7 +9,7 @@ import { SIZE_TYPES, SIZE_OPTIONS, SIZE_HINT, SIZE_UNIT, GENDERS, SEASONS, sizeL
 import { Btn, Field, Input, Select, Badge, Confirm, useToast } from '../components/ui'
 import { fmt, som, TL } from '../lib/format'
 
-export default function Items({ data, can, profile }) {
+export default function Items({ data, can, profile, scanSku, onScanUsed }) {
   const toast = useToast()
   const seeStock = ['admin', 'warehouse', 'director'].includes(profile?.role)
   const { products, categories, suppliers, locations, stock, stockByWh, freeByWh, resvByWh, warehouses, campaigns, directions, productTypes, flows, checkouts, recipients, invalidate } = data
@@ -18,6 +18,15 @@ export default function Items({ data, can, profile }) {
   const [imp, setImp] = useState(false)
   const [skuOpen, setSkuOpen] = useState(false)
   const [labels, setLabels] = useState(null)
+
+  // Пришли по наклейке — открываем карточку товара
+  useEffect(() => {
+    if (!scanSku || !products?.length) return
+    const p = products.find((x) => (x.sku || '').toUpperCase() === scanSku.toUpperCase())
+    if (p) setSel(p)
+    else setQ(scanSku)      // не нашёлся — подставляем в поиск, пусть человек решит
+    onScanUsed?.()
+  }, [scanSku, products])
   const [view, setView] = useState(() => localStorage.getItem('items_view') || 'grid')
   const switchView = (v) => { setView(v); try { localStorage.setItem('items_view', v) } catch {} }
   const [sel, setSel] = useState(null)
