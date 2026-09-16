@@ -106,7 +106,7 @@ export default function Home({ data, profile, can, setView }) {
           if (toIssue.length) cards.push({ ico: '📤', l: 'К выдаче', n: toIssue.length, c: 'var(--gr-m)', bg: 'var(--gr-l)', to: 'requests' })
         }
         // Заявителю — свои в работе
-        if (role !== 'admin') {
+        if (!['admin', 'warehouse'].includes(role)) {
           const myActive = (requests || []).filter((r) => r.author_id === profile.id && ['new', 'approved', 'revision'].includes(r.status))
           if (myActive.length) cards.push({ ico: '📋', l: 'Мои в работе', n: myActive.length, c: 'var(--am-m)', bg: 'var(--am-l)', to: 'requests' })
         }
@@ -139,7 +139,7 @@ export default function Home({ data, profile, can, setView }) {
       )}
 
       {/* Карточки-действия (только склад) */}
-      {showActions && role === 'admin' && (
+      {showActions && ['admin', 'warehouse'].includes(role) && (
         <div className="home-actions" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 22 }}>
           {actions.map((a) => (
             <button key={a.t} onClick={() => setSheet(a.t)} className="card" style={{ padding: 17, textAlign: 'left', cursor: 'pointer', transition: 'all .15s' }}
@@ -154,19 +154,31 @@ export default function Home({ data, profile, can, setView }) {
       )}
 
       {/* KPI: склады видят только админ и директор */}
-      {['admin', 'director'].includes(role) ? (
-        <div className="home-kpi" style={{ display: 'grid', gridTemplateColumns: `repeat(${3 + warehouses.length}, minmax(0,1fr))`, gap: 12, marginBottom: 22 }}>
-          <Stat label="Стоимость" value={fmt(totalVal)} unit="сом" color="var(--ink)" accent />
+      {['admin', 'warehouse', 'director'].includes(role) ? (
+        <div className="home-kpi" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 12, marginBottom: 22 }}>
+          <Stat label="Стоимость запасов" value={fmt(totalVal)} unit="сом" color="var(--ink)" accent />
           <Stat label="Всего на складах" value={fmt(totalUnits)} unit="шт" color="var(--gr)" />
-          {warehouses.map((w) => (<Stat key={w.id} label={w.name} value={fmt(whTotal(w.id))} unit="шт" />))}
           <Stat label="Просрочено" value={overdue.length} color={overdue.length ? 'var(--rd)' : 'var(--gr)'} />
         </div>
       ) : null}
 
+      {/* Остатки по складам: отдельной строкой, чтобы не мельчить показатели */}
+      {['admin', 'warehouse', 'director'].includes(role) && warehouses.length > 0 && (
+        <div className="scroll-x" style={{ display: 'flex', gap: 8, marginBottom: 22, flexWrap: 'wrap' }}>
+          {warehouses.map((w) => (
+            <div key={w.id} className="card" style={{ padding: '9px 13px', display: 'flex', alignItems: 'baseline', gap: 8, whiteSpace: 'nowrap' }}>
+              <span style={{ fontSize: 12, color: 'var(--tx3)' }}>{w.name}</span>
+              <span className="mono" style={{ fontSize: 14, fontWeight: 600 }}>{fmt(whTotal(w.id))}</span>
+              <span style={{ fontSize: 11, color: 'var(--tx3)' }}>шт</span>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Панели */}
       <div className="home-panels" style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 16 }}>
         <div className="card" style={{ overflow: 'hidden' }}>
-          <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--brd)', fontWeight: 600, fontSize: 14.5 }}>{['admin','director'].includes(role) ? 'Последние движения' : role === 'manager' ? 'Движения моего филиала' : 'Что я получал'}</div>
+          <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--brd)', fontWeight: 600, fontSize: 14.5 }}>{['admin','warehouse','director'].includes(role) ? 'Последние движения' : role === 'manager' ? 'Движения моего филиала' : 'Что я получал'}</div>
           {recent.length === 0 && (
             <div style={{ padding: 34, textAlign: 'center', color: 'var(--tx3)', fontSize: 12.5, lineHeight: 1.6 }}>
               Операций пока не было.<br />Они появятся после первого прихода или выдачи.
