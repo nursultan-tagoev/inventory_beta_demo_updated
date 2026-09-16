@@ -13,8 +13,16 @@ export default defineConfig({
         short_name: 'Склад',
         description: 'Учёт и склад · маркетинг банка',
         lang: 'ru',
+        id: '/',
         start_url: '/',
+        scope: '/',
         display: 'standalone',
+        /* Ссылки с наклеек должны открываться в установленном приложении,
+           а не в браузере. Android спросит один раз и запомнит выбор;
+           на iPhone такой возможности нет — там откроется Safari. */
+        handle_links: 'preferred',
+        capture_links: 'existing-client-navigate',
+        launch_handler: { client_mode: 'navigate-existing' },
         background_color: '#0A0C10',
         theme_color: '#4B45E4',
         icons: [
