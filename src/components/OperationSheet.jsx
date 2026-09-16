@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { supabase } from '../supabaseClient'
 import { fullName, attrsLine } from '../lib/attrs'
+import LabelPrint from './LabelPrint'
 import { Btn, Field, Input, Select, Confirm, useToast } from './ui'
 import { som } from '../lib/format'
 import { saveMovement, stockAt } from '../lib/ops'
@@ -26,6 +27,7 @@ export default function OperationSheet({ type, data, profile, can, onDone }) {
   const [newRec, setNewRec] = useState({ name: '', dept: '', branch_id: '' })
   const [dictating, setDictating] = useState(false)
   const [act, setAct] = useState(null)
+  const [labels, setLabels] = useState(null)
   const [f, setF] = useState({
     product_id: '', qty: 1, recipient_id: '', branch_id: '', dept: '', is_test: false,
     warehouse_id: warehouses[0]?.id || '', warehouse_to_id: '', location_id: '',
@@ -128,6 +130,9 @@ export default function OperationSheet({ type, data, profile, can, onDone }) {
     toast(TL[type] + ' сохранена')
     if ((type === 'out' || type === 'return') && selProd) {
       setAct({ type, items: [{ name: fullName(selProd), sku: selProd.sku, price: selProd.price, qty: Number(f.qty), product_id: selProd.id, warehouse_id: Number(f.warehouse_id) }], recipient: selRec?.name || '', recipient_id: selRec?.id || null, purpose: f.purpose, branch_id: f.branch_id || selRec?.branch_id || null, branchName: branches.find((b) => b.id === (f.branch_id || selRec?.branch_id))?.name, dept: f.dept || selRec?.dept || '' })
+    } else if (type === 'in' && selProd) {
+      // Наклейки клеятся при первом приходе, количество берём из накладной
+      setLabels([{ product_id: selProd.id, qty: goodQty }])
     } else { onDone() }
   }
   const next = () => { if (step < steps) setStep(step + 1); else setConfirm(true) }
@@ -142,7 +147,9 @@ export default function OperationSheet({ type, data, profile, can, onDone }) {
       <Btn v="secondary" onClick={onDone} style={{ flex: 1 }}>Позже</Btn>
       <Btn onClick={() => setAct({ ...act, open: true })} style={{ flex: 1 }}>🧾 Сформировать акт</Btn>
     </div>
-    {act.open && <ActModal init={act} profile={profile} onClose={() => { setAct(null); onDone() }} onSaved={() => {}} />}
+    {labels && <LabelPrint items={labels} products={products}
+      onClose={() => { setLabels(null); onDone() }} />}
+    {act?.open && <ActModal init={act} profile={profile} onClose={() => { setAct(null); onDone() }} onSaved={() => {}} />}
   </div>)
 
   const whName = (id) => warehouses.find((w) => w.id == id)?.name || '—'
