@@ -86,7 +86,7 @@ export default function LabelPrint({ items, products, onClose }) {
           <div>
             <div style={{ fontSize: 12, color: 'var(--tx3)', marginBottom: 6 }}>Как будет выглядеть</div>
             <div style={{ display: 'inline-block', border: '1px dashed var(--brd)', borderRadius: 6, padding: 4, background: '#fff' }}>
-              <Label product={rows[0].product} size={size} />
+              <Label key={size} product={rows[0].product} size={size} />
             </div>
           </div>
         )}
@@ -103,7 +103,7 @@ export default function LabelPrint({ items, products, onClose }) {
           <div id="labels-sheet" style={{ display: 'flex', flexWrap: 'wrap', gap: 0, background: '#fff' }}>
             {tags.map((p, i) => (
               <div key={i} style={{ border: '0.2mm dashed #bbb' }}>
-                <Label product={p} size={size} />
+                <Label key={size + '-' + i} product={p} size={size} />
               </div>
             ))}
           </div>

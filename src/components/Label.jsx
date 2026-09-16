@@ -23,16 +23,24 @@ function Barcode({ value, width, height }) {
   const ref = useRef(null)
   useEffect(() => {
     if (!ref.current || !value) return
-    try {
-      JsBarcode(ref.current, value, {
-        format: 'CODE128',        // берёт буквы и дефисы, в отличие от EAN
-        displayValue: false,
-        margin: 0,
-        width: 1.1,
-        height: height * 3.8,
-      })
-    } catch (e) { /* нечитаемый артикул — оставляем пусто */ }
-  }, [value, height])
+    /* Рисуем не сразу: шторка ещё открывается, и размеры элемента
+       на первом кадре нулевые — код лёг бы не по месту. */
+    let cancelled = false
+    const draw = () => {
+      if (cancelled || !ref.current) return
+      try {
+        JsBarcode(ref.current, value, {
+          format: 'CODE128',      // берёт буквы и дефисы, в отличие от EAN
+          displayValue: false,
+          margin: 0,
+          width: 1.1,
+          height: height * 3.8,
+        })
+      } catch (e) { /* нечитаемый артикул — оставляем пусто */ }
+    }
+    const id = requestAnimationFrame(() => requestAnimationFrame(draw))
+    return () => { cancelled = true; cancelAnimationFrame(id) }
+  }, [value, height, width])
   return <svg ref={ref} style={{ width: `${width}mm`, height: `${height}mm`, display: 'block' }} />
 }
 
@@ -40,13 +48,19 @@ function Qr({ value, size }) {
   const ref = useRef(null)
   useEffect(() => {
     if (!ref.current || !value) return
-    QRCode.toCanvas(ref.current, value, {
-      margin: 0,
-      width: 320,                  // с запасом: печать плотнее экрана
-      errorCorrectionLevel: 'M',   // наклейка на коробке мнётся и пачкается
-      color: { dark: '#000000', light: '#ffffff' },
-    }).catch(() => {})
-  }, [value])
+    let cancelled = false
+    const draw = () => {
+      if (cancelled || !ref.current) return
+      QRCode.toCanvas(ref.current, value, {
+        margin: 0,
+        width: 320,                  // с запасом: печать плотнее экрана
+        errorCorrectionLevel: 'M',   // наклейка на коробке мнётся и пачкается
+        color: { dark: '#000000', light: '#ffffff' },
+      }).catch(() => {})
+    }
+    const id = requestAnimationFrame(() => requestAnimationFrame(draw))
+    return () => { cancelled = true; cancelAnimationFrame(id) }
+  }, [value, size])
   return <canvas ref={ref} style={{ width: `${size}mm`, height: `${size}mm`, display: 'block', flexShrink: 0 }} />
 }
 
