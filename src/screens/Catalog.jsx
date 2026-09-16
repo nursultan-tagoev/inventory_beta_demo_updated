@@ -5,7 +5,9 @@ import { fmt } from '../lib/format'
 import { attrsLine } from '../lib/attrs'
 import { issueBasket } from '../lib/issueBasket'
 import { listTemplates, saveTemplate, deleteTemplate, expandTemplate } from '../lib/templates'
+import Scanner from '../components/Scanner'
 import { supabase } from '../supabaseClient'
+import { cameraOn } from '../lib/integrations'
 
 const SEC = 'var(--sec-cat)', SEC_L = 'var(--sec-cat-l)'
 
@@ -16,6 +18,7 @@ export default function Catalog({ data, profile, onRequest, scanSku, onScanUsed 
   const isWh = ['admin', 'warehouse'].includes(profile?.role)
   const [issue, setIssue] = useState(null)   // окно оформления выдачи
   const [busy, setBusy] = useState(false)
+  const [scan, setScan] = useState(false)
 
 
   /* Шаблоны: заявители набирают одно и то же на каждую акцию */
@@ -110,9 +113,13 @@ export default function Catalog({ data, profile, onRequest, scanSku, onScanUsed 
     <div style={{ maxWidth: 1000, margin: '0 auto', padding: '20px 18px 90px', animation: 'fadeUp .3s ease' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 11, marginBottom: 13, flexWrap: 'wrap' }}>
         <span className="ff" style={{ fontSize: 20, fontWeight: 600 }}>{isWh ? 'Выдача' : 'Каталог'}</span>
+        {cameraOn(data.integrations) && (
+          <button onClick={() => setScan(true)} title="Сканировать код"
+            style={{ marginLeft: 'auto', minHeight: 38, width: 44, borderRadius: 9, border: '1px solid var(--brd)', background: 'var(--sur)', fontSize: 16 }}>📷</button>
+        )}
         {!isWh && (
           <button onClick={() => setTplOpen(true)}
-            style={{ marginLeft: 'auto', minHeight: 38, padding: '0 13px', borderRadius: 9, border: '1px solid var(--brd)', background: 'var(--sur)', color: 'var(--tx2)', fontSize: 12.5, fontWeight: 600 }}>
+            style={{ minHeight: 38, padding: '0 13px', borderRadius: 9, border: '1px solid var(--brd)', background: 'var(--sur)', color: 'var(--tx2)', fontSize: 12.5, fontWeight: 600 }}>
             Шаблоны{tpls.length ? ` · ${tpls.length}` : ''}
           </button>
         )}
@@ -231,6 +238,18 @@ export default function Catalog({ data, profile, onRequest, scanSku, onScanUsed 
             </Btn>
           )}
         </div>
+      )}
+
+      {scan && (
+        <Scanner title="Наведите на наклейку" onClose={() => setScan(false)}
+          onFound={(sku) => {
+            const p = products.find((x) => (x.sku || '').toUpperCase() === sku.toUpperCase() && !x.archived)
+            if (!p) return toast('Артикул ' + sku + ' не найден', 'error')
+            // Каждое сканирование добавляет штуку в корзину
+            const has = inDraft(p.id)
+            if (has === null) putInDraft(p, 1)
+            else bump(p.id, +1)
+          }} />
       )}
 
       {/* Шаблоны заявок */}

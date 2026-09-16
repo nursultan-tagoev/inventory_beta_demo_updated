@@ -4,10 +4,12 @@ import { chainOf, freeAll, reservedAll } from '../lib/data'
 import ImportProducts from '../components/ImportProducts'
 import SkuAssign from '../components/SkuAssign'
 import LabelPrint from '../components/LabelPrint'
+import Scanner from '../components/Scanner'
 import { buildSku } from '../lib/sku'
 import { SIZE_TYPES, SIZE_OPTIONS, SIZE_HINT, SIZE_UNIT, GENDERS, SEASONS, sizeLabel, attrsLine } from '../lib/attrs'
 import { Btn, Field, Input, Select, Badge, Confirm, useToast } from '../components/ui'
 import { fmt, som, TL } from '../lib/format'
+import { cameraOn } from '../lib/integrations'
 
 export default function Items({ data, can, profile, scanSku, onScanUsed }) {
   const toast = useToast()
@@ -18,6 +20,7 @@ export default function Items({ data, can, profile, scanSku, onScanUsed }) {
   const [imp, setImp] = useState(false)
   const [skuOpen, setSkuOpen] = useState(false)
   const [labels, setLabels] = useState(null)
+  const [scan, setScan] = useState(false)
 
   // Пришли по наклейке — открываем карточку товара
   useEffect(() => {
@@ -92,6 +95,10 @@ export default function Items({ data, can, profile, scanSku, onScanUsed }) {
       <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Поиск по названию или артикулу…"
           style={{ ...selS, flex: 1, minWidth: 170, padding: '0 13px' }} />
+        {cameraOn(data.integrations) && (
+          <button onClick={() => setScan(true)} title="Сканировать код"
+            style={{ ...selS, width: 46, padding: 0, fontSize: 17 }}>📷</button>
+        )}
         <select value={hier.direction_id} onChange={(e) => setHier({ direction_id: e.target.value, product_type_id: '', campaign_id: '' })} style={selS}>
           <option value="">Направление</option>
           {directions.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
@@ -209,6 +216,15 @@ export default function Items({ data, can, profile, scanSku, onScanUsed }) {
       )}
 
       {sel && <ItemModal p={sel} data={data} can={can} onClose={() => setSel(null)} />}
+      {scan && (
+        <Scanner title="Наведите на наклейку" onClose={() => setScan(false)}
+          onFound={(sku) => {
+            const p = products.find((x) => (x.sku || '').toUpperCase() === sku.toUpperCase())
+            setScan(false)
+            if (p) setSel(p)
+            else { setQ(sku); toast('Товар с таким артикулом не найден', 'error') }
+          }} />
+      )}
       {labels && <LabelPrint items={labels} products={products} onClose={() => setLabels(null)} />}
       {skuOpen && <SkuAssign data={data} onClose={() => setSkuOpen(false)} onDone={() => setSkuOpen(false)} />}
       {imp && <ImportProducts data={data} onClose={() => setImp(false)} onDone={() => { setImp(false); invalidate(['products', 'stock']) }} />}

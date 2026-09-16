@@ -9,6 +9,8 @@ import {
   loadInventory, deleteInventory,
 } from '../lib/inventory'
 import DefectSheet from '../components/DefectSheet'
+import Scanner from '../components/Scanner'
+import { cameraOn } from '../lib/integrations'
 
 const ACC = 'var(--bl, #2F6FB3)'
 const ACC_L = 'color-mix(in srgb, var(--bl, #2F6FB3) 12%, transparent)'
@@ -32,6 +34,7 @@ export default function Inventory({ data, profile }) {
   const [confirm, setConfirm] = useState(null)
   const [delInv, setDelInv] = useState(null)
   const [defect, setDefect] = useState(false)
+  const [scan, setScan] = useState(false)
   const printRef = useRef(null)
 
 
@@ -210,9 +213,18 @@ export default function Inventory({ data, profile }) {
             </div>
 
             {open.inv.status === 'draft' && (
-              <div style={{ padding: '10px 13px', background: 'var(--am-l)', borderRadius: 11, fontSize: 11.5, color: 'var(--am-m)', lineHeight: 1.55 }}>
-                Внесите фактические остатки. Можно сохранить черновиком и продолжить позже — остатки при этом не меняются.
-              </div>
+              <>
+                <div style={{ padding: '10px 13px', background: 'var(--am-l)', borderRadius: 11, fontSize: 11.5, color: 'var(--am-m)', lineHeight: 1.55 }}>
+                  Внесите фактические остатки. Можно сохранить черновиком и продолжить позже — остатки при этом не меняются.
+                </div>
+                {/* Со сканером механика обратная: не искать товар в списке,
+                    а идти вдоль стеллажа и считать то, что нашлось */}
+                {cameraOn(data.integrations) && (
+                  <Btn v="secondary" onClick={() => setScan(true)} style={{ minHeight: 46 }}>
+                    📷 Сканировать полки
+                  </Btn>
+                )}
+              </>
             )}
 
             {/* Таблица позиций */}
@@ -341,6 +353,15 @@ export default function Inventory({ data, profile }) {
           }} />
       )}
 
+      {scan && open && (
+        <Scanner title="Сканируйте товар на полке" onClose={() => setScan(false)}
+          onFound={(sku) => {
+            const p = (products || []).find((x) => (x.sku || '').toUpperCase() === sku.toUpperCase())
+            if (!p) return toast('Артикул ' + sku + ' не найден', 'error')
+            // Каждое сканирование прибавляет единицу — так считают по факту
+            setFact((f) => ({ ...f, [p.id]: (Number(f[p.id]) || 0) + 1 }))
+          }} />
+      )}
       {defect && <DefectSheet data={data} profile={profile} onClose={() => setDefect(false)} onDone={() => { setDefect(false); invalidate(AFFECTS.defect) }} />}
     </div>
   )
