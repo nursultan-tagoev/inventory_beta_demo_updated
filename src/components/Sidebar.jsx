@@ -7,6 +7,7 @@ const I = {
   acts: <path d="M6 3h9l4 4v14H6zM15 3v4h4M9 12h7M9 16h5" />,
   lucy: <path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v6a3 3 0 0 0 3 3ZM6 11a6 6 0 0 0 12 0M12 19v3" />,
   recipients: <path d="M16 19v-1a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v1M9.5 10a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM21 19v-1a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8" />,
+  integrations: <path d="M6 3v6M18 3v6M4 9h16v4a8 8 0 0 1-16 0zM12 21v-4" />,
   audit: <path d="M8 4h9l3 3v13H8zM4 8h4M4 12h4M4 16h4M12 11h5M12 15h5" />,
   reports: <path d="M4 20h16M7 20V10M12 20V4M17 20v-7" />,
   requests: <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2m-6 9 2 2 4-4" />,
@@ -37,6 +38,7 @@ const NAV = [
   { id: 'inventory', label: 'Инвентаризация', roles: ['admin', 'warehouse', 'director'] },
   { id: 'reports', label: 'Аналитика', roles: ['admin', 'warehouse', 'director', 'manager'] },
   { id: 'lucy', label: 'Люси', roles: ['admin', 'warehouse', 'manager', 'employee', 'director'] },
+  { id: 'integrations', label: 'Интеграции', roles: ['admin', 'warehouse'] },
   { id: 'audit', label: 'Журнал действий', roles: ['admin'] },
   { id: 'settings', label: 'Справочники', roles: ['admin', 'warehouse'] },
   // Блок 2: { id: 'requests', label: 'Заявки' }, { id: 'acts', label: 'Акты' }, { id: 'recipients', label: 'Получатели' }

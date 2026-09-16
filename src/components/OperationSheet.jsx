@@ -147,7 +147,7 @@ export default function OperationSheet({ type, data, profile, can, onDone }) {
       <Btn v="secondary" onClick={onDone} style={{ flex: 1 }}>Позже</Btn>
       <Btn onClick={() => setAct({ ...act, open: true })} style={{ flex: 1 }}>🧾 Сформировать акт</Btn>
     </div>
-    {labels && <LabelPrint items={labels} products={products}
+    {labels && <LabelPrint items={labels} products={products} warehouseId={f.warehouse_id}
       onClose={() => { setLabels(null); onDone() }} />}
     {act?.open && <ActModal init={act} profile={profile} onClose={() => { setAct(null); onDone() }} onSaved={() => {}} />}
   </div>)

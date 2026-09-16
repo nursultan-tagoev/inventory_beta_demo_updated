@@ -2,13 +2,27 @@ import { useState, useMemo, useEffect } from 'react'
 import { Btn, Sheet, useToast } from './ui'
 import Label, { SIZES, sizeById } from './Label'
 import { printDoc } from '../lib/print'
+import { attrsLine } from '../lib/attrs'
+import { listIntegrations, printerFor, printLabels } from '../lib/integrations'
 
 /* Печать наклеек. Лист под обычный принтер — кладём сетку и режем,
    поштучно — под термопринтер. Проверяем до печати: рулон конечный. */
 
-export default function LabelPrint({ items, products, onClose }) {
+export default function LabelPrint({ items, products, onClose, warehouseId }) {
   const toast = useToast()
   const [size, setSize] = useState('40x30')
+
+  /* Если подключён сетевой принтер — печатаем прямо на него, без окна браузера.
+     Нет принтера — остаётся обычная печать листом. */
+  const [printer, setPrinter] = useState(null)
+  const [sending, setSending] = useState(false)
+  useEffect(() => {
+    listIntegrations().then((l) => {
+      const p = printerFor(l, warehouseId)
+      setPrinter(p)
+      if (p?.label_size) setSize(p.label_size)
+    })
+  }, [warehouseId])
   const [copies, setCopies] = useState(() =>
     Object.fromEntries(items.map((it) => [it.product_id, it.qty || 1])))
 
@@ -29,10 +43,24 @@ export default function LabelPrint({ items, products, onClose }) {
     return out
   }, [rows])
 
-  const doPrint = () => {
-    if (noSku.length) return toast(`У ${noSku.length} товаров нет артикула — печатать нечего`, 'error')
-    if (!total) return toast('Укажите количество наклеек', 'error')
-    printDoc('labels-sheet')
+  const check = () => {
+    if (noSku.length) { toast(`У ${noSku.length} товаров нет артикула — печатать нечего`, 'error'); return false }
+    if (!total) { toast('Укажите количество наклеек', 'error'); return false }
+    return true
+  }
+
+  const doPrint = () => { if (check()) printDoc('labels-sheet') }
+
+  const doSend = async () => {
+    if (!check()) return
+    setSending(true)
+    const { error } = await printLabels(printer.id, rows.filter((r) => r.qty > 0).map((r) => ({
+      name: r.product.name, attrs: attrsLine(r.product), sku: r.product.sku, copies: r.qty,
+    })))
+    setSending(false)
+    if (error) return toast(error, 'error')
+    toast(`Отправлено на печать: ${total}`)
+    onClose()
   }
 
   return (
@@ -96,7 +124,17 @@ export default function LabelPrint({ items, products, onClose }) {
           <span className="mono" style={{ fontSize: 16, fontWeight: 600 }}>{total}</span>
         </div>
 
-        <Btn size="lg" onClick={doPrint} style={{ minHeight: 50 }}>Печать</Btn>
+        {printer ? (
+          <>
+            <div style={{ fontSize: 11.5, color: 'var(--tx3)', textAlign: 'center' }}>
+              Принтер: {printer.name}
+            </div>
+            <Btn size="lg" loading={sending} onClick={doSend} style={{ minHeight: 50 }}>Печать на принтер</Btn>
+            <Btn v="secondary" onClick={doPrint} style={{ minHeight: 44 }}>Через окно браузера</Btn>
+          </>
+        ) : (
+          <Btn size="lg" onClick={doPrint} style={{ minHeight: 50 }}>Печать</Btn>
+        )}
 
         {/* Лист для печати: сетка наклеек встык, без отступов между ними */}
         <div style={{ display: 'none' }}>
