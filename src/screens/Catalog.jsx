@@ -17,13 +17,6 @@ export default function Catalog({ data, profile, onRequest, scanSku, onScanUsed 
   const [issue, setIssue] = useState(null)   // окно оформления выдачи
   const [busy, setBusy] = useState(false)
 
-  // Пришли по наклейке — показываем товар в поиске
-  useEffect(() => {
-    if (!scanSku || !products?.length) return
-    const p = products.find((x) => (x.sku || '').toUpperCase() === scanSku.toUpperCase())
-    setQ(p ? p.name : scanSku)
-    onScanUsed?.()
-  }, [scanSku, products])
 
   /* Шаблоны: заявители набирают одно и то же на каждую акцию */
   const [tpls, setTpls] = useState([])
@@ -36,6 +29,15 @@ export default function Catalog({ data, profile, onRequest, scanSku, onScanUsed 
   const [hier, setHier] = useState({ direction_id: '', product_type_id: '', campaign_id: '' })
   const [draft, setDraft] = useState([])       // корзина: заявка или выдача
   const [pick, setPick] = useState(null)       // выбранный товар
+
+  // Пришли по наклейке — показываем товар в поиске
+  useEffect(() => {
+    if (!scanSku || !products?.length) return
+    const p = products.find((x) => (x.sku || '').toUpperCase() === scanSku.toUpperCase())
+    setQ(p ? p.name : scanSku)
+    onScanUsed?.()
+  }, [scanSku, products])
+
 
   /* Корзина: количество правится и на карточке, и в списке внизу */
   const inDraft = (id) => {
