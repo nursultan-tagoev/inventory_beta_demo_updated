@@ -18,5 +18,9 @@ export function printDoc(elementOrId) {
     window.removeEventListener('afterprint', cleanup)
   }
   window.addEventListener('afterprint', cleanup)
-  setTimeout(() => { window.print(); setTimeout(cleanup, 1000) }, 60)
+  // Ждём картинки: QR приходит как data-URL, без загрузки лист уйдёт пустым
+  const imgs = [...host.querySelectorAll('img')]
+  const ready = Promise.all(imgs.map((im) => (im.complete ? null
+    : new Promise((res) => { im.onload = im.onerror = res }))))
+  ready.then(() => setTimeout(() => { window.print(); setTimeout(cleanup, 1000) }, 60))
 }
