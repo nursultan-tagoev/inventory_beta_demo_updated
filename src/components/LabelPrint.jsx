@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { Btn, Sheet, useToast } from './ui'
 import Label, { SIZES, sizeById } from './Label'
 import { printDoc } from '../lib/print'
@@ -9,6 +9,9 @@ import { printDoc } from '../lib/print'
 export default function LabelPrint({ items, products, onClose }) {
   const toast = useToast()
   const [size, setSize] = useState('40x30')
+  const [ready, setReady] = useState(false)
+  useEffect(() => { const t = setTimeout(() => setReady(true), 180); return () => clearTimeout(t) }, [])
+
   const [copies, setCopies] = useState(() =>
     Object.fromEntries(items.map((it) => [it.product_id, it.qty || 1])))
 
@@ -85,8 +88,10 @@ export default function LabelPrint({ items, products, onClose }) {
         {rows[0]?.product && (
           <div>
             <div style={{ fontSize: 12, color: 'var(--tx3)', marginBottom: 6 }}>Как будет выглядеть</div>
-            <div style={{ display: 'inline-block', border: '1px dashed var(--brd)', borderRadius: 6, padding: 4, background: '#fff' }}>
-              <Label key={size} product={rows[0].product} size={size} />
+            <div style={{ display: 'inline-block', border: '1px dashed var(--brd)', borderRadius: 6, padding: 4, background: '#fff', minHeight: 40 }}>
+              {ready
+                ? <Label key={size} product={rows[0].product} size={size} />
+                : <div style={{ width: 120, height: 80, display: 'grid', placeItems: 'center', color: '#999', fontSize: 11 }}>готовим…</div>}
             </div>
           </div>
         )}
