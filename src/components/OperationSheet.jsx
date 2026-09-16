@@ -2,12 +2,14 @@ import { useState, useMemo } from 'react'
 import { supabase } from '../supabaseClient'
 import { fullName, attrsLine } from '../lib/attrs'
 import LabelPrint from './LabelPrint'
+import Scanner from './Scanner'
 import { Btn, Field, Input, Select, Confirm, useToast } from './ui'
 import { som } from '../lib/format'
 import { saveMovement, stockAt } from '../lib/ops'
 import { chainOf } from '../lib/data'
 import { norm, parseQty, matchName, askLucy } from '../lib/lucy'
 import ActModal from './ActModal'
+import { cameraOn } from '../lib/integrations'
 
 const TL = { in: 'Приход', out: 'Выдача', return: 'Возврат', writeoff: 'Списание', transfer: 'Перемещение' }
 const TC = { in: 'var(--gr)', out: 'var(--ink)', return: 'var(--pu)', writeoff: 'var(--rd)', transfer: 'var(--am-m)' }
@@ -28,6 +30,7 @@ export default function OperationSheet({ type, data, profile, can, onDone }) {
   const [dictating, setDictating] = useState(false)
   const [act, setAct] = useState(null)
   const [labels, setLabels] = useState(null)
+  const [scan, setScan] = useState(false)
   const [f, setF] = useState({
     product_id: '', qty: 1, recipient_id: '', branch_id: '', dept: '', is_test: false,
     warehouse_id: warehouses[0]?.id || '', warehouse_to_id: '', location_id: '',
@@ -147,6 +150,17 @@ export default function OperationSheet({ type, data, profile, can, onDone }) {
       <Btn v="secondary" onClick={onDone} style={{ flex: 1 }}>Позже</Btn>
       <Btn onClick={() => setAct({ ...act, open: true })} style={{ flex: 1 }}>🧾 Сформировать акт</Btn>
     </div>
+    {scan && (
+      <Scanner title="Наведите на наклейку товара" onClose={() => setScan(false)}
+        onFound={(sku) => {
+          const p = products.find((x) => (x.sku || '').toUpperCase() === sku.toUpperCase() && !x.archived)
+          setScan(false)
+          if (!p) return toast('Товар с артикулом ' + sku + ' не найден', 'error')
+          up('product_id', p.id)
+          setCreatedProd(null)
+          toast(p.name)
+        }} />
+    )}
     {labels && <LabelPrint items={labels} products={products} warehouseId={f.warehouse_id}
       onClose={() => { setLabels(null); onDone() }} />}
     {act?.open && <ActModal init={act} profile={profile} onClose={() => { setAct(null); onDone() }} onSaved={() => {}} />}
@@ -179,12 +193,21 @@ export default function OperationSheet({ type, data, profile, can, onDone }) {
         </button>}
 
         <Field label="Товар">
+          {/* Сканирование: на складе быстрее навести камеру, чем искать в списке */}
+          <div style={{ display: 'flex', gap: 7 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
           <Select value={f.product_id} onChange={(e) => { if (e.target.value === 'new') setShowNewProd(true); else { up('product_id', e.target.value); setCreatedProd(null) } }}>
             <option value="">— выбрать товар —</option>
             {createdProd && <option value={createdProd.id}>{createdProd.name} (новый)</option>}
             {products.filter((p) => !p.archived).map((p) => <option key={p.id} value={p.id}>{fullName(p)}{p.sku ? ` (${p.sku})` : ''}</option>)}
             <option value="new">➕ Добавить новый товар</option>
           </Select>
+            </div>
+            {cameraOn(data.integrations) && (
+              <button onClick={() => setScan(true)} title="Сканировать код"
+                style={{ width: 46, minHeight: 44, borderRadius: 11, border: '1.5px solid var(--brd)', background: 'var(--sur)', fontSize: 17 }}>📷</button>
+            )}
+          </div>
         </Field>
         {showNewProd && <div className="card" style={{ padding: 14, background: 'var(--bg)' }}>
           <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--ink)', marginBottom: 10 }}>Новый товар</div>
