@@ -377,3 +377,21 @@ button:active { transform: scale(.97); }
   .items-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10 !important; }
   .items-grid.list-view { grid-template-columns: 1fr; }
 }
+
+/* ── Наклейки ─────────────────────────────────────────────────
+   Печатаются в реальных миллиметрах: и листом на обычный принтер,
+   и поштучно на термопринтер. Между наклейками отступов нет —
+   режутся по пунктирной линии. */
+.label-tag { break-inside: avoid; page-break-inside: avoid; }
+
+@media print {
+  .print-root #labels-sheet,
+  #labels-sheet {
+    display: flex !important;
+    flex-wrap: wrap;
+    gap: 0;
+    background: #fff;
+  }
+  .label-tag { border: 0.2mm dashed #bbb; }
+  @page { margin: 5mm; }
+}
