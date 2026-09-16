@@ -7,6 +7,7 @@ import FirstPassword from './components/FirstPassword'
 import Tour from './components/Tour'
 import Inventory from './screens/Inventory'
 import Audit from './screens/Audit'
+import Integrations from './screens/Integrations'
 import InstallPrompt from './components/InstallPrompt'
 import Sidebar from './components/Sidebar'
 import Notifications from './components/Notifications'
@@ -41,8 +42,8 @@ class ErrorBoundary extends React.Component {
 }
 
 const ROLE_VIEWS = {
-  admin: ['home', 'catalog', 'items', 'movements', 'requests', 'acts', 'inventory', 'audit', 'lucy', 'recipients', 'reports', 'settings'],
-  warehouse: ['home', 'catalog', 'items', 'movements', 'requests', 'acts', 'inventory', 'lucy', 'recipients', 'reports', 'settings'],
+  admin: ['home', 'catalog', 'items', 'movements', 'requests', 'acts', 'inventory', 'audit', 'integrations', 'lucy', 'recipients', 'reports', 'settings'],
+  warehouse: ['home', 'catalog', 'items', 'movements', 'requests', 'acts', 'inventory', 'integrations', 'lucy', 'recipients', 'reports', 'settings'],
   manager: ['home', 'catalog', 'movements', 'requests', 'acts', 'reports', 'lucy'],
   director: ['home', 'items', 'movements', 'requests', 'acts', 'inventory', 'reports'],
   employee: ['home', 'catalog', 'movements', 'requests', 'acts', 'lucy'],
@@ -178,6 +179,7 @@ export default function App() {
     settings: <Settings data={data} profile={profile} />,
     inventory: <Inventory data={data} profile={profile} />,
     audit: <Audit profile={profile} />,
+    integrations: <Integrations data={data} profile={profile} />,
     requests: <Requests data={data} profile={profile} can={can} draftItems={draftItems} onDraftUsed={() => setDraftItems(null)} />,
     lucy: <Lucy data={data} profile={profile} can={can} setView={setView} autostart={assistAuto} onAutostart={() => setAssistAuto(false)} />,
   }
