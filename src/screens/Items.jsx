@@ -3,6 +3,7 @@ import { supabase } from '../supabaseClient'
 import { chainOf, freeAll, reservedAll } from '../lib/data'
 import ImportProducts from '../components/ImportProducts'
 import SkuAssign from '../components/SkuAssign'
+import LabelPrint from '../components/LabelPrint'
 import { buildSku } from '../lib/sku'
 import { SIZE_TYPES, SIZE_OPTIONS, SIZE_HINT, SIZE_UNIT, GENDERS, SEASONS, sizeLabel, attrsLine } from '../lib/attrs'
 import { Btn, Field, Input, Select, Badge, Confirm, useToast } from '../components/ui'
@@ -16,6 +17,7 @@ export default function Items({ data, can, profile }) {
   const [add, setAdd] = useState(false)
   const [imp, setImp] = useState(false)
   const [skuOpen, setSkuOpen] = useState(false)
+  const [labels, setLabels] = useState(null)
   const [view, setView] = useState(() => localStorage.getItem('items_view') || 'grid')
   const switchView = (v) => { setView(v); try { localStorage.setItem('items_view', v) } catch {} }
   const [sel, setSel] = useState(null)
@@ -68,6 +70,11 @@ export default function Items({ data, can, profile }) {
                 color: view === v ? 'var(--tx)' : 'var(--tx3)', fontWeight: view === v ? 600 : 400 }}>{ico}</button>
           ))}
         </div>
+        {can('edit') && list.length > 0 && (
+          <Btn size="sm" v="secondary" onClick={() => setLabels(list.map((p) => ({ product_id: p.id, qty: 1 })))}>
+            Наклейки
+          </Btn>
+        )}
         {can('edit') && <Btn size="sm" v="secondary" onClick={() => setSkuOpen(true)}>Артикулы</Btn>}
         {can('edit') && <Btn size="sm" v="secondary" onClick={() => setImp(true)}>↑ Загрузить</Btn>}
         {can('edit') && <Btn size="sm" onClick={() => setAdd(!add)}>＋ Товар</Btn>}
@@ -193,6 +200,7 @@ export default function Items({ data, can, profile }) {
       )}
 
       {sel && <ItemModal p={sel} data={data} can={can} onClose={() => setSel(null)} />}
+      {labels && <LabelPrint items={labels} products={products} onClose={() => setLabels(null)} />}
       {skuOpen && <SkuAssign data={data} onClose={() => setSkuOpen(false)} onDone={() => setSkuOpen(false)} />}
       {imp && <ImportProducts data={data} onClose={() => setImp(false)} onDone={() => { setImp(false); invalidate(['products', 'stock']) }} />}
     </div>
