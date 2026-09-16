@@ -41,22 +41,16 @@ function Barcode({ value, width, height }) {
   return <svg ref={ref} style={{ width: `${width}mm`, height: `${height}mm`, display: 'block' }} />
 }
 
-function Qr({ value, size }) {
-  /* Рисуем в картинку, а не на холст: при печати элемент копируется,
-     и содержимое холста теряется — QR не попадал на бумагу. */
-  const [src, setSrc] = useState('')
-  useEffect(() => {
-    if (!value) { setSrc(''); return }
-    let cancelled = false
-    QRCode.toDataURL(value, {
-      margin: 0,
-      width: 512,                  // с запасом: печать плотнее экрана
-      errorCorrectionLevel: 'M',   // наклейка на коробке мнётся и пачкается
-      color: { dark: '#000000', light: '#ffffff' },
-    }).then((url) => { if (!cancelled) setSrc(url) }).catch(() => {})
-    return () => { cancelled = true }
-  }, [value])
+/* QR готовим заранее и отдаём готовой картинкой: холст при печати
+   не копируется, а отложенная отрисовка не успевала к моменту печати. */
+export const qrDataUrl = (value) => QRCode.toDataURL(value, {
+  margin: 0,
+  width: 512,                    // с запасом: печать плотнее экрана
+  errorCorrectionLevel: 'M',     // наклейка на коробке мнётся и пачкается
+  color: { dark: '#000000', light: '#ffffff' },
+}).catch(() => '')
 
+function Qr({ src, size }) {
   if (!src) return <div style={{ width: `${size}mm`, height: `${size}mm`, flexShrink: 0 }} />
   return <img src={src} alt="" style={{ width: `${size}mm`, height: `${size}mm`, display: 'block', flexShrink: 0 }} />
 }
@@ -70,14 +64,15 @@ export const skuLink = (sku) => {
   return base ? `${base}/s/${encodeURIComponent(sku)}` : sku
 }
 
-export default function Label({ product, size = '40x30', scale = 1 }) {
+export default function Label({ product, size = '40x30', scale = 1, codes = 'both', qrSrc = '' }) {
   const s = sizeById(size)
   const sku = product?.sku || ''
   const attrs = attrsLine(product)
 
   // На маленькой наклейке два кода нечитаемы — оставляем штрихкод
-  const both = s.both && sku
-  const barW = both ? s.w - s.qr - 6.5 : s.w - 5
+  const wantBar = codes !== 'qr'
+  const wantQr = codes !== 'barcode' && s.both && !!sku
+  const barW = wantBar && wantQr ? s.w - s.qr - 6.5 : s.w - 5
 
   return (
     <div className="label-tag" style={{
@@ -103,10 +98,16 @@ export default function Label({ product, size = '40x30', scale = 1 }) {
 
       {/* Строка кодов фиксированной высоты: иначе QR вылезает за край наклейки */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '2mm', marginTop: 'auto', height: `${s.code}mm` }}>
-        <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center' }}>
-          <Barcode value={sku} width={barW} height={both ? s.code * 0.62 : s.code} />
-        </div>
-        {both && <Qr value={skuLink(sku)} size={s.qr} />}
+        {wantBar && (
+          <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center' }}>
+            <Barcode value={sku} width={barW} height={wantQr ? s.code * 0.62 : s.code} />
+          </div>
+        )}
+        {wantQr && (
+          <div style={{ marginLeft: wantBar ? 0 : 'auto', marginRight: wantBar ? 0 : 'auto' }}>
+            <Qr src={qrSrc} size={wantBar ? s.qr : s.code} />
+          </div>
+        )}
       </div>
 
       <div className="mono" style={{ fontSize: '2mm', letterSpacing: '.02em', textAlign: 'center', marginTop: '0.5mm' }}>

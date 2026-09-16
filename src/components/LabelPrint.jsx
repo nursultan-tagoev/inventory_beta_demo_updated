@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react'
 import { Btn, Sheet, useToast } from './ui'
-import Label, { SIZES, sizeById } from './Label'
+import Label, { SIZES, sizeById, qrDataUrl, skuLink } from './Label'
 import { printDoc } from '../lib/print'
 import { attrsLine } from '../lib/attrs'
 import { listIntegrations, printerFor, printLabels } from '../lib/integrations'
@@ -11,6 +11,11 @@ import { listIntegrations, printerFor, printLabels } from '../lib/integrations'
 export default function LabelPrint({ items, products, onClose, warehouseId }) {
   const toast = useToast()
   const [size, setSize] = useState('40x30')
+  const [codes, setCodes] = useState('both')   // both | barcode | qr
+
+  /* Коды готовим заранее для всех наклеек: при печати картинки должны
+     уже быть на месте, иначе на бумаге останется пустое место. */
+  const [qrMap, setQrMap] = useState({})
 
   /* Если подключён сетевой принтер — печатаем прямо на него, без окна браузера.
      Нет принтера — остаётся обычная печать листом. */
@@ -34,6 +39,16 @@ export default function LabelPrint({ items, products, onClose, warehouseId }) {
   }).filter((r) => r.product), [items, products, copies])
 
   const noSku = rows.filter((r) => !r.product.sku)
+
+  useEffect(() => {
+    let cancelled = false
+    const skus = [...new Set(rows.map((r) => r.product.sku).filter(Boolean))]
+    Promise.all(skus.map((sku) => qrDataUrl(skuLink(sku)).then((url) => [sku, url])))
+      .then((pairs) => { if (!cancelled) setQrMap(Object.fromEntries(pairs)) })
+    return () => { cancelled = true }
+  }, [rows.map((r) => r.product.sku).join('|')])
+
+  const qrReady = rows.every((r) => !r.product.sku || qrMap[r.product.sku])
   const total = rows.reduce((a, r) => a + r.qty, 0)
 
   // Разворачиваем в отдельные наклейки: по копии на каждую
@@ -46,6 +61,7 @@ export default function LabelPrint({ items, products, onClose, warehouseId }) {
   const check = () => {
     if (noSku.length) { toast(`У ${noSku.length} товаров нет артикула — печатать нечего`, 'error'); return false }
     if (!total) { toast('Укажите количество наклеек', 'error'); return false }
+    if (codes !== 'barcode' && !qrReady) { toast('Коды ещё готовятся, секунду', 'error'); return false }
     return true
   }
 
@@ -86,6 +102,19 @@ export default function LabelPrint({ items, products, onClose, warehouseId }) {
           )}
         </div>
 
+        <div>
+          <div style={{ fontSize: 12, color: 'var(--tx3)', marginBottom: 6 }}>Что печатать</div>
+          <div style={{ display: 'flex', gap: 6 }}>
+            {[['both', 'Оба кода'], ['barcode', 'Только штрихкод'], ['qr', 'Только QR']].map(([v, l]) => (
+              <button key={v} onClick={() => setCodes(v)}
+                style={{ flex: 1, minHeight: 40, borderRadius: 9, fontSize: 12.5, whiteSpace: 'nowrap',
+                  border: `1px solid ${codes === v ? 'var(--ink)' : 'var(--brd)'}`,
+                  background: codes === v ? 'var(--ink-l)' : 'var(--sur)',
+                  color: codes === v ? 'var(--ink)' : 'var(--tx2)', fontWeight: codes === v ? 600 : 400 }}>{l}</button>
+            ))}
+          </div>
+        </div>
+
         {noSku.length > 0 && (
           <div style={{ padding: '11px 13px', background: 'var(--rd-l)', borderRadius: 11, fontSize: 11.5, color: 'var(--rd-m)', lineHeight: 1.6 }}>
             Без артикула: {noSku.map((r) => r.product.name).join(', ')}.
@@ -114,7 +143,7 @@ export default function LabelPrint({ items, products, onClose, warehouseId }) {
           <div>
             <div style={{ fontSize: 12, color: 'var(--tx3)', marginBottom: 6 }}>Как будет выглядеть</div>
             <div style={{ display: 'inline-block', border: '1px dashed var(--brd)', borderRadius: 6, padding: 4, background: '#fff', minHeight: 40 }}>
-              <Label key={size} product={rows[0].product} size={size} />
+              <Label key={size + codes} product={rows[0].product} size={size} codes={codes} qrSrc={qrMap[rows[0].product.sku]} />
             </div>
           </div>
         )}
@@ -141,7 +170,7 @@ export default function LabelPrint({ items, products, onClose, warehouseId }) {
           <div id="labels-sheet" style={{ display: 'flex', flexWrap: 'wrap', gap: 0, background: '#fff' }}>
             {tags.map((p, i) => (
               <div key={i} style={{ border: '0.2mm dashed #bbb' }}>
-                <Label key={size + '-' + i} product={p} size={size} />
+                <Label key={size + codes + '-' + i} product={p} size={size} codes={codes} qrSrc={qrMap[p.sku]} />
               </div>
             ))}
           </div>
