@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import JsBarcode from 'jsbarcode'
 import QRCode from 'qrcode'
 import { attrsLine } from '../lib/attrs'
@@ -42,24 +42,23 @@ function Barcode({ value, width, height }) {
 }
 
 function Qr({ value, size }) {
-  const ref = useRef(null)
+  /* Рисуем в картинку, а не на холст: при печати элемент копируется,
+     и содержимое холста теряется — QR не попадал на бумагу. */
+  const [src, setSrc] = useState('')
   useEffect(() => {
-    if (!ref.current || !value) return
-    QRCode.toCanvas(ref.current, value, {
+    if (!value) { setSrc(''); return }
+    let cancelled = false
+    QRCode.toDataURL(value, {
       margin: 0,
-      width: 320,                  // с запасом: печать плотнее экрана
+      width: 512,                  // с запасом: печать плотнее экрана
       errorCorrectionLevel: 'M',   // наклейка на коробке мнётся и пачкается
       color: { dark: '#000000', light: '#ffffff' },
-    }).then(() => {
-      /* Библиотека прописывает размер холста в пикселях и затирает наш
-         размер в миллиметрах — возвращаем его обратно, иначе QR
-         разрастается на всю наклейку. */
-      if (!ref.current) return
-      ref.current.style.width = `${size}mm`
-      ref.current.style.height = `${size}mm`
-    }).catch(() => {})
-  }, [value, size])
-  return <canvas ref={ref} style={{ width: `${size}mm`, height: `${size}mm`, display: 'block', flexShrink: 0 }} />
+    }).then((url) => { if (!cancelled) setSrc(url) }).catch(() => {})
+    return () => { cancelled = true }
+  }, [value])
+
+  if (!src) return <div style={{ width: `${size}mm`, height: `${size}mm`, flexShrink: 0 }} />
+  return <img src={src} alt="" style={{ width: `${size}mm`, height: `${size}mm`, display: 'block', flexShrink: 0 }} />
 }
 
 /* В QR кладём ссылку на товар: голый текст сканер телефона отправляет в поиск.
