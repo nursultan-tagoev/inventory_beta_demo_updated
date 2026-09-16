@@ -31,6 +31,11 @@ function Barcode({ value, width, height }) {
         width: 1.1,
         height: height * 3.8,
       })
+      // JsBarcode тоже ставит свои размеры — возвращаем миллиметры
+      ref.current.style.width = `${width}mm`
+      ref.current.style.height = `${height}mm`
+      ref.current.removeAttribute('width')
+      ref.current.removeAttribute('height')
     } catch (e) { /* нечитаемый артикул — оставляем пусто */ }
   }, [value, height, width])
   return <svg ref={ref} style={{ width: `${width}mm`, height: `${height}mm`, display: 'block' }} />
@@ -45,6 +50,13 @@ function Qr({ value, size }) {
       width: 320,                  // с запасом: печать плотнее экрана
       errorCorrectionLevel: 'M',   // наклейка на коробке мнётся и пачкается
       color: { dark: '#000000', light: '#ffffff' },
+    }).then(() => {
+      /* Библиотека прописывает размер холста в пикселях и затирает наш
+         размер в миллиметрах — возвращаем его обратно, иначе QR
+         разрастается на всю наклейку. */
+      if (!ref.current) return
+      ref.current.style.width = `${size}mm`
+      ref.current.style.height = `${size}mm`
     }).catch(() => {})
   }, [value, size])
   return <canvas ref={ref} style={{ width: `${size}mm`, height: `${size}mm`, display: 'block', flexShrink: 0 }} />
