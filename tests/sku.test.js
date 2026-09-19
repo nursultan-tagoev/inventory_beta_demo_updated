@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { translit, shortCode, colorCode, buildSku, assignSkus } from '../src/lib/sku'
+import { translit, shortCode, colorCode, buildSku, assignSkus, uniqueSku } from '../src/lib/sku'
 
 const refs = {
   directions: [{ id: 1, name: 'Розница' }, { id: 2, name: 'Бизнес' }],
@@ -93,5 +93,24 @@ describe('присвоение', () => {
     const list = [{ id: 1, name: 'А', product_type_id: 10, sku: 'RZN-FTB' }]
     const rows = assignSkus(list, refs)
     expect(rows[0].changed).toBe(false)
+  })
+})
+
+describe('уникальный артикул для нового товара', () => {
+  const list = [{ id: 1, sku: 'RZN-FTB' }, { id: 2, sku: 'RZN-FTB-2' }]
+
+  it('свободный отдаёт как есть', () => {
+    const p = { name: 'Ручка', product_type_id: 11 }
+    expect(uniqueSku(p, refs, [])).toBe('BZN-EZH')
+  })
+
+  it('занятый получает номер', () => {
+    const p = { name: 'Футболка', product_type_id: 10 }
+    expect(uniqueSku(p, refs, list)).toBe('RZN-FTB-3')
+  })
+
+  it('регистр не обманывает проверку', () => {
+    const p = { name: 'Футболка', product_type_id: 10 }
+    expect(uniqueSku(p, refs, [{ sku: 'rzn-ftb' }])).toBe('RZN-FTB-2')
   })
 })
