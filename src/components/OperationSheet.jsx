@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
 import { supabase } from '../supabaseClient'
+import { enqueue, tempId } from '../lib/offline'
 import { fullName, attrsLine } from '../lib/attrs'
 import LabelPrint from './LabelPrint'
 import Scanner from './Scanner'
@@ -81,13 +82,45 @@ export default function OperationSheet({ type, data, profile, can, onDone }) {
 
   const createProduct = async () => {
     if (!newProd.name.trim()) return toast('Введите название', 'error')
-    const { data: d, error } = await supabase.from('products').insert({ name: newProd.name.trim(), sku: newProd.sku || null, price: Number(newProd.price) || 0, campaign_id: newProd.campaign_id ? Number(newProd.campaign_id) : null, direction_id: newProd.direction_id ? Number(newProd.direction_id) : null, archived: false }).select().single()
+    const body = {
+      name: newProd.name.trim(), sku: newProd.sku || null, price: Number(newProd.price) || 0,
+      campaign_id: newProd.campaign_id ? Number(newProd.campaign_id) : null,
+      direction_id: newProd.direction_id ? Number(newProd.direction_id) : null, archived: false,
+    }
+    const reset = (d) => {
+      up('product_id', d.id); setCreatedProd(d); setShowNewProd(false)
+      setNewProd({ name: '', sku: '', price: '', direction_id: '', product_type_id: '', campaign_id: '' })
+    }
+
+    /* Без связи товар получает временный идентификатор: при отправке
+       очереди он заменится на настоящий во всех операциях с ним. */
+    if (!navigator.onLine) {
+      const id = tempId()
+      await enqueue({ kind: 'product', payload: body, tempId: id, title: 'Новый товар · ' + body.name })
+      reset({ ...body, id })
+      return toast('Товар записан — создастся, когда появится связь')
+    }
+
+    const { data: d, error } = await supabase.from('products').insert(body).select().single()
     if (error) return toast('Ошибка: ' + error.message, 'error')
-    up('product_id', d.id); setCreatedProd(d); setShowNewProd(false); setNewProd({ name: '', sku: '', price: '', direction_id: '', product_type_id: '', campaign_id: '' }); toast('Товар создан')
+    reset(d); toast('Товар создан')
   }
   const createRecipient = async () => {
     if (!newRec.name.trim()) return toast('Введите имя', 'error')
-    const { data: d, error } = await supabase.from('recipients').insert({ name: newRec.name.trim(), dept: newRec.dept?.trim() || null, branch_id: Number(newRec.branch_id) || null }).select().single()
+    const body = { name: newRec.name.trim(), dept: newRec.dept?.trim() || null, branch_id: Number(newRec.branch_id) || null }
+
+    if (!navigator.onLine) {
+      const id = tempId()
+      await enqueue({ kind: 'recipient', payload: body, tempId: id, title: 'Новый получатель · ' + body.name })
+      setExtraRecs((l) => [...l, { ...body, id }])
+      up('recipient_id', id)
+      if (body.branch_id) up('branch_id', body.branch_id)
+      up('dept', body.dept || '')
+      setShowNewRec(false); setNewRec({ name: '', dept: '', branch_id: '' })
+      return toast('Получатель записан — создастся, когда появится связь')
+    }
+
+    const { data: d, error } = await supabase.from('recipients').insert(body).select().single()
     if (error) return toast('Ошибка: ' + error.message, 'error')
     setExtraRecs((l) => [...l, d])          // сразу в список
     up('recipient_id', d.id)
