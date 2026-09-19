@@ -8,7 +8,7 @@ import Tour from './components/Tour'
 import Inventory from './screens/Inventory'
 import Audit from './screens/Audit'
 import Integrations from './screens/Integrations'
-import { saveProfile, loadProfile } from './lib/offline'
+import { saveProfile, loadProfile, loadProfileSync } from './lib/offline'
 import InstallPrompt from './components/InstallPrompt'
 import Sidebar from './components/Sidebar'
 import Notifications from './components/Notifications'
@@ -90,7 +90,21 @@ export default function App() {
     // Профиль НИКОГДА не выдумываем: не прочитали — значит ошибка, а не «специалист».
     // Иначе сбой сети молча понижает админа в правах.
     const load = async (attempt = 0) => {
-      const { data, error } = await supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle()
+      /* Сети заведомо нет — не гоняем три попытки по семь десятых секунды,
+         а сразу берём профиль с устройства. */
+      if (!navigator.onLine) {
+        const cached = loadProfileSync(session.user.id) || await loadProfile(session.user.id)
+        if (!alive) return
+        if (cached) { setProfile(cached); setProfErr(null); return }
+        setProfErr('Нет связи, а профиль на этом устройстве не сохранён. Подключитесь к сети и войдите заново.')
+        return
+      }
+
+      let data = null, error = null
+      try {
+        const res = await supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle()
+        data = res.data; error = res.error
+      } catch (e) { error = e }
       if (!alive) return
       if (data) { setProfile(data); setProfErr(null); saveProfile(data); return }
       if (attempt < 2) { setTimeout(() => load(attempt + 1), 700); return }
