@@ -6,7 +6,7 @@ import { useState, useRef, useEffect, useMemo } from 'react'
 
 export default function SearchSelect({
   value, onChange, options, placeholder = '— выбрать —',
-  groupBy, extra, required, style,
+  groupBy, extra, required, style, onCreate, createHint,
 }) {
   const [open, setOpen] = useState(false)
   const [q, setQ] = useState('')
@@ -98,6 +98,19 @@ export default function SearchSelect({
               </div>
             ))}
           </div>
+
+          {/* Заводим прямо здесь: уходить в справочник и терять начатое неудобно */}
+          {onCreate && q.trim() && !list.some((o) => o.label.toLowerCase() === q.trim().toLowerCase()) && (
+            <div style={{ borderTop: '1px solid var(--brd)' }}>
+              <button type="button" onClick={async () => {
+                const ok = await onCreate(q.trim())
+                if (ok) { setOpen(false); setQ('') }
+              }} style={{ width: '100%', padding: '12px 13px', minHeight: 48, textAlign: 'left', fontSize: 13, color: 'var(--ink)' }}>
+                ＋ Создать «{q.trim()}»
+                {createHint && <span style={{ display: 'block', fontSize: 11, color: 'var(--tx3)', marginTop: 2 }}>{createHint}</span>}
+              </button>
+            </div>
+          )}
 
           {extra && (
             <div style={{ borderTop: '1px solid var(--brd)' }}>

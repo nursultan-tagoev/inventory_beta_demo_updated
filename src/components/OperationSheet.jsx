@@ -6,6 +6,7 @@ import { fullName, attrsLine } from '../lib/attrs'
 import LabelPrint from './LabelPrint'
 import Scanner from './Scanner'
 import SearchSelect from './SearchSelect'
+import { createDirection, createProductType, createCampaign } from '../lib/classifier'
 import Photo from './Photo'
 import { Btn, Field, Input, Select, Confirm, useToast } from './ui'
 import { som } from '../lib/format'
@@ -436,7 +437,16 @@ export default function OperationSheet({ type, data, profile, can, onDone }) {
             <SearchSelect value={f.direction_id}
               onChange={(v) => { up('direction_id', v); up('product_type_id', ''); up('campaign_id', '') }}
               placeholder="— не выбрано —"
-              options={(directions || []).map((d) => ({ value: d.id, label: d.name }))} />
+              options={(directions || []).map((d) => ({ value: d.id, label: d.name }))}
+              createHint="появится в справочнике"
+              onCreate={async (name) => {
+                const { data: d, error, existed } = await createDirection(name)
+                if (error) { toast(error, 'error'); return false }
+                up('direction_id', d.id); up('product_type_id', ''); up('campaign_id', '')
+                data.invalidate('refs')
+                toast(existed ? 'Уже было — выбрано' : 'Направление добавлено')
+                return true
+              }} />
           </div>
 
           <div>
@@ -447,7 +457,16 @@ export default function OperationSheet({ type, data, profile, can, onDone }) {
               onChange={(v) => { up('product_type_id', v); up('campaign_id', '') }}
               placeholder={f.direction_id ? '— не выбрано —' : 'сначала направление'}
               options={(productTypes || []).filter((t) => !f.direction_id || t.direction_id == f.direction_id)
-                .map((t) => ({ value: t.id, label: t.name }))} />
+                .map((t) => ({ value: t.id, label: t.name }))}
+              createHint={f.direction_id ? 'внутри выбранного направления' : 'сначала выберите направление'}
+              onCreate={async (name) => {
+                const { data: t, error, existed } = await createProductType(name, f.direction_id)
+                if (error) { toast(error, 'error'); return false }
+                up('product_type_id', t.id); up('campaign_id', '')
+                data.invalidate('refs')
+                toast(existed ? 'Уже было — выбрано' : 'Продукт добавлен')
+                return true
+              }} />
           </div>
 
           <div>
@@ -457,7 +476,16 @@ export default function OperationSheet({ type, data, profile, can, onDone }) {
             <SearchSelect value={f.campaign_id} onChange={(v) => up('campaign_id', v)}
               placeholder={f.product_type_id ? '— не выбрано —' : 'сначала продукт'}
               options={(campaigns || []).filter((c) => !f.product_type_id || c.product_type_id == f.product_type_id)
-                .map((c) => ({ value: c.id, label: c.name }))} />
+                .map((c) => ({ value: c.id, label: c.name }))}
+              createHint={f.product_type_id ? 'внутри выбранного продукта' : 'сначала выберите продукт'}
+              onCreate={async (name) => {
+                const { data: c, error, existed } = await createCampaign(name, f.product_type_id)
+                if (error) { toast(error, 'error'); return false }
+                up('campaign_id', c.id)
+                data.invalidate('refs')
+                toast(existed ? 'Уже было — выбрано' : 'Кампания добавлена')
+                return true
+              }} />
           </div>
         </div>
 
@@ -535,45 +563,6 @@ export default function OperationSheet({ type, data, profile, can, onDone }) {
         <div style={{ padding: '12px 14px', background: 'var(--bg)', borderRadius: 10, fontSize: 12.5, color: 'var(--tx2)' }}>
           <b style={{ color: 'var(--tx)' }}>{selProd?.name}</b> × {f.qty} шт · склад {whName(f.warehouse_id)}{selRec ? <> · {selRec.name}</> : null}
         </div>
-        {/* Классификатор: подо что закупали и для чего выдаём.
-            Списки связаны — выбрал направление, в продуктах остались только его. */}
-        <div style={{ padding: '12px 13px', background: 'var(--bg)', borderRadius: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '.05em', color: 'var(--tx3)' }}>
-            КЛАССИФИКАТОР <span style={{ fontWeight: 400, letterSpacing: 0 }}>— можно пропустить</span>
-          </div>
-
-          <div>
-            <div style={{ fontSize: 12, color: 'var(--tx3)', marginBottom: 4 }}>
-              Направление бизнеса <span style={{ opacity: .7 }}>· розница, бизнес, ислам</span>
-            </div>
-            <SearchSelect value={f.direction_id}
-              onChange={(v) => { up('direction_id', v); up('product_type_id', ''); up('campaign_id', '') }}
-              placeholder="— не выбрано —"
-              options={(directions || []).map((d) => ({ value: d.id, label: d.name }))} />
-          </div>
-
-          <div>
-            <div style={{ fontSize: 12, color: 'var(--tx3)', marginBottom: 4 }}>
-              Продукт банка <span style={{ opacity: .7 }}>· карты, кредиты, депозиты</span>
-            </div>
-            <SearchSelect value={f.product_type_id}
-              onChange={(v) => { up('product_type_id', v); up('campaign_id', '') }}
-              placeholder={f.direction_id ? '— не выбрано —' : 'сначала направление'}
-              options={(productTypes || []).filter((t) => !f.direction_id || t.direction_id == f.direction_id)
-                .map((t) => ({ value: t.id, label: t.name }))} />
-          </div>
-
-          <div>
-            <div style={{ fontSize: 12, color: 'var(--tx3)', marginBottom: 4 }}>
-              Что продвигаем <span style={{ opacity: .7 }}>· продукт или акция</span>
-            </div>
-            <SearchSelect value={f.campaign_id} onChange={(v) => up('campaign_id', v)}
-              placeholder={f.product_type_id ? '— не выбрано —' : 'сначала продукт'}
-              options={(campaigns || []).filter((c) => !f.product_type_id || c.product_type_id == f.product_type_id)
-                .map((c) => ({ value: c.id, label: c.name }))} />
-          </div>
-        </div>
-
         {/* Тестовая операция: помечается, чтобы перед запуском убрать одним фильтром */}
         <label style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '11px 13px', borderRadius: 11, background: f.is_test ? 'var(--am-l)' : 'var(--bg)', cursor: 'pointer' }}>
           <input type="checkbox" checked={f.is_test} onChange={(e) => up('is_test', e.target.checked)}
