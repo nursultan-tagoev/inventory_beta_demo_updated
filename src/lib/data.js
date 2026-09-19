@@ -168,8 +168,8 @@ const FETCH = {
   },
 
   async inventories() {
-    const { data } = await supabase.from('inventories').select('*').order('started_at', { ascending: false })
-    return { inventories: data || [] }
+    const res = await supabase.from('inventories').select('*').order('started_at', { ascending: false })
+    return { inventories: ok(res) }
   },
 }
 
