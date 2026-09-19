@@ -35,6 +35,13 @@ export const AFFECTS = {
 
 const q = (t, order = 'id') => supabase.from(t).select('*').order(order)
 
+/* Без связи запрос отдаёт пустой результат. Если молча его принять,
+   снимок на устройстве затрётся пустыми списками — поэтому падаем. */
+const ok = (res) => {
+  if (res?.error) throw new Error(res.error.message)
+  return res?.data || []
+}
+
 function buildRequests(reqs, items) {
   const byReq = {}
   for (const it of items || []) (byReq[it.request_id] || (byReq[it.request_id] = [])).push(it)
@@ -71,22 +78,22 @@ const FETCH = {
         q('external_approvers', 'level'),
       ])
     return {
-      branches: branches.data || [], suppliers: suppliers.data || [], categories: categories.data || [],
-      directions: directions.data || [], productTypes: productTypes.data || [], locations: locations.data || [],
-      warehouses: warehouses.data || [], campaigns: campaigns.data || [],
-      recipients: recipients.data || [], externals: externals.data || [],
+      branches: ok(branches), suppliers: ok(suppliers), categories: ok(categories),
+      directions: ok(directions), productTypes: ok(productTypes), locations: ok(locations),
+      warehouses: ok(warehouses), campaigns: ok(campaigns),
+      recipients: ok(recipients), externals: ok(externals),
     }
   },
 
   async products() {
-    const { data } = await supabase.from('products').select('*').order('name')
-    return { products: data || [] }
+    const res = await supabase.from('products').select('*').order('name')
+    return { products: ok(res) }
   },
 
   async movements() {
-    const { data } = await supabase.from('movements').select('*')
+    const res = await supabase.from('movements').select('*')
       .order('created_at', { ascending: false }).limit(2000)
-    const mv = data || []
+    const mv = ok(res)
     return { movements: mv, ...deriveFromMovements(mv) }
   },
 
@@ -95,6 +102,7 @@ const FETCH = {
       supabase.from('stock_by_warehouse').select('*'),
       supabase.from('stock_free').select('*'),
     ])
+    if (rows?.error) throw new Error(rows.error.message)
     const stockByWh = {}, stock = {}
     for (const r of rows.data || []) {
       const pid = Number(r.product_id), wid = Number(r.warehouse_id), qty = Number(r.qty) || 0
@@ -117,17 +125,15 @@ const FETCH = {
       supabase.from('requests').select('*').order('created_at', { ascending: false }).limit(1000),
       supabase.from('request_items').select('*'),
     ])
-    return { requests: buildRequests(reqs.data, items.data) }
+    return { requests: buildRequests(ok(reqs), ok(items)) }
   },
 
   async approvers() {
-    const { data } = await q('request_approvers', 'order_no')
-    return { reqApprovers: data || [] }
+    return { reqApprovers: ok(await q('request_approvers', 'order_no')) }
   },
 
   async messages() {
-    const { data } = await q('request_messages', 'created_at')
-    return { reqMessages: data || [] }
+    return { reqMessages: ok(await q('request_messages', 'created_at')) }
   },
 
   async acts() {
@@ -135,12 +141,11 @@ const FETCH = {
       supabase.from('acts').select('*').order('created_at', { ascending: false }).limit(1000),
       q('act_signers', 'order_no'),
     ])
-    return { acts: acts.data || [], actSigners: signers.data || [] }
+    return { acts: ok(acts), actSigners: ok(signers) }
   },
 
   async profiles() {
-    const { data } = await supabase.from('profiles').select('*')
-    return { profiles: data || [] }
+    return { profiles: ok(await supabase.from('profiles').select('*')) }
   },
 
   async reservations() {
@@ -154,14 +159,13 @@ const FETCH = {
   },
 
   async integrations() {
-    const { data } = await supabase.from('integrations').select('*')
-    return { integrations: data || [] }
+    return { integrations: ok(await supabase.from('integrations').select('*')) }
   },
 
   async departments() {
-    const { data } = await supabase.from('departments').select('*')
+    const res = await supabase.from('departments').select('*')
       .eq('is_active', true).order('kind').order('name')
-    return { departments: data || [] }
+    return { departments: ok(res) }
   },
 
   async inventories() {
@@ -185,11 +189,14 @@ export function useAppData(profile) {
      связи. Без него на складе не будет ни каталога, ни остатков. */
   const snapAt = useRef(0)
   const SNAP_EVERY = 2 * 60 * 60 * 1000
+  const snapDone = useRef(false)
 
   const maybeSnapshot = useCallback((state, force) => {
     if (!state?.products?.length) return
-    if (!force && Date.now() - snapAt.current < SNAP_EVERY) return
+    // Первый удачный заход снимаем сразу: иначе внизу может не оказаться данных
+    if (!force && snapDone.current && Date.now() - snapAt.current < SNAP_EVERY) return
     snapAt.current = Date.now()
+    snapDone.current = true
     saveSnapshot(state)
   }, [])
 
@@ -241,7 +248,9 @@ export function useAppData(profile) {
     requestPersistence()
     loadSnapshot().then((snap) => {
       if (!alive || !snap?.data) return
-      setState((s) => (s.products?.length ? s : { ...s, ...snap.data, loading: false, fromSnapshot: snap.at }))
+      setState((s) => (s.products?.length
+        ? s
+        : { ...s, ...snap.data, loading: false, fromSnapshot: snap.at }))
     })
     load()
     return () => { alive = false }

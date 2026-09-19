@@ -1,5 +1,5 @@
 import { supabase } from '../supabaseClient'
-import { enqueue } from './offline'
+import { enqueue, isTempId } from './offline'
 
 // Единая запись операции. Остаток проверяется ПО КОНКРЕТНОМУ СКЛАДУ.
 // a = { type, product_id, qty, warehouse_id, warehouse_to_id?, recipient_id?, branch_id?, ... }
@@ -23,13 +23,16 @@ export async function saveMovement(a, stockByWh) {
     return { error: `На складе только ${avail} шт` }
   }
 
+  // Товар мог быть заведён без связи — идентификатор пока временный
+  const tempProduct = isTempId(a.product_id)
+
   const row = {
     type: a.type,
-    product_id: Number(a.product_id),
+    product_id: tempProduct ? a.product_id : Number(a.product_id),
     qty,
     warehouse_id: wh,
     warehouse_to_id: a.type === 'transfer' ? whTo : null,
-    recipient_id: a.recipient_id ? Number(a.recipient_id) : null,
+    recipient_id: a.recipient_id ? (isTempId(a.recipient_id) ? a.recipient_id : Number(a.recipient_id)) : null,
     branch_id: a.branch_id ? Number(a.branch_id) : null,          // филиал-адресат (куда выдали)
     supplier_id: a.type === 'in' && a.supplier_id ? Number(a.supplier_id) : null,
     delivery_id: a.delivery_id ? Number(a.delivery_id) : null,
@@ -45,7 +48,7 @@ export async function saveMovement(a, stockByWh) {
   }
   /* Связи нет — операция уходит в очередь и проводится при её появлении.
      Отказать человеку у стеллажа нельзя: работа не ждёт сети. */
-  if (!navigator.onLine) {
+  if (!navigator.onLine || tempProduct || isTempId(a.recipient_id)) {
     await enqueue({ kind: 'movement', payload: row, title: describe(a) })
     return { error: null, queued: true }
   }
