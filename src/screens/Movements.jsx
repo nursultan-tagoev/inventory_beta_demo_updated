@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react'
 import { Btn, Sheet, useToast } from '../components/ui'
 import { TL } from '../lib/format'
 import { fullName } from '../lib/attrs'
+import { chainOf } from '../lib/data'
 import OperationSheet from '../components/OperationSheet'
 import { cancelMovement, restoreMovement, deleteMovement, canCancelMovement, canHardDelete } from '../lib/cleanup'
 
@@ -37,6 +38,16 @@ export default function Movements({ data, profile, can }) {
 
   const pById = useMemo(() => Object.fromEntries(products.map((p) => [p.id, p])), [products])
   const pName = (id) => fullName(pById[id]) || '—'
+
+  // Что продвигали: кампания операции, иначе её продукт или направление
+  const campaignOf = (m) => {
+    const c = (campaigns || []).find((x) => x.id === m.campaign_id)
+    if (c) return c.name
+    const t = (productTypes || []).find((x) => x.id === m.product_type_id)
+    if (t) return t.name
+    const d = (directions || []).find((x) => x.id === m.direction_id)
+    return d?.name || null
+  }
   const rName = (id) => recipients.find((r) => r.id === id)?.name || ''
   const bName = (id) => branches.find((b) => b.id === id)?.name || ''
   const whName = (id) => warehouses.find((w) => w.id === id)?.name || ''
