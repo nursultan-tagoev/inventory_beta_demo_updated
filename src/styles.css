@@ -178,7 +178,7 @@ button:active { transform: scale(.97); }
   .chart-x > * { min-width: 430px; }
 
   /* Боковое меню справочников уезжает наверх лентой */
-  .side-nav {
+  .ref-nav {
     flex-direction: row !important;
     width: auto !important;
     border-right: none !important;
@@ -186,9 +186,9 @@ button:active { transform: scale(.97); }
     overflow-x: auto;
     scrollbar-width: none;
   }
-  .side-nav::-webkit-scrollbar { display: none; }
-  .side-nav > * { flex-shrink: 0; white-space: nowrap; }
-  .side-wrap { flex-direction: column !important; }
+  .ref-nav::-webkit-scrollbar { display: none; }
+  .ref-nav > * { flex-shrink: 0; white-space: nowrap; }
+  .ref-wrap { flex-direction: column !important; }
 
   /* Строка-таблица становится карточкой */
   .row-card { display: block !important; }
