@@ -72,6 +72,22 @@ export async function snapshotAge() {
   return s?.at ? Date.now() - s.at : null
 }
 
+/* Профиль на устройстве. Права не выдумываем никогда, но сохранённый
+   настоящий профиль — это не выдумка: без него на складе не войти. */
+export async function saveProfile(profile) {
+  if (!profile?.id) return
+  try { await tx(SNAP, 'readwrite', (s) => s.put({ at: Date.now(), profile }, 'profile')) } catch (e) {}
+}
+
+export async function loadProfile(userId) {
+  try {
+    const row = await tx(SNAP, 'readonly', (s) => s.get('profile'))
+    if (!row?.profile) return null
+    // Чужой профиль не отдаём: на устройстве мог работать другой человек
+    return row.profile.id === userId ? row.profile : null
+  } catch (e) { return null }
+}
+
 /* ── Очередь операций ──
    Переживает перезагрузку телефона: человек может выключить его
    с несохранёнными операциями и включить через день. */
