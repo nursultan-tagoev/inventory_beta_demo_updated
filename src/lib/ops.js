@@ -39,7 +39,12 @@ export async function saveMovement(a, stockByWh) {
     delivery_id: a.delivery_id ? Number(a.delivery_id) : null,
     is_test: !!a.is_test,
     location_id: a.location_id ? Number(a.location_id) : null,    // место хранения (полка)
+    /* Классификатор операции: подо что закупали и для чего выдаём.
+       Отдельные поля, а не одно: иногда известно только направление,
+       и это уже полезно для отчёта. */
     direction_id: a.direction_id ? Number(a.direction_id) : null,
+    product_type_id: a.product_type_id ? Number(a.product_type_id) : null,
+    campaign_id: a.campaign_id ? Number(a.campaign_id) : null,
     issuer_id: a.issuer_id || null,
     purpose: a.type === 'out' ? a.purpose || null : null,
     due_date: a.type === 'out' ? a.due_date || null : null,

@@ -386,3 +386,32 @@ export function valueBreakdown(data, { mode = 'stock', period, branchId } = {}) 
     byType: srt(Object.values(byType)),
   }
 }
+
+/* Расход по кампаниям — по классификатору операции, а не по привязке товара.
+   Разница существенная: товар может быть приписан к одной кампании,
+   а закупаться и выдаваться под разные. */
+export function byCampaignOps(data, period) {
+  const { movements, products, campaigns, productTypes, directions } = data
+  const price = (id) => num(products.find((p) => p.id === id)?.price)
+
+  const name = (m) => {
+    const c = campaigns?.find((x) => x.id === m.campaign_id)
+    if (c) return c.name
+    const t = productTypes?.find((x) => x.id === m.product_type_id)
+    if (t) return t.name
+    const d = directions?.find((x) => x.id === m.direction_id)
+    return d?.name || 'Без классификатора'
+  }
+
+  const g = {}
+  for (const m of movements || []) {
+    if (!inRange(m.created_at, period) || m.cancelled_at) continue
+    if (m.type !== 'in' && m.type !== 'out') continue
+    const k = name(m)
+    const row = g[k] || (g[k] = { name: k, inQty: 0, inVal: 0, outQty: 0, outVal: 0 })
+    const v = num(m.qty) * price(m.product_id)
+    if (m.type === 'in') { row.inQty += num(m.qty); row.inVal += v }
+    else { row.outQty += num(m.qty); row.outVal += v }
+  }
+  return Object.values(g).sort((a, b) => b.inVal + b.outVal - (a.inVal + a.outVal))
+}
