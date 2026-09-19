@@ -145,6 +145,32 @@ export async function oldestAgeDays() {
   return Math.floor((Date.now() - oldest) / 86400000)
 }
 
+/* Расхождения после синхронизации: остаток ушёл в минус или двойник
+   получателя. Копятся отдельно — их надо разобрать, а не потерять
+   вместе с уведомлением. */
+const CONF = 'sklad-conflicts'
+
+export function addConflicts(list) {
+  if (!list?.length) return
+  try {
+    const cur = JSON.parse(localStorage.getItem(CONF) || '[]')
+    localStorage.setItem(CONF, JSON.stringify([...cur, ...list.map((c) => ({ ...c, at: Date.now() }))]))
+  } catch (e) {}
+}
+
+export function listConflicts() {
+  try { return JSON.parse(localStorage.getItem(CONF) || '[]') } catch (e) { return [] }
+}
+
+export function dropConflict(at) {
+  try {
+    const cur = JSON.parse(localStorage.getItem(CONF) || '[]')
+    localStorage.setItem(CONF, JSON.stringify(cur.filter((c) => c.at !== at)))
+  } catch (e) {}
+}
+
+export const clearConflicts = () => { try { localStorage.removeItem(CONF) } catch (e) {} }
+
 /* Временные идентификаторы для товаров и получателей, заведённых без связи.
    При синхронизации заменяются на настоящие. */
 export const tempId = () => `tmp_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`

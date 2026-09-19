@@ -1,4 +1,5 @@
 import { supabase } from '../supabaseClient'
+import { takeNumber, markUsed } from './actPool'
 
 function dataURLtoBlob(dataURL) {
   const [head, b64] = dataURL.split(',')
@@ -8,8 +9,22 @@ function dataURLtoBlob(dataURL) {
 }
 
 export async function nextActNumber(prefix) {
+  /* Без связи берём номер из пачки, зарезервированной заранее —
+     иначе акт нельзя оформить и напечатать на складе. */
+  if (!navigator.onLine) {
+    const n = takeNumber(prefix)
+    if (n) return n
+    throw new Error('Нет связи, а зарезервированные номера кончились. Поднимитесь туда, где есть сеть.')
+  }
+
   const { data, error } = await supabase.rpc('next_act_number', { p_prefix: prefix })
-  if (error) throw new Error('Нумерация: ' + error.message)
+  if (error) {
+    // Связь оборвалась посреди запроса — пробуем пачку
+    const n = takeNumber(prefix)
+    if (n) return n
+    throw new Error('Нумерация: ' + error.message)
+  }
+  markUsed(data)
   return data
 }
 
