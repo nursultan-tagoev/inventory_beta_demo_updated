@@ -133,7 +133,7 @@ export default function ActSheet({ act, items = [], innerRef }) {
           <tr>
             <th style={{ ...th, width: 24 }}>№</th>
             <th style={{ ...th, width: 62 }}>Артикул</th>
-            <th style={{ ...th, width: 94 }}>Подразделение</th>
+            <th style={{ ...th, width: 94 }}>Департамент / управление</th>
             <th style={{ ...th, textAlign: 'left', padding: '7px 7px' }}>Наименование</th>
             <th style={{ ...th, width: 42 }}>Кол-во</th>
             <th style={{ ...th, width: 64 }}>Цена, сом</th>
@@ -145,7 +145,7 @@ export default function ActSheet({ act, items = [], innerRef }) {
             <tr key={it.id || i}>
               <td data-label="№" style={{ ...cell, textAlign: 'center' }}>{i + 1}</td>
               <td data-label="Артикул" style={{ ...cell, textAlign: 'center' }}>{it.sku || '—'}</td>
-              <td data-label="Подразделение" style={cell}>{it.dept || '—'}</td>
+              <td data-label="Департамент" style={cell}>{it.dept || '—'}</td>
               <td data-label="Наименование" style={{ ...cell, padding: '7px 7px' }}>{it.name}</td>
               <td data-label="Количество" style={{ ...cell, textAlign: 'center' }}>{it.qty}</td>
               <td data-label="За единицу" style={{ ...cell, textAlign: 'right' }}>{fmt(it.price)}</td>

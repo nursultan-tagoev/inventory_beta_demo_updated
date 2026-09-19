@@ -132,7 +132,7 @@ export default function Users({ data }) {
               </Select>
             </Field>
           )}
-          <Field label="Подразделение — попадёт в акт при выдаче">
+          <Field label="Департамент / управление">
             <Select value={f.dept} onChange={(e) => up('dept', e.target.value)}>
               <option value="">—</option>
               {(data.departments || []).filter((d) => d.kind === 'dep').length > 0 && (
@@ -233,7 +233,7 @@ export default function Users({ data }) {
                 </Field>
               )}
 
-              <Field label="Подразделение — попадёт в акт при выдаче">
+              <Field label="Департамент / управление">
                 <Select value={edit.f.dept} onChange={(e) => setEdit({ ...edit, f: { ...edit.f, dept: e.target.value } })}>
                   <option value="">—</option>
                   {(data.departments || []).filter((d) => d.kind === 'dep').map((d) => <option key={d.id} value={d.name}>{d.name}</option>)}

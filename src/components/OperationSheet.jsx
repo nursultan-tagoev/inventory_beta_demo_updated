@@ -143,6 +143,8 @@ export default function OperationSheet({ type, data, profile, can, onDone }) {
   }
 
   const doSave = async () => {
+    // Без департамента акт уйдёт с прочерком в графе получателя
+    if (type === 'out' && !f.dept) return toast('Укажите департамент или управление', 'error')
     setLoading(true)
     // Приход с браком — оприходуем только годное
     const defects = type === 'in' && f.has_defects ? (Number(f.defects) || 0) : 0
@@ -429,8 +431,11 @@ export default function OperationSheet({ type, data, profile, can, onDone }) {
         </div>}
         {/* Подразделение — кому предназначен товар. Подставляется из карточки
             получателя, но правится: бывает, что получает один, а для другого отдела. */}
-        {type === 'out' && <Field label="Подразделение — кому предназначено">
-          <Select value={f.dept} onChange={(e) => up('dept', e.target.value)}>
+        {/* Обязателен: без него акт уходит с прочерком в графе получателя.
+            Филиалы входят в этот же список, отдельное поле не нужно. */}
+        {type === 'out' && <Field label="Департамент / управление" req>
+          <Select value={f.dept} onChange={(e) => up('dept', e.target.value)}
+            style={!f.dept ? { borderColor: 'var(--am)' } : undefined}>
             <option value="">— выбрать —</option>
             {departments.filter((d) => d.kind === 'dep').length > 0 && (
               <optgroup label="Департаменты и управления">

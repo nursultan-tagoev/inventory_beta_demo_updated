@@ -13,8 +13,8 @@ export function Btn({ children, onClick, v = 'primary', size = 'md', disabled, l
   </button>
 }
 export function Spin({ s = 24 }) { return <span style={{ width: s, height: s, border: '3px solid var(--brd2)', borderTopColor: 'var(--ink)', borderRadius: '50%', animation: 'spin .7s linear infinite', display: 'inline-block' }} /> }
-export function Field({ label, children }) {
-  return <label style={{ display: 'block' }}><span style={{ display: 'block', fontSize: 11, fontWeight: 600, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--tx3)', marginBottom: 7 }}>{label}</span>{children}</label>
+export function Field({ label, children, req }) {
+  return <label style={{ display: 'block' }}><span style={{ display: 'block', fontSize: 11, fontWeight: 600, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--tx3)', marginBottom: 7 }}>{label}{req && <span style={{ color: 'var(--rd)' }}> *</span>}</span>{children}</label>
 }
 const inpStyle = { width: '100%', height: 44, padding: '0 14px', borderRadius: 12, border: '1px solid var(--brd2)', background: 'var(--sur)', fontSize: 14 }
 export const Input = (p) => <input {...p} style={{ ...inpStyle, ...(p.style || {}) }} />

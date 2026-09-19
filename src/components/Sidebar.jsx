@@ -68,7 +68,7 @@ export default function Sidebar({ view, setView, profile, onLogout, badges = {},
   return (
     <>
       {/* Десктоп — боковое меню */}
-      <aside className="side-nav" style={{ width: 226, flexShrink: 0, background: 'var(--nav)', display: 'flex', flexDirection: 'column', padding: '16px 12px' }}>
+      <aside className="side-nav" style={{ width: 226, flexShrink: 0, background: 'var(--nav)', display: 'flex', flexDirection: 'column', padding: '16px 12px', height: '100vh', position: 'sticky', top: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '4px 8px 18px' }}>
           <div style={{ width: 34, height: 34, borderRadius: 10, background: 'linear-gradient(150deg,var(--ink),var(--pu))', display: 'grid', placeItems: 'center', fontSize: 17 }}>📦</div>
           <div>
@@ -77,7 +77,7 @@ export default function Sidebar({ view, setView, profile, onLogout, badges = {},
           </div>
         </div>
 
-        <nav style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1 }}>
+        <nav style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1, overflowY: 'auto', minHeight: 0, paddingRight: 2 }}>
           {items.map((n) => (
             <button key={n.id} data-tour={'nav-' + n.id} onClick={() => setView(n.id)} style={{
               display: 'flex', alignItems: 'center', gap: 12, height: 40, padding: '0 12px', borderRadius: 10,

@@ -207,7 +207,7 @@ export default function ActModal({ init, profile, onClose, onSaved }) {
                   <Row label="Артикул">
                     <input value={r.sku} onChange={(e) => setRow(i, 'sku', e.target.value)} placeholder="—" style={{ ...small, width: '56%', textAlign: 'right' }} />
                   </Row>
-                  <Row label="Подразделение">
+                  <Row label="Департамент / управление">
                     <select value={r.dept} onChange={(e) => setRow(i, 'dept', e.target.value)} style={{ ...small, width: '56%', fontSize: 12 }}>
                       <option value="">—</option>
                       {deps.length === 0 && r.dept && <option value={r.dept}>{r.dept}</option>}
