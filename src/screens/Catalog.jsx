@@ -6,6 +6,7 @@ import { attrsLine } from '../lib/attrs'
 import { issueBasket } from '../lib/issueBasket'
 import { listTemplates, saveTemplate, deleteTemplate, expandTemplate } from '../lib/templates'
 import Scanner from '../components/Scanner'
+import SearchSelect from '../components/SearchSelect'
 import { supabase } from '../supabaseClient'
 import { cameraOn } from '../lib/integrations'
 
@@ -335,18 +336,17 @@ export default function Catalog({ data, profile, onRequest, scanSku, onScanUsed 
           return (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div>{lbl('Получатель')}
-                <select value={issue.recipient_id} onChange={(e) => {
-                  if (e.target.value === 'new') { set('newRec', { name: '', dept: '' }); return }
-                  set('recipient_id', e.target.value)
-                  const r = (data.recipients || []).find((x) => x.id == e.target.value)
-                  set('dept', r?.dept || '')
-                }} style={inp}>
-                  <option value="">— выбрать —</option>
-                  {(data.recipients || []).map((r) => (
-                    <option key={r.id} value={r.id}>{r.name}{r.dept ? ' · ' + r.dept : ''}</option>
-                  ))}
-                  <option value="new">➕ Добавить получателя</option>
-                </select>
+                <SearchSelect
+                  value={issue.recipient_id}
+                  onChange={(v) => {
+                    set('recipient_id', v)
+                    const r = (data.recipients || []).find((x) => x.id == v)
+                    set('dept', r?.dept || '')
+                  }}
+                  placeholder="— выбрать —" required
+                  options={(data.recipients || []).map((r) => ({ value: r.id, label: r.name, hint: r.dept || '' }))}
+                  extra={{ label: '➕ Добавить получателя', onClick: () => set('newRec', { name: '', dept: '' }) }}
+                />
 
                 {/* Новый получатель прямо здесь: бежать в справочник посреди выдачи неудобно */}
                 {issue.newRec && (
@@ -377,10 +377,14 @@ export default function Catalog({ data, profile, onRequest, scanSku, onScanUsed 
               </div>
 
               <div>{lbl('Департамент / управление')}
-                <select value={issue.dept} onChange={(e) => set('dept', e.target.value)} style={inp}>
-                  <option value="">—</option>
-                  {(data.departments || []).map((d) => <option key={d.id} value={d.name}>{d.name}</option>)}
-                </select>
+                <SearchSelect
+                  value={issue.dept} onChange={(v) => set('dept', v)}
+                  placeholder="— выбрать —" required groupBy
+                  options={(data.departments || []).map((d) => ({
+                    value: d.name, label: d.name,
+                    group: d.kind === 'branch' ? 'Филиалы' : 'Департаменты и управления',
+                  }))}
+                />
               </div>
 
               <div>{lbl('Основание')}
@@ -417,6 +421,7 @@ export default function Catalog({ data, profile, onRequest, scanSku, onScanUsed 
 
               <Btn size="lg" loading={busy} onClick={async () => {
                 if (!rec) return toast('Выберите получателя', 'error')
+                if (!issue.dept) return toast('Выберите департамент или управление', 'error')
                 if (!issue.warehouse_id) return toast('Выберите склад', 'error')
                 setBusy(true)
                 const { data: res, error } = await issueBasket({
