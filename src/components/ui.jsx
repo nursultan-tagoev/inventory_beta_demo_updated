@@ -53,10 +53,11 @@ export function Sheet({ open, onClose, title, children }) {
   if (!open) return null
   return <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 900, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
     <div style={{ position: 'absolute', inset: 0, background: 'rgba(8,10,14,.45)', backdropFilter: 'blur(3px)', animation: 'fadeUp .2s' }} />
-    <div onClick={(e) => e.stopPropagation()} style={{ position: 'relative', background: 'var(--sur)', borderRadius: '20px 20px 0 0', width: '100%', maxWidth: 560, maxHeight: '90vh', overflow: 'auto', boxShadow: 'var(--sh3)', border: '1px solid var(--brd)', borderBottom: 'none', animation: 'slideUp .28s cubic-bezier(.32,.72,0,1)' }}>
+    <div onClick={(e) => e.stopPropagation()} style={{ position: 'relative', background: 'var(--sur)', borderRadius: '20px 20px 0 0', width: '100%', maxWidth: 560, maxHeight: '88dvh', overflow: 'auto', WebkitOverflowScrolling: 'touch', boxShadow: 'var(--sh3)', border: '1px solid var(--brd)', borderBottom: 'none', animation: 'slideUp .28s cubic-bezier(.32,.72,0,1)' }}>
       <div style={{ display: 'flex', justifyContent: 'center', padding: '12px 0 0' }}><div style={{ width: 42, height: 5, borderRadius: 3, background: 'var(--brd2)' }} /></div>
       {title && <div className="ff" style={{ padding: '10px 24px 0', fontWeight: 600, fontSize: 19 }}>{title}</div>}
-      <div style={{ padding: '14px 24px 28px' }}>{children}</div>
+      {/* Запас снизу: иначе нижнее меню телефона перекрывает последние кнопки */}
+      <div style={{ padding: '14px 24px', paddingBottom: 'calc(28px + env(safe-area-inset-bottom, 0px) + 56px)' }}>{children}</div>
     </div>
   </div>
 }

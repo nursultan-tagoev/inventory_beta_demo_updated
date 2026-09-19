@@ -16,6 +16,41 @@ function SignPad({ label, onRef }) {
   return <div><div style={{ border: '1px dashed var(--brd2)', borderRadius: 8, background: 'var(--sur)' }}><canvas ref={ref} onMouseDown={d} onMouseMove={m} onMouseUp={() => (draw.current = false)} onMouseLeave={() => (draw.current = false)} onTouchStart={d} onTouchMove={m} onTouchEnd={() => (draw.current = false)} style={{ width: '100%', height: 90, display: 'block', touchAction: 'none', cursor: 'crosshair' }} /></div><div className="no-print" style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}><span style={{ fontSize: 11, color: 'var(--tx3)' }}>{label}{signed ? ' · подписано' : ''}</span><button onClick={clr} style={{ fontSize: 11, color: 'var(--tx3)' }}>очистить</button></div></div>
 }
 
+/* Вынесено из компонента: объявленные внутри, они пересоздавались на каждый
+   ввод, и поле теряло фокус — приходилось кликать после каждой буквы. */
+function Block({ title, extra, children }) {
+  return (
+    <div style={{ padding: '14px 15px', borderBottom: '1px solid var(--brd)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 11 }}>
+        <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '.05em', color: 'var(--tx3)' }}>{title}</span>
+        {extra && <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--tx3)' }}>{extra}</span>}
+      </div>
+      {children}
+    </div>
+  )
+}
+
+const INP = {
+  width: '100%', minHeight: 42, padding: '0 12px', borderRadius: 10,
+  border: '1.5px solid var(--brd)', background: 'var(--sur)', fontSize: 14, color: 'var(--tx)',
+}
+const SMALL = { ...INP, minHeight: 40, fontSize: 13 }
+
+function Signer({ f, up, nameKey, posKey, removable }) {
+  return (
+    <div style={{ border: '1px solid var(--brd)', borderRadius: 10, padding: 11, marginBottom: 9, position: 'relative' }}>
+      <input value={f[nameKey]} onChange={(e) => up(nameKey, e.target.value)}
+        placeholder="Ф.И.О." style={{ ...SMALL, marginBottom: 8 }} />
+      <input value={f[posKey]} onChange={(e) => up(posKey, e.target.value)}
+        placeholder="должность" style={SMALL} />
+      {removable && (
+        <button onClick={() => { up(nameKey, ''); up(posKey, '') }}
+          style={{ position: 'absolute', top: 7, right: 7, width: 26, height: 26, color: 'var(--tx3)', fontSize: 15 }}>×</button>
+      )}
+    </div>
+  )
+}
+
 export default function ActModal({ init, profile, onClose, onSaved }) {
   const toast = useToast()
   const isRet = init.type === 'return'
@@ -102,36 +137,9 @@ export default function ActModal({ init, profile, onClose, onSaved }) {
     setSaving(false)
   }
 
-  /* ── Оформление формы ── */
-  const inp = {
-    width: '100%', minHeight: 42, padding: '0 12px', borderRadius: 10,
-    border: '1.5px solid var(--brd)', background: 'var(--sur)', fontSize: 14, color: 'var(--tx)',
-  }
-  const small = { ...inp, minHeight: 40, fontSize: 13 }
+  const inp = INP
+  const small = SMALL
   const lbl = (t) => <div style={{ fontSize: 12, color: 'var(--tx3)', marginBottom: 4 }}>{t}</div>
-  const Block = ({ title, extra, children }) => (
-    <div style={{ padding: '14px 15px', borderBottom: '1px solid var(--brd)' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 11 }}>
-        <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '.05em', color: 'var(--tx3)' }}>{title}</span>
-        {extra && <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--tx3)' }}>{extra}</span>}
-      </div>
-      {children}
-    </div>
-  )
-
-  // Карточка подписанта: ФИО и должность, обе правятся
-  const Signer = ({ nameKey, posKey, removable }) => (
-    <div style={{ border: '1px solid var(--brd)', borderRadius: 10, padding: 11, marginBottom: 9, position: 'relative' }}>
-      <input value={f[nameKey]} onChange={(e) => up(nameKey, e.target.value)}
-        placeholder="Ф.И.О." style={{ ...small, marginBottom: 8 }} />
-      <input value={f[posKey]} onChange={(e) => up(posKey, e.target.value)}
-        placeholder="должность" style={small} />
-      {removable && (
-        <button onClick={() => { up(nameKey, ''); up(posKey, '') }}
-          style={{ position: 'absolute', top: 7, right: 7, width: 26, height: 26, color: 'var(--tx3)', fontSize: 15 }}>×</button>
-      )}
-    </div>
-  )
 
   return (
     <div className="act-overlay" onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 1200, background: 'rgba(8,10,14,.5)', backdropFilter: 'blur(3px)', overflow: 'auto', padding: '24px 12px' }}>
@@ -175,16 +183,16 @@ export default function ActModal({ init, profile, onClose, onSaved }) {
             </Block>
 
             <Block title={isRet ? 'ВЕРНУЛИ' : 'ПЕРЕДАЛИ'} extra={f.giver2_name ? '2 из 2' : null}>
-              <Signer nameKey="giver_name" posKey="giver_position" />
+              <Signer f={f} up={up} nameKey="giver_name" posKey="giver_position" />
               {f.giver2_name || f.giver2_position
-                ? <Signer nameKey="giver2_name" posKey="giver2_position" removable />
+                ? <Signer f={f} up={up} nameKey="giver2_name" posKey="giver2_position" removable />
                 : <button onClick={() => up('giver2_name', ' ')} style={{ width: '100%', minHeight: 42, borderRadius: 10, border: '1px dashed var(--brd)', background: 'var(--bg)', color: 'var(--tx3)', fontSize: 13 }}>＋ Ещё подписант</button>}
             </Block>
 
             <Block title="ПРИНЯЛИ" extra={f.recipient2_name ? '2 из 2' : null}>
-              <Signer nameKey="recipient_name" posKey="recipient_position" />
+              <Signer f={f} up={up} nameKey="recipient_name" posKey="recipient_position" />
               {f.recipient2_name || f.recipient2_position
-                ? <Signer nameKey="recipient2_name" posKey="recipient2_position" removable />
+                ? <Signer f={f} up={up} nameKey="recipient2_name" posKey="recipient2_position" removable />
                 : <button onClick={() => up('recipient2_name', ' ')} style={{ width: '100%', minHeight: 42, borderRadius: 10, border: '1px dashed var(--brd)', background: 'var(--bg)', color: 'var(--tx3)', fontSize: 13 }}>＋ Ещё подписант</button>}
             </Block>
 

@@ -33,6 +33,7 @@ export default function OperationSheet({ type, data, profile, can, onDone }) {
   const [act, setAct] = useState(null)
   const [labels, setLabels] = useState(null)
   const [scan, setScan] = useState(false)
+  const [showNotes, setShowNotes] = useState(false)
   const [f, setF] = useState({
     product_id: '', qty: 1, recipient_id: '', branch_id: '', dept: '', is_test: false,
     warehouse_id: warehouses[0]?.id || '', warehouse_to_id: '', location_id: '',
@@ -186,6 +187,13 @@ export default function OperationSheet({ type, data, profile, can, onDone }) {
   }
   const next = () => { if (step < steps) setStep(step + 1); else setConfirm(true) }
 
+  /* После прихода форму убираем и показываем печать наклеек —
+     иначе она остаётся висеть под окном. */
+  if (labels) return (
+    <LabelPrint items={labels} products={products} warehouseId={f.warehouse_id}
+      onClose={() => { setLabels(null); onDone() }} />
+  )
+
   if (act) return (<div>
     <div style={{ textAlign: 'center', padding: '10px 0 18px' }}>
       <div style={{ fontSize: 40, marginBottom: 8 }}>✅</div>
@@ -207,8 +215,6 @@ export default function OperationSheet({ type, data, profile, can, onDone }) {
           toast(p.name)
         }} />
     )}
-    {labels && <LabelPrint items={labels} products={products} warehouseId={f.warehouse_id}
-      onClose={() => { setLabels(null); onDone() }} />}
     {act?.open && <ActModal init={act} profile={profile} onClose={() => { setAct(null); onDone() }} onSaved={() => {}} />}
   </div>)
 
@@ -378,7 +384,10 @@ export default function OperationSheet({ type, data, profile, can, onDone }) {
           <Field label="Комментарий"><Input value={f.delivery_comment} onChange={(e) => up('delivery_comment', e.target.value)} placeholder="Что отметить по поставке" /></Field>
         </div>}
 
-        <Field label="Примечание"><Input value={f.notes} onChange={(e) => up('notes', e.target.value)} placeholder="Необязательно" /></Field>
+        {/* Примечание заполняют редко — прячем, чтобы не удлинять форму */}
+        {f.notes || showNotes
+          ? <Field label="Примечание"><Input value={f.notes} onChange={(e) => up('notes', e.target.value)} placeholder="Необязательно" autoFocus /></Field>
+          : <button onClick={() => setShowNotes(true)} style={{ alignSelf: 'flex-start', fontSize: 12, color: 'var(--tx3)', padding: '4px 0' }}>＋ Примечание</button>}
         {/* Тестовая операция: помечается, чтобы перед запуском убрать одним фильтром */}
         <label style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '11px 13px', borderRadius: 11, background: f.is_test ? 'var(--am-l)' : 'var(--bg)', cursor: 'pointer' }}>
           <input type="checkbox" checked={f.is_test} onChange={(e) => up('is_test', e.target.checked)}
@@ -445,7 +454,9 @@ export default function OperationSheet({ type, data, profile, can, onDone }) {
           <Field label="Вернуть до (необязательно)"><Input type="date" value={f.due_date} onChange={(e) => up('due_date', e.target.value)} /></Field>
           <Field label="Номер СЗ"><Input value={f.sz} onChange={(e) => up('sz', e.target.value)} placeholder="СЗ-001" /></Field>
         </>}
-        <Field label="Примечание"><Input value={f.notes} onChange={(e) => up('notes', e.target.value)} /></Field>
+        {f.notes || showNotes
+          ? <Field label="Примечание"><Input value={f.notes} onChange={(e) => up('notes', e.target.value)} autoFocus /></Field>
+          : <button onClick={() => setShowNotes(true)} style={{ alignSelf: 'flex-start', fontSize: 12, color: 'var(--tx3)', padding: '4px 0' }}>＋ Примечание</button>}
         <div style={{ padding: '12px 14px', background: 'var(--bg)', borderRadius: 10, fontSize: 12.5, color: 'var(--tx2)' }}>
           <b style={{ color: 'var(--tx)' }}>{selProd?.name}</b> × {f.qty} шт · склад {whName(f.warehouse_id)}{selRec ? <> · {selRec.name}</> : null}
         </div>
