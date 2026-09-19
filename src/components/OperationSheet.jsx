@@ -5,6 +5,7 @@ import { uniqueSku } from '../lib/sku'
 import { fullName, attrsLine } from '../lib/attrs'
 import LabelPrint from './LabelPrint'
 import Scanner from './Scanner'
+import SearchSelect from './SearchSelect'
 import { Btn, Field, Input, Select, Confirm, useToast } from './ui'
 import { som } from '../lib/format'
 import { saveMovement, stockAt } from '../lib/ops'
@@ -144,7 +145,8 @@ export default function OperationSheet({ type, data, profile, can, onDone }) {
 
   const doSave = async () => {
     // Без департамента акт уйдёт с прочерком в графе получателя
-    if (type === 'out' && !f.dept) return toast('Укажите департамент или управление', 'error')
+    if (type === 'out' && !f.recipient_id) return toast('Выберите получателя', 'error')
+    if (type === 'out' && !f.dept) return toast('Выберите департамент или управление', 'error')
     setLoading(true)
     // Приход с браком — оприходуем только годное
     const defects = type === 'in' && f.has_defects ? (Number(f.defects) || 0) : 0
@@ -223,6 +225,12 @@ export default function OperationSheet({ type, data, profile, can, onDone }) {
   const whName = (id) => warehouses.find((w) => w.id == id)?.name || '—'
   const canNext = f.product_id && f.warehouse_id && (type !== 'transfer' || (f.warehouse_to_id && f.warehouse_to_id != f.warehouse_id))
 
+  /* Для выдачи получатель и департамент обязательны: без них акт
+     уходит с прочерками, а потом не разобрать, кому что отдали. */
+  const outReady = type !== 'out' || (f.recipient_id && f.dept)
+  const missing = type === 'out' && !f.recipient_id ? 'Выберите получателя'
+    : type === 'out' && !f.dept ? 'Выберите департамент или управление' : ''
+
   return (
     <div>
       {confirm && <Confirm title={`Подтвердить: ${TL[type]}?`} danger={type === 'writeoff'}
@@ -250,12 +258,19 @@ export default function OperationSheet({ type, data, profile, can, onDone }) {
           {/* Сканирование: на складе быстрее навести камеру, чем искать в списке */}
           <div style={{ display: 'flex', gap: 7 }}>
             <div style={{ flex: 1, minWidth: 0 }}>
-          <Select value={f.product_id} onChange={(e) => { if (e.target.value === 'new') setShowNewProd(true); else { up('product_id', e.target.value); setCreatedProd(null) } }}>
-            <option value="">— выбрать товар —</option>
-            {createdProd && <option value={createdProd.id}>{createdProd.name} (новый)</option>}
-            {products.filter((p) => !p.archived).map((p) => <option key={p.id} value={p.id}>{fullName(p)}{p.sku ? ` (${p.sku})` : ''}</option>)}
-            <option value="new">➕ Добавить новый товар</option>
-          </Select>
+          <SearchSelect
+            value={f.product_id}
+            onChange={(v) => { up('product_id', v); setCreatedProd(null) }}
+            placeholder="— выбрать товар —"
+            required
+            options={[
+              ...(createdProd ? [{ value: createdProd.id, label: createdProd.name + ' (новый)' }] : []),
+              ...products.filter((p) => !p.archived).map((p) => ({
+                value: p.id, label: fullName(p), hint: p.sku || '',
+              })),
+            ]}
+            extra={{ label: '➕ Добавить новый товар', onClick: () => setShowNewProd(true) }}
+          />
             </div>
             {cameraOn(data.integrations) && (
               <button onClick={() => setScan(true)} title="Сканировать код"
@@ -403,18 +418,20 @@ export default function OperationSheet({ type, data, profile, can, onDone }) {
 
       {step === 2 && (type === 'out' || type === 'return') && <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <Field label={type === 'out' ? 'Получатель' : 'Возврат от'}>
-          <Select value={f.recipient_id} onChange={(e) => {
-            if (e.target.value === 'new') { setShowNewRec(true); return }
-            up('recipient_id', e.target.value)
-            const r = recList.find((x) => x.id == e.target.value)
-            // Департамент и филиал подтягиваются из карточки получателя
-            if (r?.branch_id) up('branch_id', r.branch_id)
-            up('dept', r?.dept || '')
-          }}>
-            <option value="">— выбрать —</option>
-            {recList.map((r) => <option key={r.id} value={r.id}>{r.name}{r.dept ? ` · ${r.dept}` : ''}</option>)}
-            <option value="new">➕ Добавить получателя</option>
-          </Select>
+          <SearchSelect
+            value={f.recipient_id}
+            onChange={(v) => {
+              up('recipient_id', v)
+              const r = recList.find((x) => x.id == v)
+              // Департамент и филиал подтягиваются из карточки получателя
+              if (r?.branch_id) up('branch_id', r.branch_id)
+              up('dept', r?.dept || '')
+            }}
+            placeholder="— выбрать —"
+            required
+            options={recList.map((r) => ({ value: r.id, label: r.name, hint: r.dept || '' }))}
+            extra={{ label: '➕ Добавить получателя', onClick: () => setShowNewRec(true) }}
+          />
         </Field>
         {showNewRec && <div className="card" style={{ padding: 14, background: 'var(--bg)' }}>
           <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 10, marginBottom: 10 }}>
@@ -434,20 +451,17 @@ export default function OperationSheet({ type, data, profile, can, onDone }) {
         {/* Обязателен: без него акт уходит с прочерком в графе получателя.
             Филиалы входят в этот же список, отдельное поле не нужно. */}
         {type === 'out' && <Field label="Департамент / управление" req>
-          <Select value={f.dept} onChange={(e) => up('dept', e.target.value)}
-            style={!f.dept ? { borderColor: 'var(--am)' } : undefined}>
-            <option value="">— выбрать —</option>
-            {departments.filter((d) => d.kind === 'dep').length > 0 && (
-              <optgroup label="Департаменты и управления">
-                {departments.filter((d) => d.kind === 'dep').map((d) => <option key={d.id} value={d.name}>{d.name}</option>)}
-              </optgroup>
-            )}
-            {departments.filter((d) => d.kind === 'branch').length > 0 && (
-              <optgroup label="Филиалы">
-                {departments.filter((d) => d.kind === 'branch').map((d) => <option key={d.id} value={d.name}>{d.name}</option>)}
-              </optgroup>
-            )}
-          </Select>
+          <SearchSelect
+            value={f.dept}
+            onChange={(v) => up('dept', v)}
+            placeholder="— выбрать —"
+            required
+            groupBy
+            options={departments.map((d) => ({
+              value: d.name, label: d.name,
+              group: d.kind === 'branch' ? 'Филиалы' : 'Департаменты и управления',
+            }))}
+          />
         </Field>}
         {type === 'return' && <Field label="Состояние"><Select value={f.condition} onChange={(e) => up('condition', e.target.value)}><option value="хорошее">Хорошее</option><option value="б/у">Б/у</option><option value="брак">Брак</option></Select></Field>}
         <div style={{ display: 'flex', gap: 8 }}><Btn v="secondary" onClick={() => setStep(1)}>← Назад</Btn><Btn onClick={next} style={{ flex: 1 }}>Далее →</Btn></div>
@@ -473,7 +487,8 @@ export default function OperationSheet({ type, data, profile, can, onDone }) {
             Тестовая операция — пометить для удаления перед запуском
           </span>
         </label>
-        <div style={{ display: 'flex', gap: 8 }}><Btn v="secondary" onClick={() => setStep(2)}>← Назад</Btn><Btn loading={loading} onClick={() => setConfirm(true)} style={{ flex: 1 }}>Сохранить</Btn></div>
+        {missing && <div style={{ fontSize: 11.5, color: 'var(--am-m)', marginBottom: 2 }}>{missing}</div>}
+        <div style={{ display: 'flex', gap: 8 }}><Btn v="secondary" onClick={() => setStep(2)}>← Назад</Btn><Btn loading={loading} disabled={!outReady} onClick={() => setConfirm(true)} style={{ flex: 1 }}>Сохранить</Btn></div>
       </div>}
     </div>
   )

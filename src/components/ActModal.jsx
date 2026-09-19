@@ -130,7 +130,9 @@ export default function ActModal({ init, profile, onClose, onSaved }) {
         items: rows, sigGiver: sigG.current?.() || null, sigRecipient: sigR.current?.() || null, scanFile: scan,
       })
       setSavedNo(res.number)
-      toast('Акт ' + res.number + ' сохранён')
+      toast(res.offline
+        ? 'Акт ' + res.number + ' записан — уйдёт на сервер при связи'
+        : 'Акт ' + res.number + ' сохранён')
       onSaved?.(res)
       setView('preview')
     } catch (e) { toast(e.message, 'error') }
