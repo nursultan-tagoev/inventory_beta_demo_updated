@@ -10,7 +10,7 @@ const EMPTY = {
   categories: [], directions: [], productTypes: [], locations: [],
   warehouses: [], campaigns: [], requests: [], reservations: [], profiles: [],
   acts: [], actSigners: [], externals: [], reqApprovers: [], reqMessages: [],
-  deliveries: [], inventories: [], departments: [], integrations: [],
+  deliveries: [], inventories: [], departments: [], integrations: [], photos: {},
   stock: {}, stockByWh: {}, freeByWh: {}, resvByWh: {}, flows: {}, checkouts: [],
   loading: true, error: null,
 }
@@ -29,7 +29,7 @@ export const AFFECTS = {
   act:       ['acts', 'requests'],
   chat:      ['messages'],
   users:     ['profiles'],
-  refs:      ['refs', 'products', 'departments', 'integrations'],
+  refs:      ['refs', 'products', 'departments', 'integrations', 'photos'],
   catalog:   ['products', 'stock'],
 }
 
@@ -155,6 +155,14 @@ const FETCH = {
   async deliveries() {
     const { data } = await supabase.from('deliveries').select('*').order('created_at', { ascending: false }).limit(300)
     return { deliveries: data || [] }
+  },
+
+  async photos() {
+    const res = await supabase.from('product_photos').select('product_id,path,is_main,sort')
+      .order('is_main', { ascending: false }).order('sort')
+    const map = {}
+    for (const r of ok(res)) if (!map[r.product_id]) map[r.product_id] = r.path
+    return { photos: map }
   },
 
   async integrations() {
