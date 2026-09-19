@@ -5,6 +5,8 @@ import ImportProducts from '../components/ImportProducts'
 import SkuAssign from '../components/SkuAssign'
 import LabelPrint from '../components/LabelPrint'
 import Scanner from '../components/Scanner'
+import SearchSelect from '../components/SearchSelect'
+import { createDirection, createProductType, createCampaign } from '../lib/classifier'
 import Photo from '../components/Photo'
 import PhotoGallery from '../components/PhotoGallery'
 import { buildSku, uniqueSku } from '../lib/sku'
@@ -166,9 +168,54 @@ export default function Items({ data, can, profile, scanSku, onScanUsed }) {
         </div>
         <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--ink)', margin: '4px 0 8px' }}>Цепочка (Направление → Тип → Кампания)</div>
         <div className="form-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 4 }}>
-          <Field label="Направление"><Select value={nf.direction_id} onChange={(e) => setNf({ ...nf, direction_id: e.target.value, product_type_id: '', campaign_id: '' })}><option value="">—</option>{directions.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}</Select></Field>
-          <Field label="Тип"><Select value={nf.product_type_id} onChange={(e) => setNf({ ...nf, product_type_id: e.target.value, campaign_id: '' })}><option value="">—</option>{productTypes.filter((t) => !nf.direction_id || t.direction_id == nf.direction_id).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</Select></Field>
-          <Field label="Кампания"><Select value={nf.campaign_id} onChange={(e) => setNf({ ...nf, campaign_id: e.target.value })}><option value="">— без категории —</option>{campaigns.filter((c) => !nf.product_type_id || c.product_type_id == nf.product_type_id).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</Select></Field>
+          {/* Подписи по смыслу и создание на месте: раньше три служебных
+              слова без подсказок — люди путались и пропускали */}
+          <Field label="Направление бизнеса · розница, бизнес, ислам">
+            <SearchSelect value={nf.direction_id}
+              onChange={(v) => setNf({ ...nf, direction_id: v, product_type_id: '', campaign_id: '' })}
+              placeholder="— не выбрано —"
+              options={directions.map((d) => ({ value: d.id, label: d.name }))}
+              createHint="появится в справочнике"
+              onCreate={async (name) => {
+                const { data: d, error, existed } = await createDirection(name)
+                if (error) { toast(error, 'error'); return false }
+                setNf((x) => ({ ...x, direction_id: d.id, product_type_id: '', campaign_id: '' }))
+                invalidate('refs'); toast(existed ? 'Уже было — выбрано' : 'Направление добавлено')
+                return true
+              }} />
+          </Field>
+
+          <Field label="Продукт банка · карты, кредиты, депозиты">
+            <SearchSelect value={nf.product_type_id}
+              onChange={(v) => setNf({ ...nf, product_type_id: v, campaign_id: '' })}
+              placeholder={nf.direction_id ? '— не выбрано —' : 'сначала направление'}
+              options={productTypes.filter((t) => !nf.direction_id || t.direction_id == nf.direction_id)
+                .map((t) => ({ value: t.id, label: t.name }))}
+              createHint={nf.direction_id ? 'внутри выбранного направления' : 'сначала выберите направление'}
+              onCreate={async (name) => {
+                const { data: t, error, existed } = await createProductType(name, nf.direction_id)
+                if (error) { toast(error, 'error'); return false }
+                setNf((x) => ({ ...x, product_type_id: t.id, campaign_id: '' }))
+                invalidate('refs'); toast(existed ? 'Уже было — выбрано' : 'Продукт добавлен')
+                return true
+              }} />
+          </Field>
+
+          <Field label="Что продвигаем · продукт или акция">
+            <SearchSelect value={nf.campaign_id}
+              onChange={(v) => setNf({ ...nf, campaign_id: v })}
+              placeholder={nf.product_type_id ? '— не выбрано —' : 'сначала продукт'}
+              options={campaigns.filter((c) => !nf.product_type_id || c.product_type_id == nf.product_type_id)
+                .map((c) => ({ value: c.id, label: c.name }))}
+              createHint={nf.product_type_id ? 'внутри выбранного продукта' : 'сначала выберите продукт'}
+              onCreate={async (name) => {
+                const { data: c, error, existed } = await createCampaign(name, nf.product_type_id)
+                if (error) { toast(error, 'error'); return false }
+                setNf((x) => ({ ...x, campaign_id: c.id }))
+                invalidate('refs'); toast(existed ? 'Уже было — выбрано' : 'Кампания добавлена')
+                return true
+              }} />
+          </Field>
         </div>
         <div style={{ display: 'flex', gap: 8 }}><Btn onClick={save} loading={loading}>Сохранить</Btn><Btn v="secondary" onClick={() => setAdd(false)}>Отмена</Btn></div>
       </div>}
