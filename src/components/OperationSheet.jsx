@@ -117,7 +117,7 @@ export default function OperationSheet({ type, data, profile, can, onDone }) {
       } catch (e) {}
     }
 
-    const { error } = await saveMovement({ ...f, qty: goodQty, type, delivery_id: deliveryId, issuer_id: profile.id, branch_id: f.branch_id || selRec?.branch_id }, stockByWh)
+    const { error, queued } = await saveMovement({ ...f, qty: goodQty, type, delivery_id: deliveryId, issuer_id: profile.id, branch_id: f.branch_id || selRec?.branch_id }, stockByWh)
 
     // Остаток на экране меняем сразу, не дожидаясь перечитывания представления
     if (!error && data.bumpStock) {
@@ -130,7 +130,9 @@ export default function OperationSheet({ type, data, profile, can, onDone }) {
     }
     setLoading(false)
     if (error) return toast(error, 'error')
-    toast(TL[type] + ' сохранена')
+    toast(queued
+      ? TL[type] + ' записана — уйдёт на сервер, когда появится связь'
+      : TL[type] + ' сохранена')
     if ((type === 'out' || type === 'return') && selProd) {
       setAct({ type, items: [{ name: fullName(selProd), sku: selProd.sku, price: selProd.price, qty: Number(f.qty), product_id: selProd.id, warehouse_id: Number(f.warehouse_id) }], recipient: selRec?.name || '', recipient_id: selRec?.id || null, purpose: f.purpose, branch_id: f.branch_id || selRec?.branch_id || null, branchName: branches.find((b) => b.id === (f.branch_id || selRec?.branch_id))?.name, dept: f.dept || selRec?.dept || '' })
     } else if (type === 'in' && selProd) {
