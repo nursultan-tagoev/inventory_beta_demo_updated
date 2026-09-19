@@ -83,3 +83,15 @@ export function assignSkus(products, refs, { onlyEmpty = false } = {}) {
   }
   return rows
 }
+
+/* Артикул для одного нового товара. Базу собираем по правилу, а если
+   такой уже занят — добавляем номер. Без этого база отклоняет вставку
+   по уникальному индексу. */
+export function uniqueSku(product, refs, products) {
+  const base = buildSku(product, refs)
+  const taken = new Set((products || []).map((p) => (p.sku || '').toUpperCase()).filter(Boolean))
+  if (!taken.has(base.toUpperCase())) return base
+  let n = 2
+  while (taken.has(`${base}-${n}`.toUpperCase())) n += 1
+  return `${base}-${n}`
+}
