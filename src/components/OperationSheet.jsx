@@ -39,7 +39,8 @@ export default function OperationSheet({ type, data, profile, can, onDone }) {
   const [f, setF] = useState({
     product_id: '', qty: 1, recipient_id: '', branch_id: '', dept: '', is_test: false,
     warehouse_id: warehouses[0]?.id || '', warehouse_to_id: '', location_id: '',
-    supplier_id: suppliers[0]?.id || '', purpose: '', due_date: '', sz: '', condition: 'хорошее', direction_id: '', notes: '',
+    supplier_id: suppliers[0]?.id || '', purpose: '', due_date: '', sz: '', condition: 'хорошее', notes: '',
+    direction_id: '', product_type_id: '', campaign_id: '',
     on_time: true, has_defects: false, defects: 0, delivery_comment: '',
   })
   const up = (k, v) => setF((s) => ({ ...s, [k]: v }))
@@ -261,7 +262,21 @@ export default function OperationSheet({ type, data, profile, can, onDone }) {
             <div style={{ flex: 1, minWidth: 0 }}>
           <SearchSelect
             value={f.product_id}
-            onChange={(v) => { up('product_id', v); setCreatedProd(null) }}
+            onChange={(v) => {
+              up('product_id', v)
+              setCreatedProd(null)
+              /* У товара классификатор часто уже заполнен — подставляем,
+                 чтобы не спрашивать одно и то же дважды. */
+              const p = products.find((x) => x.id == v)
+              if (p) {
+                const camp = campaigns.find((c) => c.id === p.campaign_id)
+                const type = productTypes.find((t) => t.id === (camp?.product_type_id || p.product_type_id))
+                const dir = directions.find((d) => d.id === (type?.direction_id || p.direction_id))
+                if (dir) up('direction_id', dir.id)
+                if (type) up('product_type_id', type.id)
+                if (camp) up('campaign_id', camp.id)
+              }
+            }}
             placeholder="— выбрать товар —"
             required
             options={[
@@ -407,6 +422,45 @@ export default function OperationSheet({ type, data, profile, can, onDone }) {
         {f.notes || showNotes
           ? <Field label="Примечание"><Input value={f.notes} onChange={(e) => up('notes', e.target.value)} placeholder="Необязательно" autoFocus /></Field>
           : <button onClick={() => setShowNotes(true)} style={{ alignSelf: 'flex-start', fontSize: 12, color: 'var(--tx3)', padding: '4px 0' }}>＋ Примечание</button>}
+        {/* Классификатор: подо что закупали и для чего выдаём.
+            Списки связаны — выбрал направление, в продуктах остались только его. */}
+        <div style={{ padding: '12px 13px', background: 'var(--bg)', borderRadius: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '.05em', color: 'var(--tx3)' }}>
+            КЛАССИФИКАТОР <span style={{ fontWeight: 400, letterSpacing: 0 }}>— можно пропустить</span>
+          </div>
+
+          <div>
+            <div style={{ fontSize: 12, color: 'var(--tx3)', marginBottom: 4 }}>
+              Направление бизнеса <span style={{ opacity: .7 }}>· розница, бизнес, ислам</span>
+            </div>
+            <SearchSelect value={f.direction_id}
+              onChange={(v) => { up('direction_id', v); up('product_type_id', ''); up('campaign_id', '') }}
+              placeholder="— не выбрано —"
+              options={(directions || []).map((d) => ({ value: d.id, label: d.name }))} />
+          </div>
+
+          <div>
+            <div style={{ fontSize: 12, color: 'var(--tx3)', marginBottom: 4 }}>
+              Продукт банка <span style={{ opacity: .7 }}>· карты, кредиты, депозиты</span>
+            </div>
+            <SearchSelect value={f.product_type_id}
+              onChange={(v) => { up('product_type_id', v); up('campaign_id', '') }}
+              placeholder={f.direction_id ? '— не выбрано —' : 'сначала направление'}
+              options={(productTypes || []).filter((t) => !f.direction_id || t.direction_id == f.direction_id)
+                .map((t) => ({ value: t.id, label: t.name }))} />
+          </div>
+
+          <div>
+            <div style={{ fontSize: 12, color: 'var(--tx3)', marginBottom: 4 }}>
+              Что продвигаем <span style={{ opacity: .7 }}>· продукт или акция</span>
+            </div>
+            <SearchSelect value={f.campaign_id} onChange={(v) => up('campaign_id', v)}
+              placeholder={f.product_type_id ? '— не выбрано —' : 'сначала продукт'}
+              options={(campaigns || []).filter((c) => !f.product_type_id || c.product_type_id == f.product_type_id)
+                .map((c) => ({ value: c.id, label: c.name }))} />
+          </div>
+        </div>
+
         {/* Тестовая операция: помечается, чтобы перед запуском убрать одним фильтром */}
         <label style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '11px 13px', borderRadius: 11, background: f.is_test ? 'var(--am-l)' : 'var(--bg)', cursor: 'pointer' }}>
           <input type="checkbox" checked={f.is_test} onChange={(e) => up('is_test', e.target.checked)}
@@ -481,6 +535,45 @@ export default function OperationSheet({ type, data, profile, can, onDone }) {
         <div style={{ padding: '12px 14px', background: 'var(--bg)', borderRadius: 10, fontSize: 12.5, color: 'var(--tx2)' }}>
           <b style={{ color: 'var(--tx)' }}>{selProd?.name}</b> × {f.qty} шт · склад {whName(f.warehouse_id)}{selRec ? <> · {selRec.name}</> : null}
         </div>
+        {/* Классификатор: подо что закупали и для чего выдаём.
+            Списки связаны — выбрал направление, в продуктах остались только его. */}
+        <div style={{ padding: '12px 13px', background: 'var(--bg)', borderRadius: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '.05em', color: 'var(--tx3)' }}>
+            КЛАССИФИКАТОР <span style={{ fontWeight: 400, letterSpacing: 0 }}>— можно пропустить</span>
+          </div>
+
+          <div>
+            <div style={{ fontSize: 12, color: 'var(--tx3)', marginBottom: 4 }}>
+              Направление бизнеса <span style={{ opacity: .7 }}>· розница, бизнес, ислам</span>
+            </div>
+            <SearchSelect value={f.direction_id}
+              onChange={(v) => { up('direction_id', v); up('product_type_id', ''); up('campaign_id', '') }}
+              placeholder="— не выбрано —"
+              options={(directions || []).map((d) => ({ value: d.id, label: d.name }))} />
+          </div>
+
+          <div>
+            <div style={{ fontSize: 12, color: 'var(--tx3)', marginBottom: 4 }}>
+              Продукт банка <span style={{ opacity: .7 }}>· карты, кредиты, депозиты</span>
+            </div>
+            <SearchSelect value={f.product_type_id}
+              onChange={(v) => { up('product_type_id', v); up('campaign_id', '') }}
+              placeholder={f.direction_id ? '— не выбрано —' : 'сначала направление'}
+              options={(productTypes || []).filter((t) => !f.direction_id || t.direction_id == f.direction_id)
+                .map((t) => ({ value: t.id, label: t.name }))} />
+          </div>
+
+          <div>
+            <div style={{ fontSize: 12, color: 'var(--tx3)', marginBottom: 4 }}>
+              Что продвигаем <span style={{ opacity: .7 }}>· продукт или акция</span>
+            </div>
+            <SearchSelect value={f.campaign_id} onChange={(v) => up('campaign_id', v)}
+              placeholder={f.product_type_id ? '— не выбрано —' : 'сначала продукт'}
+              options={(campaigns || []).filter((c) => !f.product_type_id || c.product_type_id == f.product_type_id)
+                .map((c) => ({ value: c.id, label: c.name }))} />
+          </div>
+        </div>
+
         {/* Тестовая операция: помечается, чтобы перед запуском убрать одним фильтром */}
         <label style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '11px 13px', borderRadius: 11, background: f.is_test ? 'var(--am-l)' : 'var(--bg)', cursor: 'pointer' }}>
           <input type="checkbox" checked={f.is_test} onChange={(e) => up('is_test', e.target.checked)}
