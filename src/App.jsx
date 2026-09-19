@@ -159,12 +159,18 @@ export default function App() {
   if (profErr) return (
     <div style={{ height: '100vh', display: 'grid', placeItems: 'center', background: 'var(--bg)', padding: 20 }}>
       <div className="card" style={{ maxWidth: 400, padding: 26, textAlign: 'center' }}>
-        <div style={{ fontSize: 30, marginBottom: 10 }}>⚠️</div>
-        <div className="ff" style={{ fontSize: 18, fontWeight: 600, marginBottom: 8 }}>Не удалось загрузить профиль</div>
-        <div style={{ fontSize: 13, color: 'var(--tx2)', lineHeight: 1.6, marginBottom: 16 }}>
-          Права не определены, поэтому вход остановлен. Проверьте связь и повторите.
+        {/* Без связи и без сохранённых данных объясняем, что делать,
+            а не показываем техническую ошибку */}
+        <div style={{ fontSize: 30, marginBottom: 10 }}>{navigator.onLine ? '⚠️' : '📴'}</div>
+        <div className="ff" style={{ fontSize: 18, fontWeight: 600, marginBottom: 8 }}>
+          {navigator.onLine ? 'Не удалось загрузить профиль' : 'Нет связи, а данные не загружены'}
         </div>
-        <div style={{ fontSize: 11, color: 'var(--tx3)', marginBottom: 16, wordBreak: 'break-word' }}>{profErr}</div>
+        <div style={{ fontSize: 13, color: 'var(--tx2)', lineHeight: 1.6, marginBottom: 16 }}>
+          {navigator.onLine
+            ? 'Права не определены, поэтому вход остановлен. Проверьте связь и повторите.'
+            : 'Чтобы работать на складе без связи, нужно один раз зайти в приложение при интернете — тогда каталог и остатки сохранятся на телефоне.'}
+        </div>
+        {navigator.onLine && <div style={{ fontSize: 11, color: 'var(--tx3)', marginBottom: 16, wordBreak: 'break-word' }}>{profErr}</div>}
         <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
           <button onClick={() => { setProfErr(null); setSession((s) => (s ? { ...s } : s)) }}
             style={{ padding: '10px 16px', borderRadius: 9, background: 'var(--ink)', color: '#fff', fontWeight: 600 }}>Повторить</button>
@@ -226,7 +232,13 @@ export default function App() {
             <Notifications profile={profile} onOpen={(n) => { if (n.entity === 'request') setView('requests'); if (n.entity === 'act') setView('acts') }} />
           </div>
           {data.loading && <div style={{ position: 'absolute', top: 14, right: 18, zIndex: 5 }}><Spin s={18} /></div>}
-          {data.error && <div style={{ padding: '10px 24px', background: 'var(--am-l)', color: 'var(--am-m)', fontSize: 12.5, borderBottom: '1px solid var(--am)' }}>Доступ к данным закрыт: {data.error}. Проверьте, что выполнены RLS-политики.</div>}
+          {/* Без связи это не отказ в правах, а отсутствие сети — не пугаем зря */}
+          {data.error && !/fetch|network|failed to fetch/i.test(String(data.error)) && (
+            <div style={{ padding: '10px 24px', background: 'var(--am-l)', color: 'var(--am-m)', fontSize: 12.5, borderBottom: '1px solid var(--am)' }}>
+              Доступ к данным закрыт: {data.error}. Проверьте, что выполнены RLS-политики.
+            </div>
+          )}
+          <div style={{ padding: '0 20px' }}><OfflineBar data={data} /></div>
           <ErrorBoundary k={safeView}>{SCREENS[safeView]}</ErrorBoundary>
         </main>
         {safeView !== 'lucy' && (
