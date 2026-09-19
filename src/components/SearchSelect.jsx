@@ -86,8 +86,13 @@ export default function SearchSelect({
                       color: String(o.value) === String(value) ? 'var(--ink)' : 'var(--tx)',
                       fontSize: 13.5, display: 'block',
                     }}>
-                    <span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.label}</span>
-                    {o.hint && <span style={{ display: 'block', fontSize: 11, color: 'var(--tx3)', marginTop: 1 }}>{o.hint}</span>}
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                      {o.thumb}
+                      <span style={{ flex: 1, minWidth: 0 }}>
+                        <span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.label}</span>
+                        {o.hint && <span style={{ display: 'block', fontSize: 11, color: 'var(--tx3)', marginTop: 1 }}>{o.hint}</span>}
+                      </span>
+                    </span>
                   </button>
                 ))}
               </div>

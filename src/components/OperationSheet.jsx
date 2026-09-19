@@ -6,6 +6,7 @@ import { fullName, attrsLine } from '../lib/attrs'
 import LabelPrint from './LabelPrint'
 import Scanner from './Scanner'
 import SearchSelect from './SearchSelect'
+import Photo from './Photo'
 import { Btn, Field, Input, Select, Confirm, useToast } from './ui'
 import { som } from '../lib/format'
 import { saveMovement, stockAt } from '../lib/ops'
@@ -267,6 +268,7 @@ export default function OperationSheet({ type, data, profile, can, onDone }) {
               ...(createdProd ? [{ value: createdProd.id, label: createdProd.name + ' (новый)' }] : []),
               ...products.filter((p) => !p.archived).map((p) => ({
                 value: p.id, label: fullName(p), hint: p.sku || '',
+                thumb: <Photo product={p} photos={data.photos} size={28} radius={7} />,
               })),
             ]}
             extra={{ label: '➕ Добавить новый товар', onClick: () => setShowNewProd(true) }}
