@@ -59,8 +59,11 @@ export async function addPhoto(productId, file) {
   let blob
   try { blob = await shrink(file) } catch (e) { return { error: e.message } }
 
-  // Имя со временем: иначе браузер показывает старый снимок из кеша
-  const path = `${productId}/${Date.now()}-${Math.random().toString(36).slice(2, 6)}.jpg`
+  /* Случайное имя, а не номер товара: корзина публичная, и по номеру
+     ссылки можно было бы подобрать. Со случайным именем — нельзя.
+     Плюс время в имени: иначе браузер показывает старый снимок из кеша. */
+  const rnd = (crypto.randomUUID?.() || Math.random().toString(36).slice(2)).replace(/-/g, '')
+  const path = `p/${rnd}${Date.now().toString(36)}.jpg`
   const { error } = await supabase.storage.from(BUCKET)
     .upload(path, blob, { contentType: 'image/jpeg', upsert: true })
   if (error) return { error: 'Загрузка: ' + error.message }
