@@ -154,9 +154,9 @@ export default function OfflineBar({ data }) {
           <span style={{ fontSize: 15 }}>{online ? '↑' : '📴'}</span>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 12.5, fontWeight: 600, color: online ? 'var(--am-m)' : 'var(--tx2)' }}>
-              {online
+              {count
                 ? `${count} операц. ждёт отправки`
-                : count ? `Без связи · ${count} операц. в очереди` : 'Работаем без связи'}
+                : stale ? 'Данные давно не обновлялись' : 'Работаем без связи'}
             </div>
             <div style={{ fontSize: 11, color: stale ? 'var(--am-m)' : 'var(--tx3)', marginTop: 1 }}>
               данные обновлялись {fmtAge(age)}

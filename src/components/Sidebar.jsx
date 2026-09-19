@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import OfflineStatus from './OfflineStatus'
 const I = {
   home: <path d="M3 10.5 12 3l9 7.5M5 9.5V21h14V9.5" />,
   catalog: <path d="M3 6h18M3 12h18M3 18h18" />,
@@ -93,6 +94,7 @@ export default function Sidebar({ view, setView, profile, onLogout, badges = {},
         </nav>
 
         <div style={{ borderTop: '1px solid var(--nav2)', paddingTop: 10, marginTop: 8 }}>
+          <OfflineStatus />
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 8px', marginBottom: 8 }}>
             <div style={{ width: 30, height: 30, borderRadius: '50%', background: 'var(--ink)', display: 'grid', placeItems: 'center', fontSize: 12, color: '#fff', fontWeight: 600 }}>
               {(profile?.full_name || profile?.email || '?')[0]?.toUpperCase()}
@@ -132,6 +134,7 @@ export default function Sidebar({ view, setView, profile, onLogout, badges = {},
       {/* Шторка «Ещё»: остальные разделы и профиль */}
       <Sheet open={more} onClose={() => setMore(false)} title="Ещё">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <OfflineStatus />
           {restItems.length > 0 && (
             <div style={{ border: '1px solid var(--brd)', borderRadius: 12, overflow: 'hidden' }}>
               {restItems.map((n, i) => (
