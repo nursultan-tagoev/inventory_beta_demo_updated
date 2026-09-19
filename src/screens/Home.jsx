@@ -6,6 +6,7 @@ import { fmt, som, TL } from '../lib/format'
 import { fullName } from '../lib/attrs'
 import OperationSheet from '../components/OperationSheet'
 import { InstallCard } from '../components/InstallPrompt'
+import OfflineBar from '../components/OfflineBar'
 
 export default function Home({ data, profile, can, setView }) {
   const { products, movements, stock, stockByWh, warehouses, checkouts, recipients, branches, requests, acts, actSigners, reqApprovers } = data
@@ -124,6 +125,7 @@ export default function Home({ data, profile, can, setView }) {
         </div>
       })()}
 
+      <OfflineBar data={data} />
       <InstallCard />
 
       {/* Заявителям — одно действие */}
