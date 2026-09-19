@@ -74,16 +74,32 @@ export async function snapshotAge() {
 
 /* Профиль на устройстве. Права не выдумываем никогда, но сохранённый
    настоящий профиль — это не выдумка: без него на складе не войти. */
+const PROF_KEY = 'sklad-profile'
+
 export async function saveProfile(profile) {
   if (!profile?.id) return
+  // Дублируем в простое хранилище: оно читается сразу и переживает
+  // случаи, когда IndexedDB недоступна
+  try { localStorage.setItem(PROF_KEY, JSON.stringify(profile)) } catch (e) {}
   try { await tx(SNAP, 'readwrite', (s) => s.put({ at: Date.now(), profile }, 'profile')) } catch (e) {}
 }
 
+// Быстрый путь: без ожидания базы
+export function loadProfileSync(userId) {
+  try {
+    const raw = localStorage.getItem(PROF_KEY)
+    const p = raw ? JSON.parse(raw) : null
+    // Чужой профиль не отдаём: на устройстве мог работать другой человек
+    return p?.id === userId ? p : null
+  } catch (e) { return null }
+}
+
 export async function loadProfile(userId) {
+  const quick = loadProfileSync(userId)
+  if (quick) return quick
   try {
     const row = await tx(SNAP, 'readonly', (s) => s.get('profile'))
     if (!row?.profile) return null
-    // Чужой профиль не отдаём: на устройстве мог работать другой человек
     return row.profile.id === userId ? row.profile : null
   } catch (e) { return null }
 }
