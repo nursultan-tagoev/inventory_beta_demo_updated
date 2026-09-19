@@ -336,6 +336,7 @@ export default function Catalog({ data, profile, onRequest, scanSku, onScanUsed 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div>{lbl('Получатель')}
                 <select value={issue.recipient_id} onChange={(e) => {
+                  if (e.target.value === 'new') { set('newRec', { name: '', dept: '' }); return }
                   set('recipient_id', e.target.value)
                   const r = (data.recipients || []).find((x) => x.id == e.target.value)
                   set('dept', r?.dept || '')
@@ -344,7 +345,35 @@ export default function Catalog({ data, profile, onRequest, scanSku, onScanUsed 
                   {(data.recipients || []).map((r) => (
                     <option key={r.id} value={r.id}>{r.name}{r.dept ? ' · ' + r.dept : ''}</option>
                   ))}
+                  <option value="new">➕ Добавить получателя</option>
                 </select>
+
+                {/* Новый получатель прямо здесь: бежать в справочник посреди выдачи неудобно */}
+                {issue.newRec && (
+                  <div className="card" style={{ padding: 12, marginTop: 9, background: 'var(--bg)' }}>
+                    <input value={issue.newRec.name} autoFocus placeholder="Ф.И.О."
+                      onChange={(e) => set('newRec', { ...issue.newRec, name: e.target.value })}
+                      style={{ ...inp, marginBottom: 8 }} />
+                    <select value={issue.newRec.dept} onChange={(e) => set('newRec', { ...issue.newRec, dept: e.target.value })}
+                      style={{ ...inp, marginBottom: 8 }}>
+                      <option value="">— подразделение —</option>
+                      {(data.departments || []).map((d) => <option key={d.id} value={d.name}>{d.name}</option>)}
+                    </select>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <Btn size="sm" onClick={async () => {
+                        const name = issue.newRec.name.trim()
+                        if (!name) return toast('Введите имя', 'error')
+                        const { data: d, error } = await supabase.from('recipients')
+                          .insert({ name, dept: issue.newRec.dept || null }).select().single()
+                        if (error) return toast(error.message, 'error')
+                        data.invalidate('refs')
+                        setIssue((s) => ({ ...s, recipient_id: d.id, dept: d.dept || '', newRec: null }))
+                        toast('Получатель добавлен')
+                      }} style={{ flex: 1, minHeight: 42 }}>Сохранить</Btn>
+                      <Btn size="sm" v="secondary" onClick={() => set('newRec', null)} style={{ minHeight: 42 }}>Отмена</Btn>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div>{lbl('Подразделение')}

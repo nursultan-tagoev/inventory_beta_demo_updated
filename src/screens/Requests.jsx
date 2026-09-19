@@ -522,6 +522,9 @@ function RequestForm({ data, profile, editReq, draftItems, onDone }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div>
         {lbl('Позиции', true)}
+        {/* Длинный список позиций прокручивается внутри себя — иначе кнопка
+            отправки уезжает за край экрана и до неё не добраться */}
+        <div style={{ maxHeight: items.length > 4 ? 260 : 'none', overflowY: items.length > 4 ? 'auto' : 'visible', marginBottom: items.length > 4 ? 8 : 0 }}>
         {items.map((it, i) => (
           <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
             <select value={it.product_id} onChange={(e) => setItem(i, 'product_id', e.target.value)} style={{ ...inp, flex: 1, minWidth: 0 }}>
@@ -535,6 +538,7 @@ function RequestForm({ data, profile, editReq, draftItems, onDone }) {
             {items.length > 1 && <button onClick={() => setItems((s) => s.filter((_, j) => j !== i))} style={{ width: 44, minHeight: 46, borderRadius: 12, color: 'var(--tx3)', fontSize: 17 }}>×</button>}
           </div>
         ))}
+        </div>
         <button onClick={() => setItems((s) => [...s, { product_id: '', qty: 1 }])}
           style={{ width: '100%', minHeight: 44, border: '1px dashed var(--brd2)', borderRadius: 12, background: 'transparent', color: SEC, fontSize: 12.5 }}>＋ Добавить позицию</button>
       </div>
