@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../supabaseClient'
+import { saveSnapshot, loadSnapshot, requestPersistence } from './offline'
 
 /* Данные разложены по ресурсам. После действия перечитывается не всё,
    а только затронутое — см. карту AFFECTS. */
@@ -179,6 +180,19 @@ export function useAppData(profile) {
   const timer = useRef(null)
   const dirty = useRef(new Set())
 
+
+  /* Снимок данных: делается раз в два часа и принудительно при возвращении
+     связи. Без него на складе не будет ни каталога, ни остатков. */
+  const snapAt = useRef(0)
+  const SNAP_EVERY = 2 * 60 * 60 * 1000
+
+  const maybeSnapshot = useCallback((state, force) => {
+    if (!state?.products?.length) return
+    if (!force && Date.now() - snapAt.current < SNAP_EVERY) return
+    snapAt.current = Date.now()
+    saveSnapshot(state)
+  }, [])
+
   /* Перечитать конкретные ресурсы */
   const invalidate = useCallback(async (keys, opts = {}) => {
     const list = (Array.isArray(keys) ? keys : [keys]).filter((k) => FETCH[k])
@@ -197,10 +211,15 @@ export function useAppData(profile) {
       }
     }))
 
-    setState((s) => Object.assign({}, s, ...parts.filter(Boolean), { loading: false }))
+    setState((s) => {
+      const next = Object.assign({}, s, ...parts.filter(Boolean), { loading: false })
+      if (list.length === ALL.length) maybeSnapshot(next, opts.snapshot)
+      return next
+    })
   }, [])
 
   const load = useCallback((opts = {}) => invalidate(ALL, opts), [invalidate])
+
   const refresh = useCallback(() => invalidate(ALL, { silent: true }), [invalidate])
 
   /* События сыплются пачками — копим ключи и обновляем одним заходом */
@@ -214,7 +233,19 @@ export function useAppData(profile) {
     }, 300)
   }, [invalidate])
 
-  useEffect(() => { if (profile?.id) load() }, [profile?.id, load])
+  /* Первый заход: если связи нет, поднимаем последний снимок —
+     иначе на складе экран будет пустым. */
+  useEffect(() => {
+    if (!profile?.id) return
+    let alive = true
+    requestPersistence()
+    loadSnapshot().then((snap) => {
+      if (!alive || !snap?.data) return
+      setState((s) => (s.products?.length ? s : { ...s, ...snap.data, loading: false, fromSnapshot: snap.at }))
+    })
+    load()
+    return () => { alive = false }
+  }, [profile?.id, load])
   useEffect(() => () => clearTimeout(timer.current), [])
 
   /* Realtime: событие не несёт данные, а лишь помечает ресурс устаревшим */
@@ -244,7 +275,7 @@ export function useAppData(profile) {
     const hot = ['requests', 'approvers', 'movements', 'stock', 'acts']
     const tick = () => { if (document.visibilityState === 'visible') invalidate(hot, { silent: true }) }
     const iv = setInterval(tick, 25000)
-    const onBack = () => { if (document.visibilityState === 'visible') refresh() }
+    const onBack = () => { if (document.visibilityState === 'visible') invalidate(ALL, { silent: true, snapshot: true }) }
     document.addEventListener('visibilitychange', onBack)
     window.addEventListener('focus', onBack)
     window.addEventListener('online', onBack)

@@ -1,4 +1,5 @@
 import { supabase } from '../supabaseClient'
+import { enqueue } from './offline'
 
 // Единая запись операции. Остаток проверяется ПО КОНКРЕТНОМУ СКЛАДУ.
 // a = { type, product_id, qty, warehouse_id, warehouse_to_id?, recipient_id?, branch_id?, ... }
@@ -42,9 +43,24 @@ export async function saveMovement(a, stockByWh) {
     condition: a.type === 'return' ? a.condition || null : null,
     notes: a.notes || null,
   }
+  /* Связи нет — операция уходит в очередь и проводится при её появлении.
+     Отказать человеку у стеллажа нельзя: работа не ждёт сети. */
+  if (!navigator.onLine) {
+    await enqueue({ kind: 'movement', payload: row, title: describe(a) })
+    return { error: null, queued: true }
+  }
+
   const { error } = await supabase.from('movements').insert(row)
+  if (error && /fetch|network|failed/i.test(error.message)) {
+    // Связь оборвалась посреди запроса — не теряем операцию
+    await enqueue({ kind: 'movement', payload: row, title: describe(a) })
+    return { error: null, queued: true }
+  }
   return { error: error ? error.message : null }
 }
+
+const TYPE_RU = { in: 'Приход', out: 'Выдача', return: 'Возврат', writeoff: 'Списание', transfer: 'Перемещение', defect: 'Брак' }
+const describe = (a) => `${TYPE_RU[a.type] || a.type} · ${a.qty} шт`
 
 // Остаток товара на складе
 export const stockAt = (stockByWh, productId, warehouseId) =>
