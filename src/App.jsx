@@ -9,6 +9,7 @@ import Inventory from './screens/Inventory'
 import Audit from './screens/Audit'
 import Integrations from './screens/Integrations'
 import OfflineBar from './components/OfflineBar'
+import { watchIdle, expireSession, resetIdle } from './lib/idle'
 import { saveProfile, loadProfile, loadProfileSync } from './lib/offline'
 import InstallPrompt from './components/InstallPrompt'
 import Sidebar from './components/Sidebar'
@@ -56,6 +57,18 @@ export default function App() {
   const [profile, setProfile] = useState(null)
   const [profErr, setProfErr] = useState(null)
   const [tour, setTour] = useState(false)
+  const [idleWarn, setIdleWarn] = useState(null)
+
+  /* Выход по бездействию: на общем компьютере склада открытая вкладка
+     показывает остатки, суммы и фамилии кому угодно. */
+  useEffect(() => {
+    if (!session) return
+    resetIdle()
+    return watchIdle({
+      onWarn: (min) => setIdleWarn(min),
+      onExpire: async () => { setIdleWarn(null); await expireSession() },
+    })
+  }, [session])
 
   /* Переход по наклейке: /s/АРТИКУЛ открывает карточку товара.
      Адрес чистим сразу, чтобы обновление страницы не открывало его снова. */
@@ -237,6 +250,23 @@ export default function App() {
           {data.error && !/fetch|network|failed to fetch/i.test(String(data.error)) && (
             <div style={{ padding: '10px 24px', background: 'var(--am-l)', color: 'var(--am-m)', fontSize: 12.5, borderBottom: '1px solid var(--am)' }}>
               Доступ к данным закрыт: {data.error}. Проверьте, что выполнены RLS-политики.
+            </div>
+          )}
+          {idleWarn != null && (
+            <div style={{ margin: '0 20px 12px', padding: '12px 15px', borderRadius: 12, background: 'var(--am-l)', border: '1px solid var(--am)', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 15 }}>⏳</span>
+              <div style={{ flex: 1, minWidth: 140 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--am-m)' }}>
+                  Выход через {idleWarn} мин
+                </div>
+                <div style={{ fontSize: 11.5, color: 'var(--tx2)', marginTop: 1 }}>
+                  Вы давно ничего не делали — система выйдет сама
+                </div>
+              </div>
+              <button onClick={() => { resetIdle(); setIdleWarn(null) }}
+                style={{ minHeight: 38, padding: '0 14px', borderRadius: 9, background: 'var(--ink)', color: '#fff', fontSize: 12.5, fontWeight: 600 }}>
+                Я здесь
+              </button>
             </div>
           )}
           <div style={{ padding: '0 20px' }}><OfflineBar data={data} /></div>
