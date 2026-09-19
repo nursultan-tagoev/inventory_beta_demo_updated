@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { supabase } from '../supabaseClient'
 import { enqueue, tempId } from '../lib/offline'
+import { uniqueSku } from '../lib/sku'
 import { fullName, attrsLine } from '../lib/attrs'
 import LabelPrint from './LabelPrint'
 import Scanner from './Scanner'
@@ -83,7 +84,9 @@ export default function OperationSheet({ type, data, profile, can, onDone }) {
   const createProduct = async () => {
     if (!newProd.name.trim()) return toast('Введите название', 'error')
     const body = {
-      name: newProd.name.trim(), sku: newProd.sku || null, price: Number(newProd.price) || 0,
+      name: newProd.name.trim(),
+      sku: newProd.sku?.trim() || uniqueSku(newProd, data, products),
+      price: Number(newProd.price) || 0,
       campaign_id: newProd.campaign_id ? Number(newProd.campaign_id) : null,
       direction_id: newProd.direction_id ? Number(newProd.direction_id) : null, archived: false,
     }
@@ -101,7 +104,15 @@ export default function OperationSheet({ type, data, profile, can, onDone }) {
       return toast('Товар записан — создастся, когда появится связь')
     }
 
-    const { data: d, error } = await supabase.from('products').insert(body).select().single()
+    let { data: d, error } = await supabase.from('products').insert(body).select().single()
+
+    /* Артикул мог занять кто-то другой, пока форма была открыта —
+       добавляем номер и пробуем ещё раз. */
+    if (error && /uniq_products_sku|duplicate key/i.test(error.message)) {
+      const retry = { ...body, sku: `${body.sku}-${Date.now().toString().slice(-3)}` }
+      const res2 = await supabase.from('products').insert(retry).select().single()
+      d = res2.data; error = res2.error
+    }
     if (error) return toast('Ошибка: ' + error.message, 'error')
     reset(d); toast('Товар создан')
   }
