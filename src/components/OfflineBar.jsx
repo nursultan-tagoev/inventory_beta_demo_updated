@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Btn, useToast } from './ui'
-import { queueCount, oldestAgeDays, snapshotAge, queueList } from '../lib/offline'
+import { queueCount, oldestAgeDays, snapshotAge, queueList, addConflicts, listConflicts, dropConflict } from '../lib/offline'
 import { syncQueue } from '../lib/sync'
+import { topUpPool, poolCount } from '../lib/actPool'
 
 /* Состояние работы без связи: возраст данных, сколько операций ждёт отправки
    и предупреждение, если они висят слишком долго. */
@@ -25,12 +26,34 @@ export default function OfflineBar({ data }) {
   const [busy, setBusy] = useState(false)
   const [open, setOpen] = useState(false)
   const [items, setItems] = useState([])
+  const [pool, setPool] = useState(() => poolCount('АВ'))
+  const [refreshing, setRefreshing] = useState(false)
+  const [confs, setConfs] = useState(() => listConflicts())
 
   const refreshState = useCallback(async () => {
     setCount(await queueCount())
     setDays(await oldestAgeDays())
     setAge(await snapshotAge())
+    setPool(poolCount('АВ'))
+    setConfs(listConflicts())
   }, [])
+
+  /* Номера актов резервируем заранее: без связи акт должен получить
+     номер сразу, иначе его не напечатать на складе. */
+  useEffect(() => {
+    if (!navigator.onLine) return
+    topUpPool('АВ').then((n) => setPool(n))
+  }, [online])
+
+  // Перед спуском на склад данные стоит освежить принудительно
+  const refreshData = async () => {
+    setRefreshing(true)
+    await data?.load?.({ silent: true, snapshot: true })
+    await topUpPool('АВ')
+    setRefreshing(false)
+    await refreshState()
+    toast('Данные обновлены — можно работать без связи')
+  }
 
   useEffect(() => {
     refreshState()
@@ -62,6 +85,9 @@ export default function OfflineBar({ data }) {
 
     if (!sent && !failed) return
     if (conflicts.length) {
+      // Сохраняем: уведомление исчезнет, а разбираться всё равно надо
+      addConflicts(conflicts.map((c) => ({ reason: c.reason, title: c.row?.title || c.row?.kind })))
+      setConfs(listConflicts())
       toast(`Отправлено ${sent}, с расхождением ${conflicts.length} — проверьте остатки`, 'error')
     } else if (failed) {
       toast(`Отправлено ${sent}, не прошло ${failed}`, 'error')
@@ -71,7 +97,9 @@ export default function OfflineBar({ data }) {
   }
 
   const showBig = count > 0 && days >= 3
-  if (!count && online) return null
+  const stale = age != null && age > 4 * 60 * 60 * 1000   // снимку больше четырёх часов
+  // Прячем полосу, только когда всё в порядке: связь есть, очередь пуста, данные свежие
+  if (!count && online && !stale && !confs.length) return null
 
   return (
     <>
@@ -94,6 +122,27 @@ export default function OfflineBar({ data }) {
         </div>
       )}
 
+      {/* Расхождения после синхронизации: показываем, пока не разберут */}
+      {confs.length > 0 && (
+        <div style={{ margin: '0 0 12px', padding: '12px 15px', borderRadius: 12, background: 'var(--rd-l)', border: '1px solid var(--rd)' }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--rd-m)', marginBottom: 7 }}>
+            Расхождения после отправки · {confs.length}
+          </div>
+          {confs.slice(0, 4).map((c) => (
+            <div key={c.at} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '5px 0', fontSize: 12 }}>
+              <div style={{ flex: 1, minWidth: 0, color: 'var(--tx2)', lineHeight: 1.5 }}>
+                {c.title && <b>{c.title}: </b>}{c.reason}
+              </div>
+              <button onClick={() => { dropConflict(c.at); setConfs(listConflicts()) }}
+                style={{ fontSize: 11, color: 'var(--rd-m)', minHeight: 30, padding: '0 6px', whiteSpace: 'nowrap' }}>разобрал</button>
+            </div>
+          ))}
+          <div style={{ fontSize: 11, color: 'var(--tx3)', marginTop: 6, lineHeight: 1.5 }}>
+            Остаток ушёл в минус — проведите сверку или скорректируйте вручную.
+          </div>
+        </div>
+      )}
+
       {/* Обычная полоса */}
       {!showBig && (
         <div style={{
@@ -109,8 +158,9 @@ export default function OfflineBar({ data }) {
                 ? `${count} операц. ждёт отправки`
                 : count ? `Без связи · ${count} операц. в очереди` : 'Работаем без связи'}
             </div>
-            <div style={{ fontSize: 11, color: 'var(--tx3)', marginTop: 1 }}>
+            <div style={{ fontSize: 11, color: stale ? 'var(--am-m)' : 'var(--tx3)', marginTop: 1 }}>
               данные обновлялись {fmtAge(age)}
+              {pool > 0 && <> · номеров актов в запасе {pool}</>}
             </div>
           </div>
           {count > 0 && (
@@ -119,6 +169,9 @@ export default function OfflineBar({ data }) {
           )}
           {online && count > 0 && (
             <Btn size="sm" loading={busy} onClick={() => send(false)} style={{ minHeight: 36 }}>Отправить</Btn>
+          )}
+          {online && !count && (
+            <Btn size="sm" v="secondary" loading={refreshing} onClick={refreshData} style={{ minHeight: 36 }}>Обновить</Btn>
           )}
         </div>
       )}
