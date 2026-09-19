@@ -35,6 +35,14 @@ export default function Inventory({ data, profile }) {
   const [delInv, setDelInv] = useState(null)
   const [defect, setDefect] = useState(false)
   const [scan, setScan] = useState(false)
+
+  /* Факт вводят у стеллажа, где связи нет. Держим его на устройстве,
+     чтобы не потерять при закрытии приложения. */
+  const factKey = open ? `sklad-fact-${open.inv.id}` : null
+  useEffect(() => {
+    if (!factKey) return
+    try { localStorage.setItem(factKey, JSON.stringify(fact)) } catch (e) {}
+  }, [fact, factKey])
   const printRef = useRef(null)
 
 
@@ -75,12 +83,21 @@ export default function Inventory({ data, profile }) {
     if (!inv) return toast('Сверка не найдена', 'error')
     const f = {}
     items.forEach((it) => { f[it.product_id] = it.fact_qty })
+    // Незаписанный факт с этого устройства важнее сохранённого на сервере
+    try {
+      const local = JSON.parse(localStorage.getItem(`sklad-fact-${id}`) || '{}')
+      Object.assign(f, local)
+    } catch (e) {}
     setFact(f)
     setOpen({ inv, items })
   }
 
   const doSaveFact = async () => {
     const rows = Object.entries(fact).map(([pid, q]) => ({ product_id: Number(pid), fact_qty: q }))
+    if (!navigator.onLine) {
+      // Факт уже лежит на устройстве — отправим, когда будет связь
+      return toast('Факт сохранён на телефоне — отправится, когда появится связь')
+    }
     setBusy(true)
     const { error } = await saveFact(open.inv.id, rows)
     setBusy(false)
@@ -90,6 +107,7 @@ export default function Inventory({ data, profile }) {
   }
 
   const doCompare = async () => {
+    if (!navigator.onLine) return toast('Сравнение с учётом требует связи — факт пока сохранён на телефоне', 'error')
     setBusy(true)
     await saveFact(open.inv.id, Object.entries(fact).map(([pid, q]) => ({ product_id: Number(pid), fact_qty: q })))
     const { data: upd, error } = await compareWithStock(open.inv, stockByWh, profile)
@@ -102,6 +120,7 @@ export default function Inventory({ data, profile }) {
 
   const doApply = async () => {
     setBusy(true)
+    if (!navigator.onLine) return toast('Корректировку можно провести только при связи — остатки меняются на сервере', 'error')
     const { data: res, error } = await applyAdjustment(open.inv, open.items, profile)
     setBusy(false)
     setConfirm(null)
