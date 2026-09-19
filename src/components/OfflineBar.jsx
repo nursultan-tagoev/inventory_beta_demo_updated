@@ -30,12 +30,41 @@ export default function OfflineBar({ data }) {
   const [refreshing, setRefreshing] = useState(false)
   const [confs, setConfs] = useState(() => listConflicts())
 
+  /* Состав очереди: группируем по типу операции и считаем штуки.
+     Цвета те же, что в журнале движений — человек их уже узнаёт. */
+  const TONE = {
+    'Приход': ['var(--gr-l)', 'var(--gr-m)'],
+    'Выдача': ['var(--ink-l)', 'var(--ink)'],
+    'Возврат': ['var(--am-l)', 'var(--am-m)'],
+    'Списание': ['var(--rd-l)', 'var(--rd-m)'],
+    'Брак': ['var(--rd-l)', 'var(--rd-m)'],
+    'Перемещение': ['var(--sur2)', 'var(--tx2)'],
+  }
+  const summary = (() => {
+    const g = {}
+    for (const r of items) {
+      // Заголовок вида «Приход · 12 шт» или «Новый товар · Футболка»
+      const [head, tail] = String(r.title || r.kind).split(' · ')
+      const qty = Number(String(tail || '').replace(/\D/g, '')) || 0
+      const k = head || r.kind
+      g[k] ||= { label: k, qty: 0, n: 0 }
+      g[k].qty += qty
+      g[k].n += 1
+    }
+    return Object.values(g).map((x) => ({
+      ...x,
+      bg: TONE[x.label]?.[0] || 'var(--sur2)',
+      fg: TONE[x.label]?.[1] || 'var(--tx2)',
+    }))
+  })()
+
   const refreshState = useCallback(async () => {
     setCount(await queueCount())
     setDays(await oldestAgeDays())
     setAge(await snapshotAge())
     setPool(poolCount('АВ'))
     setConfs(listConflicts())
+    setItems(await queueList())
   }, [])
 
   /* Номера актов резервируем заранее: без связи акт должен получить
@@ -143,35 +172,44 @@ export default function OfflineBar({ data }) {
         </div>
       )}
 
-      {/* Обычная полоса */}
+      {/* Очередь — обычная работа, а не тревога: спокойная карточка,
+          состав видно сразу, метки те же, что в журнале движений */}
       {!showBig && (
-        <div style={{
-          margin: '0 0 12px', padding: '10px 14px', borderRadius: 11,
-          display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
-          background: online ? 'var(--am-l)' : 'var(--sur2)',
-          border: `1px solid ${online ? 'var(--am)' : 'var(--brd)'}`,
-        }}>
-          <span style={{ fontSize: 15 }}>{online ? '↑' : '📴'}</span>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 12.5, fontWeight: 600, color: online ? 'var(--am-m)' : 'var(--tx2)' }}>
-              {count
-                ? `${count} операц. ждёт отправки`
-                : stale ? 'Данные давно не обновлялись' : 'Работаем без связи'}
-            </div>
-            <div style={{ fontSize: 11, color: stale ? 'var(--am-m)' : 'var(--tx3)', marginTop: 1 }}>
-              данные обновлялись {fmtAge(age)}
-              {pool > 0 && <> · номеров актов в запасе {pool}</>}
-            </div>
+        <div className="card" style={{ margin: '0 0 12px', padding: '12px 15px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: summary.length ? 10 : 0, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 13.5, fontWeight: 600, flex: 1, minWidth: 120 }}>
+              {count ? 'Ждут отправки' : stale ? 'Данные давно не обновлялись' : 'Работаем без связи'}
+            </span>
+            {count > 0 && (
+              <span style={{ fontSize: 11.5, padding: '2px 9px', borderRadius: 20, background: 'var(--sur2)', color: 'var(--tx3)' }}>{count}</span>
+            )}
+            {online && count > 0 && (
+              <Btn size="sm" loading={busy} onClick={() => send(false)} style={{ minHeight: 34 }}>Отправить</Btn>
+            )}
+            {online && !count && (
+              <Btn size="sm" v="secondary" loading={refreshing} onClick={refreshData} style={{ minHeight: 34 }}>Обновить</Btn>
+            )}
           </div>
-          {count > 0 && (
-            <button onClick={async () => { setItems(await queueList()); setOpen(true) }}
-              style={{ fontSize: 11.5, color: 'var(--tx3)', minHeight: 34, padding: '0 8px' }}>что именно</button>
+
+          {summary.length > 0 && (
+            <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginBottom: 9 }}>
+              {summary.map((t) => (
+                <span key={t.label} style={{ fontSize: 12, padding: '5px 10px', borderRadius: 8, background: t.bg, color: t.fg }}>
+                  {t.label}{t.qty ? ` · ${t.qty} шт` : ''}{t.n > 1 ? ` × ${t.n}` : ''}
+                </span>
+              ))}
+            </div>
           )}
-          {online && count > 0 && (
-            <Btn size="sm" loading={busy} onClick={() => send(false)} style={{ minHeight: 36 }}>Отправить</Btn>
-          )}
-          {online && !count && (
-            <Btn size="sm" v="secondary" loading={refreshing} onClick={refreshData} style={{ minHeight: 36 }}>Обновить</Btn>
+
+          <div style={{ fontSize: 11, color: stale ? 'var(--am-m)' : 'var(--tx3)', lineHeight: 1.5 }}>
+            данные обновлялись {fmtAge(age)}
+            {pool > 0 && <> · номеров актов в запасе {pool}</>}
+          </div>
+
+          {busy && (
+            <div style={{ height: 3, borderRadius: 2, background: 'var(--sur2)', overflow: 'hidden', marginTop: 9 }}>
+              <div style={{ width: '45%', height: '100%', background: 'var(--ink)' }} />
+            </div>
           )}
         </div>
       )}
