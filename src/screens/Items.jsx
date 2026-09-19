@@ -5,6 +5,8 @@ import ImportProducts from '../components/ImportProducts'
 import SkuAssign from '../components/SkuAssign'
 import LabelPrint from '../components/LabelPrint'
 import Scanner from '../components/Scanner'
+import Photo from '../components/Photo'
+import PhotoGallery from '../components/PhotoGallery'
 import { buildSku, uniqueSku } from '../lib/sku'
 import { SIZE_TYPES, SIZE_OPTIONS, SIZE_HINT, SIZE_UNIT, GENDERS, SEASONS, sizeLabel, attrsLine } from '../lib/attrs'
 import { Btn, Field, Input, Select, Badge, Confirm, useToast } from '../components/ui'
@@ -180,8 +182,9 @@ export default function Items({ data, can, profile, scanSku, onScanUsed }) {
             <div key={p.id} onClick={() => setSel(p)} className="card"
               style={{ padding: 0, overflow: 'hidden', cursor: 'pointer',
                 ...(view === 'list' ? { display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px' } : {}) }}>
+              {view === 'list' && <Photo product={p} photos={data.photos} size={40} radius={10} />}
               {seeStock && <div style={view === 'list'
-                ? { minWidth: 62, textAlign: 'right', order: 2, marginLeft: 'auto' }
+                ? { minWidth: 62, textAlign: 'right', order: 3, marginLeft: 'auto' }
                 : { height: 60, background: 'var(--sur2)', display: 'flex', alignItems: 'flex-end', padding: '10px 14px' }}>
                 <span className="mono" style={{ fontSize: view === 'list' ? 15 : 23, fontWeight: 600, color: c }}>{s}<span style={{ fontFamily: 'var(--f)', fontSize: 11, color: 'var(--tx3)' }}> шт</span></span>
               </div>}
@@ -246,6 +249,7 @@ function ItemModal({ p, data, can, onClose }) {
   const [tab, setTab] = useState('info')
   const [hist, setHist] = useState(null)
   const [editing, setEditing] = useState(false)
+  const [photoBusy, setPhotoBusy] = useState(false)
   const [ef, setEf] = useState(null)
 
   const startEdit = () => {
@@ -298,7 +302,13 @@ function ItemModal({ p, data, can, onClose }) {
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'grid', placeItems: 'center', padding: 20, background: 'rgba(8,10,14,.5)', backdropFilter: 'blur(4px)' }}>
       <div onClick={(e) => e.stopPropagation()} className="card" style={{ width: '100%', maxWidth: 600, maxHeight: '88vh', overflow: 'auto', animation: 'fadeUp .2s' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '20px 22px', borderBottom: '1px solid var(--brd)' }}>
-          <div><div className="ff" style={{ fontSize: 18, fontWeight: 600 }}>{p.name}</div><div style={{ fontSize: 12, color: 'var(--tx3)', marginTop: 2 }}>{p.sku || '—'} · {som(p.price)}</div></div>
+          <div style={{ display: 'flex', gap: 13, alignItems: 'center', minWidth: 0 }}>
+            <Photo product={p} photos={data.photos} size={56} radius={13} />
+            <div style={{ minWidth: 0 }}>
+              <div className="ff" style={{ fontSize: 18, fontWeight: 600 }}>{p.name}</div>
+              <div style={{ fontSize: 12, color: 'var(--tx3)', marginTop: 2 }}>{p.sku || '—'} · {som(p.price)}</div>
+            </div>
+          </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
             <div className="mono" style={{ fontSize: 26, fontWeight: 600, color: s === 0 ? 'var(--rd)' : s < 5 ? 'var(--am)' : 'var(--gr)' }}>{s}<span style={{ fontSize: 13, color: 'var(--tx3)', fontFamily: 'var(--f)' }}> шт</span></div>
             {can('edit') && !editing && <button onClick={startEdit} title="Изменить товар" style={{ width: 34, height: 34, borderRadius: 9, display: 'grid', placeItems: 'center', color: 'var(--ink)', background: 'var(--ink-l)', fontSize: 15 }}>✎</button>}
@@ -355,9 +365,19 @@ function ItemModal({ p, data, can, onClose }) {
         </div>}
 
         {!editing && <div style={{ display: 'flex', gap: 4, padding: '14px 22px 0' }}>
-          {[['info', 'Обзор'], ['history', 'История']].map(([t, l]) => <button key={t} onClick={() => setTab(t)} style={{ padding: '7px 14px', borderRadius: 9, fontSize: 12.5, fontWeight: tab === t ? 600 : 400, background: tab === t ? 'var(--ink-l)' : 'transparent', color: tab === t ? 'var(--ink)' : 'var(--tx2)' }}>{l}</button>)}
+          {[['info', 'Обзор'], ['photos', 'Фото'], ['history', 'История']].map(([t, l]) => <button key={t} onClick={() => setTab(t)} style={{ padding: '7px 14px', borderRadius: 9, fontSize: 12.5, fontWeight: tab === t ? 600 : 400, background: tab === t ? 'var(--ink-l)' : 'transparent', color: tab === t ? 'var(--ink)' : 'var(--tx2)' }}>{l}</button>)}
         </div>}
         {!editing && <div style={{ padding: 22 }}>
+          {tab === 'photos' && (
+            <div style={{ padding: '4px 0 8px' }}>
+              <div style={{ fontSize: 11.5, color: 'var(--tx3)', lineHeight: 1.55, marginBottom: 11 }}>
+                Несколько ракурсов помогают различить похожий мерч. Главный снимок
+                виден в каталоге и при выборе товара — нажмите на фото, чтобы его назначить.
+              </div>
+              <PhotoGallery product={p} canEdit={can('edit')} onChanged={() => invalidate('photos')} />
+            </div>
+          )}
+
           {tab === 'info' && <>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10, marginBottom: 16 }}>
               {[['Приход', fl.in, 'var(--gr)'], ['Выдано', fl.out, 'var(--ink)'], ['Возврат', fl.return, 'var(--pu)'], ['Списано', fl.writeoff, 'var(--rd)']].map(([l, v, c]) => <div key={l} style={{ padding: '10px 12px', background: 'var(--bg)', borderRadius: 10 }}><div className="mono" style={{ fontSize: 18, fontWeight: 600, color: c }}>{v}</div><div style={{ fontSize: 10.5, color: 'var(--tx3)' }}>{l}</div></div>)}
