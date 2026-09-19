@@ -8,6 +8,7 @@ import Tour from './components/Tour'
 import Inventory from './screens/Inventory'
 import Audit from './screens/Audit'
 import Integrations from './screens/Integrations'
+import { saveProfile, loadProfile } from './lib/offline'
 import InstallPrompt from './components/InstallPrompt'
 import Sidebar from './components/Sidebar'
 import Notifications from './components/Notifications'
@@ -72,6 +73,9 @@ export default function App() {
     supabase.auth.getSession().then(({ data }) => setSession(data.session || null))
     // Обновляем только при реальной смене пользователя — иначе лишние перерисовки
     const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
+      /* Без связи токен не продлевается, и библиотека может сообщить о выходе.
+         Выкидывать человека со склада из-за этого нельзя. */
+      if (!s && !navigator.onLine) return
       setSession((prev) => {
         const a = prev?.user?.id || null, b = s?.user?.id || null
         return a === b ? prev : (s || null)
@@ -88,8 +92,16 @@ export default function App() {
     const load = async (attempt = 0) => {
       const { data, error } = await supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle()
       if (!alive) return
-      if (data) { setProfile(data); setProfErr(null); return }
+      if (data) { setProfile(data); setProfErr(null); saveProfile(data); return }
       if (attempt < 2) { setTimeout(() => load(attempt + 1), 700); return }
+
+      /* Связи нет — берём профиль, сохранённый на этом устройстве.
+         Это не выдумка прав: он настоящий, прочитан при прошлом входе.
+         Чужой не подойдёт — сверяем по идентификатору. */
+      const cached = await loadProfile(session.user.id)
+      if (!alive) return
+      if (cached) { setProfile(cached); setProfErr(null); return }
+
       setProfErr(error?.message || 'Профиль не найден в базе')
     }
     load()
