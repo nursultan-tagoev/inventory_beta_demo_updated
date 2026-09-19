@@ -1,5 +1,6 @@
 import { supabase } from '../supabaseClient'
 import { takeNumber, markUsed } from './actPool'
+import { enqueue } from './offline'
 
 function dataURLtoBlob(dataURL) {
   const [head, b64] = dataURL.split(',')
@@ -38,6 +39,18 @@ async function upload(path, fileOrBlob) {
 export async function createAct({ act, items, sigGiver, sigRecipient, scanFile }) {
   const prefix = act.type === 'return' ? 'АЗ' : 'АВ'
   const number = await nextActNumber(prefix)
+
+  /* Без связи акт записываем на устройство: номер уже есть из пачки,
+     печатать можно сразу, а на сервер он уйдёт при синхронизации.
+     Подписи и сканы офлайн не грузим — их добавят наверху. */
+  if (!navigator.onLine) {
+    await enqueue({
+      kind: 'act',
+      payload: { act: { ...act, number, status: 'draft' }, items },
+      title: 'Акт ' + number,
+    })
+    return { id: null, number, offline: true }
+  }
   // Путь в Storage — только латиница (кириллица в ключах недопустима)
   const base = number
     .replace(/А/g, 'A').replace(/В/g, 'V').replace(/З/g, 'Z')

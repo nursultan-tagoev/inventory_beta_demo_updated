@@ -5,12 +5,13 @@ import { enqueue, isTempId } from './offline'
 // a = { type, product_id, qty, warehouse_id, warehouse_to_id?, recipient_id?, branch_id?, ... }
 // stockByWh = { [product_id]: { [warehouse_id]: qty } }
 export async function saveMovement(a, stockByWh) {
-  const qty = Number(a.qty)
+  // Запятая, пробелы и пустое поле не должны выглядеть как «ноль»
+  const qty = Number(String(a.qty ?? '').replace(',', '.').trim())
   const wh = a.warehouse_id ? Number(a.warehouse_id) : null
   const whTo = a.warehouse_to_id ? Number(a.warehouse_to_id) : null
 
   if (!a.product_id) return { error: 'Не выбран товар' }
-  if (!qty || qty <= 0) return { error: 'Количество должно быть больше 0' }
+  if (!Number.isFinite(qty) || qty <= 0) return { error: 'Укажите количество больше нуля' }
   if (!wh) return { error: 'Не выбран склад' }                       // склад обязателен всегда
   if (a.type === 'transfer') {
     if (!whTo) return { error: 'Не выбран склад назначения' }

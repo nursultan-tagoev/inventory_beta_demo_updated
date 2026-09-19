@@ -4,7 +4,7 @@ import { queueList, dequeue, markFailed, isTempId } from './offline'
 /* Отправка очереди. Операции уходят по порядку: товар, заведённый без связи,
    должен получить настоящий идентификатор раньше, чем его оприходуют. */
 
-const ORDER = { product: 0, recipient: 1, movement: 2 }
+const ORDER = { product: 0, recipient: 1, movement: 2, act: 3 }
 
 export async function syncQueue({ onProgress } = {}) {
   const list = (await queueList()).sort((a, b) =>
@@ -58,6 +58,28 @@ async function sendOne(row, map) {
     const { data, error } = await supabase.from('recipients').insert(body).select('id').single()
     if (error) return { error: error.message }
     return { id: data.id }
+  }
+
+  if (row.kind === 'act') {
+    const { act, items } = row.payload
+    const body = { ...act }
+    if (body.recipient_id) body.recipient_id = real(body.recipient_id, map)
+
+    // Номер уже взят из пачки — проверяем, не ушёл ли акт раньше
+    const { data: same } = await supabase.from('acts').select('id').eq('number', body.number).maybeSingle()
+    if (same?.id) return {}
+
+    const { data: a, error } = await supabase.from('acts').insert(body).select('id').single()
+    if (error) return { error: error.message }
+
+    const rows = (items || []).map((it) => ({
+      act_id: a.id, product_id: real(it.product_id, map) || null, warehouse_id: it.warehouse_id || null,
+      name: it.name, sku: it.sku || null, unit: it.unit || 'шт',
+      qty: Number(it.qty) || 0, price: Number(it.price) || 0,
+      sum: (Number(it.qty) || 0) * (Number(it.price) || 0), dept: it.dept || null,
+    }))
+    if (rows.length) await supabase.from('act_items').insert(rows)
+    return {}
   }
 
   if (row.kind === 'movement') {
