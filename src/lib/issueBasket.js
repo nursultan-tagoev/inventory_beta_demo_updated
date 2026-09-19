@@ -24,15 +24,20 @@ export async function issueBasket({ basket, warehouseId, recipient, dept, basis,
 
   const wh = Number(warehouseId)
 
-  // Остаток проверяем до записи: иначе часть позиций уйдёт, а часть нет
-  const { data: stock } = await supabase.from('stock_by_warehouse')
+  /* Остаток проверяем до записи: иначе часть позиций уйдёт, а часть нет.
+     Ошибку запроса отличаем от пустого склада — раньше сорванный запрос
+     выглядел как «товара нет». */
+  const { data: stock, error: stErr } = await supabase.from('stock_by_warehouse')
     .select('product_id,qty').eq('warehouse_id', wh)
-  const have = Object.fromEntries((stock || []).map((r) => [r.product_id, r.qty]))
+  if (stErr) return { error: 'Не удалось прочитать остатки: ' + stErr.message }
 
-  const lack = basket.filter((it) => it.qty > (have[it.product_id] || 0))
+  const have = {}
+  for (const r of stock || []) have[Number(r.product_id)] = Number(r.qty) || 0
+
+  const lack = basket.filter((it) => it.qty > (have[Number(it.product_id)] || 0))
   if (lack.length) {
     const p = products.find((x) => x.id === lack[0].product_id)
-    return { error: `${p?.name || 'Товар'}: на складе только ${have[lack[0].product_id] || 0} шт` }
+    return { error: `${p?.name || 'Товар'} — на складе ${have[Number(lack[0].product_id)] || 0} шт, просят ${lack[0].qty}. Проверьте, тот ли склад выбран.` }
   }
 
   // Сначала акт — он даёт номер, который уйдёт в примечание движений

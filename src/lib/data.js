@@ -149,8 +149,7 @@ const FETCH = {
   },
 
   async reservations() {
-    const { data } = await supabase.from('reservations').select('*').eq('active', true)
-    return { reservations: data || [] }
+    return { reservations: ok(await supabase.from('reservations').select('*').eq('active', true)) }
   },
 
   async deliveries() {
