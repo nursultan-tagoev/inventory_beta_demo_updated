@@ -356,7 +356,7 @@ export default function Catalog({ data, profile, onRequest, scanSku, onScanUsed 
                       style={{ ...inp, marginBottom: 8 }} />
                     <select value={issue.newRec.dept} onChange={(e) => set('newRec', { ...issue.newRec, dept: e.target.value })}
                       style={{ ...inp, marginBottom: 8 }}>
-                      <option value="">— подразделение —</option>
+                      <option value="">— департамент / управление —</option>
                       {(data.departments || []).map((d) => <option key={d.id} value={d.name}>{d.name}</option>)}
                     </select>
                     <div style={{ display: 'flex', gap: 8 }}>
@@ -376,7 +376,7 @@ export default function Catalog({ data, profile, onRequest, scanSku, onScanUsed 
                 )}
               </div>
 
-              <div>{lbl('Подразделение')}
+              <div>{lbl('Департамент / управление')}
                 <select value={issue.dept} onChange={(e) => set('dept', e.target.value)} style={inp}>
                   <option value="">—</option>
                   {(data.departments || []).map((d) => <option key={d.id} value={d.name}>{d.name}</option>)}

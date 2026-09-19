@@ -42,9 +42,9 @@ export default function Settings({ data, profile }) {
     <div style={{ maxWidth: 1000, margin: '0 auto', padding: '24px 20px 80px', animation: 'fadeUp .3s ease' }}>
       <div className="ff" style={{ fontSize: 21, fontWeight: 600, marginBottom: 16 }}>Справочники</div>
 
-      <div className="side-wrap" style={{ display: 'flex', gap: 16, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+      <div className="ref-wrap" style={{ display: 'flex', gap: 16, alignItems: 'flex-start', flexWrap: 'wrap' }}>
         {/* Меню: на ноутбуке сбоку, на телефоне лентой сверху */}
-        <div className="card side-nav" style={{ width: 200, padding: 8, flexShrink: 0, display: 'flex', flexDirection: 'column' }}>
+        <div className="card ref-nav" style={{ width: 200, padding: 8, flexShrink: 0, display: 'flex', flexDirection: 'column' }}>
           {navItems.map((n) => (
             <button key={n.id} onClick={() => setTab(n.id)} style={{
               display: 'flex', alignItems: 'center', gap: 9, width: '100%', height: 38, padding: '0 11px', borderRadius: 9,

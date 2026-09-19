@@ -63,10 +63,11 @@ export default function Inventory({ data, profile }) {
     if (error) return toast(error, 'error')
     toast('Сверка начата')
     setNewWh('')
-    // Показываем сразу, не дожидаясь перечитывания реестра
-    invalidate(AFFECTS.inventory)
     setFact({})
     setOpen({ inv, items: [] })
+    // Реестр перечитываем следом: новая сверка должна быть в списке,
+    // а не появляться только после перезахода
+    await invalidate(AFFECTS.inventory)
   }
 
   const openOne = async (id) => {
