@@ -5,7 +5,7 @@ import ImportProducts from '../components/ImportProducts'
 import SkuAssign from '../components/SkuAssign'
 import LabelPrint from '../components/LabelPrint'
 import Scanner from '../components/Scanner'
-import { buildSku } from '../lib/sku'
+import { buildSku, uniqueSku } from '../lib/sku'
 import { SIZE_TYPES, SIZE_OPTIONS, SIZE_HINT, SIZE_UNIT, GENDERS, SEASONS, sizeLabel, attrsLine } from '../lib/attrs'
 import { Btn, Field, Input, Select, Badge, Confirm, useToast } from '../components/ui'
 import { fmt, som, TL } from '../lib/format'
@@ -63,7 +63,14 @@ export default function Items({ data, can, profile, scanSku, onScanUsed }) {
   const save = async () => {
     if (!nf.name.trim()) return toast('Название обязательно', 'error')
     setLoading(true)
-    const { error } = await supabase.from('products').insert({ name: nf.name.trim(), sku: nf.sku?.trim() || buildSku({ ...nf, product_type_id: nf.product_type_id, campaign_id: nf.campaign_id, direction_id: nf.direction_id }, data), size_type: nf.size_type || null, size: nf.size?.trim() || null, color: nf.color?.trim() || null, gender: nf.gender || null, season: nf.season || null, category_id: nf.category_id ? Number(nf.category_id) : null, price: Number(nf.price) || 0, location_id: nf.location_id ? Number(nf.location_id) : null, supplier_id: nf.supplier_id ? Number(nf.supplier_id) : null, campaign_id: nf.campaign_id ? Number(nf.campaign_id) : null, direction_id: nf.direction_id ? Number(nf.direction_id) : null, archived: false })
+    const body = { name: nf.name.trim(), sku: nf.sku?.trim() || uniqueSku(nf, data, products), size_type: nf.size_type || null, size: nf.size?.trim() || null, color: nf.color?.trim() || null, gender: nf.gender || null, season: nf.season || null, category_id: nf.category_id ? Number(nf.category_id) : null, price: Number(nf.price) || 0, location_id: nf.location_id ? Number(nf.location_id) : null, supplier_id: nf.supplier_id ? Number(nf.supplier_id) : null, campaign_id: nf.campaign_id ? Number(nf.campaign_id) : null, direction_id: nf.direction_id ? Number(nf.direction_id) : null, archived: false }
+
+    let { error } = await supabase.from('products').insert(body)
+    // Артикул мог занять другой товар, пока форма была открыта
+    if (error && /uniq_products_sku|duplicate key/i.test(error.message)) {
+      const res2 = await supabase.from('products').insert({ ...body, sku: `${body.sku}-${Date.now().toString().slice(-3)}` })
+      error = res2.error
+    }
     setLoading(false)
     if (error) return toast('Ошибка: ' + error.message, 'error')
     setAdd(false); setNf({ name: '', sku: '', size_type: '', size: '', color: '', gender: '', season: '', category_id: '', price: '', location_id: '', supplier_id: '', direction_id: '', product_type_id: '', campaign_id: '' }); toast('Товар добавлен'); invalidate(['products', 'stock'])
@@ -123,7 +130,7 @@ export default function Items({ data, can, profile, scanSku, onScanUsed }) {
         <div style={{ fontWeight: 600, marginBottom: 12 }}>Новый товар</div>
         <div className="form-2col" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: 10, marginBottom: 12 }}>
           <Field label="Название"><Input value={nf.name} onChange={(e) => setNf({ ...nf, name: e.target.value })} autoFocus /></Field>
-          <Field label="Артикул — соберётся сам, если оставить пустым"><Input value={nf.sku} onChange={(e) => setNf({ ...nf, sku: e.target.value })} placeholder={buildSku(nf, data)} /></Field>
+          <Field label="Артикул — соберётся сам, если оставить пустым"><Input value={nf.sku} onChange={(e) => setNf({ ...nf, sku: e.target.value })} placeholder={uniqueSku(nf, data, products)} /></Field>
           <Field label="Тип размерности">
             <Select value={nf.size_type} onChange={(e) => setNf({ ...nf, size_type: e.target.value, size: '' })}>
               {SIZE_TYPES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
