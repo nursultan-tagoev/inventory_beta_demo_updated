@@ -5,7 +5,12 @@ import { fmt } from '../lib/format'
 import { attrsLine } from '../lib/attrs'
 import { issueBasket } from '../lib/issueBasket'
 import { listTemplates, saveTemplate, deleteTemplate, expandTemplate } from '../lib/templates'
+import Scanner from '../components/Scanner'
+import SearchSelect from '../components/SearchSelect'
+import Photo from '../components/Photo'
+import PhotoGallery from '../components/PhotoGallery'
 import { supabase } from '../supabaseClient'
+import { cameraOn } from '../lib/integrations'
 
 const SEC = 'var(--sec-cat)', SEC_L = 'var(--sec-cat-l)'
 
@@ -16,6 +21,8 @@ export default function Catalog({ data, profile, onRequest, scanSku, onScanUsed 
   const isWh = ['admin', 'warehouse'].includes(profile?.role)
   const [issue, setIssue] = useState(null)   // окно оформления выдачи
   const [busy, setBusy] = useState(false)
+  const [scan, setScan] = useState(false)
+  const [gallery, setGallery] = useState(null)
 
 
   /* Шаблоны: заявители набирают одно и то же на каждую акцию */
@@ -110,9 +117,13 @@ export default function Catalog({ data, profile, onRequest, scanSku, onScanUsed 
     <div style={{ maxWidth: 1000, margin: '0 auto', padding: '20px 18px 90px', animation: 'fadeUp .3s ease' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 11, marginBottom: 13, flexWrap: 'wrap' }}>
         <span className="ff" style={{ fontSize: 20, fontWeight: 600 }}>{isWh ? 'Выдача' : 'Каталог'}</span>
+        {cameraOn(data.integrations) && (
+          <button onClick={() => setScan(true)} title="Сканировать код"
+            style={{ marginLeft: 'auto', minHeight: 38, width: 44, borderRadius: 9, border: '1px solid var(--brd)', background: 'var(--sur)', fontSize: 16 }}>📷</button>
+        )}
         {!isWh && (
           <button onClick={() => setTplOpen(true)}
-            style={{ marginLeft: 'auto', minHeight: 38, padding: '0 13px', borderRadius: 9, border: '1px solid var(--brd)', background: 'var(--sur)', color: 'var(--tx2)', fontSize: 12.5, fontWeight: 600 }}>
+            style={{ minHeight: 38, padding: '0 13px', borderRadius: 9, border: '1px solid var(--brd)', background: 'var(--sur)', color: 'var(--tx2)', fontSize: 12.5, fontWeight: 600 }}>
             Шаблоны{tpls.length ? ` · ${tpls.length}` : ''}
           </button>
         )}
@@ -153,7 +164,12 @@ export default function Catalog({ data, profile, onRequest, scanSku, onScanUsed 
           const disabled = state === 'bad'
           return (
             <div key={p.id} className="card" style={{ padding: 13, opacity: disabled ? 0.55 : 1, display: 'flex', flexDirection: 'column' }}>
-              <div style={{ width: 36, height: 36, borderRadius: 11, background: 'var(--sur2)', display: 'grid', placeItems: 'center', fontSize: 17, marginBottom: 8 }}>📦</div>
+              {/* Фото во всю ширину карточки: витрина без снимков — просто список */}
+              {/* Нажатие открывает все ракурсы, не уводя из витрины */}
+              <div onClick={(e) => { e.stopPropagation(); setGallery(p) }} style={{ cursor: 'pointer' }}>
+                <Photo product={p} photos={data.photos} size="100%" radius={9}
+                  style={{ height: 96, marginBottom: 9, aspectRatio: 'auto' }} />
+              </div>
               <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.3 }}>{p.name}</div>
               {attrsLine(p) && <div style={{ fontSize: 10.5, color: 'var(--tx3)', marginTop: 2 }}>{attrsLine(p)}</div>}
               {chain && <div style={{ fontSize: 10, color: 'var(--tx3)', marginTop: 2 }}>{chain}</div>}
@@ -197,6 +213,7 @@ export default function Catalog({ data, profile, onRequest, scanSku, onScanUsed 
           <div style={{ maxHeight: 120, overflowY: 'auto', marginBottom: 10 }}>
             {draft.map((d, i) => (
               <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 0', borderBottom: '1px solid var(--brd)', fontSize: 12.5 }}>
+                <Photo product={products.find((x) => x.id === d.product_id)} photos={data.photos} size={26} radius={7} />
                 <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.name}</span>
                 {/* Количество правится и здесь: вернуться к карточке ради цифры неудобно */}
                 <button onClick={() => bump(d.product_id, -1)}
@@ -231,6 +248,20 @@ export default function Catalog({ data, profile, onRequest, scanSku, onScanUsed 
             </Btn>
           )}
         </div>
+      )}
+
+      {gallery && <PhotoGallery product={gallery} canEdit={false} viewerOnly onClose={() => setGallery(null)} />}
+
+      {scan && (
+        <Scanner title="Наведите на наклейку" onClose={() => setScan(false)}
+          onFound={(sku) => {
+            const p = products.find((x) => (x.sku || '').toUpperCase() === sku.toUpperCase() && !x.archived)
+            if (!p) return toast('Артикул ' + sku + ' не найден', 'error')
+            // Каждое сканирование добавляет штуку в корзину
+            const has = inDraft(p.id)
+            if (has === null) putInDraft(p, 1)
+            else bump(p.id, +1)
+          }} />
       )}
 
       {/* Шаблоны заявок */}
@@ -316,23 +347,55 @@ export default function Catalog({ data, profile, onRequest, scanSku, onScanUsed 
           return (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div>{lbl('Получатель')}
-                <select value={issue.recipient_id} onChange={(e) => {
-                  set('recipient_id', e.target.value)
-                  const r = (data.recipients || []).find((x) => x.id == e.target.value)
-                  set('dept', r?.dept || '')
-                }} style={inp}>
-                  <option value="">— выбрать —</option>
-                  {(data.recipients || []).map((r) => (
-                    <option key={r.id} value={r.id}>{r.name}{r.dept ? ' · ' + r.dept : ''}</option>
-                  ))}
-                </select>
+                <SearchSelect
+                  value={issue.recipient_id}
+                  onChange={(v) => {
+                    set('recipient_id', v)
+                    const r = (data.recipients || []).find((x) => x.id == v)
+                    set('dept', r?.dept || '')
+                  }}
+                  placeholder="— выбрать —" required
+                  options={(data.recipients || []).map((r) => ({ value: r.id, label: r.name, hint: r.dept || '' }))}
+                  extra={{ label: '➕ Добавить получателя', onClick: () => set('newRec', { name: '', dept: '' }) }}
+                />
+
+                {/* Новый получатель прямо здесь: бежать в справочник посреди выдачи неудобно */}
+                {issue.newRec && (
+                  <div className="card" style={{ padding: 12, marginTop: 9, background: 'var(--bg)' }}>
+                    <input value={issue.newRec.name} autoFocus placeholder="Ф.И.О."
+                      onChange={(e) => set('newRec', { ...issue.newRec, name: e.target.value })}
+                      style={{ ...inp, marginBottom: 8 }} />
+                    <select value={issue.newRec.dept} onChange={(e) => set('newRec', { ...issue.newRec, dept: e.target.value })}
+                      style={{ ...inp, marginBottom: 8 }}>
+                      <option value="">— департамент / управление —</option>
+                      {(data.departments || []).map((d) => <option key={d.id} value={d.name}>{d.name}</option>)}
+                    </select>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <Btn size="sm" onClick={async () => {
+                        const name = issue.newRec.name.trim()
+                        if (!name) return toast('Введите имя', 'error')
+                        const { data: d, error } = await supabase.from('recipients')
+                          .insert({ name, dept: issue.newRec.dept || null }).select().single()
+                        if (error) return toast(error.message, 'error')
+                        data.invalidate('refs')
+                        setIssue((s) => ({ ...s, recipient_id: d.id, dept: d.dept || '', newRec: null }))
+                        toast('Получатель добавлен')
+                      }} style={{ flex: 1, minHeight: 42 }}>Сохранить</Btn>
+                      <Btn size="sm" v="secondary" onClick={() => set('newRec', null)} style={{ minHeight: 42 }}>Отмена</Btn>
+                    </div>
+                  </div>
+                )}
               </div>
 
-              <div>{lbl('Подразделение')}
-                <select value={issue.dept} onChange={(e) => set('dept', e.target.value)} style={inp}>
-                  <option value="">—</option>
-                  {(data.departments || []).map((d) => <option key={d.id} value={d.name}>{d.name}</option>)}
-                </select>
+              <div>{lbl('Департамент / управление')}
+                <SearchSelect
+                  value={issue.dept} onChange={(v) => set('dept', v)}
+                  placeholder="— выбрать —" required groupBy
+                  options={(data.departments || []).map((d) => ({
+                    value: d.name, label: d.name,
+                    group: d.kind === 'branch' ? 'Филиалы' : 'Департаменты и управления',
+                  }))}
+                />
               </div>
 
               <div>{lbl('Основание')}
@@ -369,6 +432,7 @@ export default function Catalog({ data, profile, onRequest, scanSku, onScanUsed 
 
               <Btn size="lg" loading={busy} onClick={async () => {
                 if (!rec) return toast('Выберите получателя', 'error')
+                if (!issue.dept) return toast('Выберите департамент или управление', 'error')
                 if (!issue.warehouse_id) return toast('Выберите склад', 'error')
                 setBusy(true)
                 const { data: res, error } = await issueBasket({
