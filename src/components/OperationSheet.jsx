@@ -37,6 +37,12 @@ export default function OperationSheet({ type, data, profile, can, onDone }) {
   const [labels, setLabels] = useState(null)
   const [scan, setScan] = useState(false)
   const [showNotes, setShowNotes] = useState(false)
+
+  /* Последний использованный классификатор: у нового товара его негде взять,
+     а закупки обычно идут подряд под одну акцию. */
+  const LAST = 'sklad-last-classifier'
+  const readLast = () => { try { return JSON.parse(localStorage.getItem(LAST) || '{}') } catch (e) { return {} } }
+  const saveLast = (v) => { try { localStorage.setItem(LAST, JSON.stringify(v)) } catch (e) {} }
   const [f, setF] = useState({
     product_id: '', qty: 1, recipient_id: '', branch_id: '', dept: '', is_test: false,
     warehouse_id: warehouses[0]?.id || '', warehouse_to_id: '', location_id: '',
@@ -169,6 +175,9 @@ export default function OperationSheet({ type, data, profile, can, onDone }) {
       } catch (e) {}
     }
 
+    if (type === 'in' && f.direction_id) {
+      saveLast({ direction_id: f.direction_id, product_type_id: f.product_type_id, campaign_id: f.campaign_id })
+    }
     const { error, queued } = await saveMovement({ ...f, qty: goodQty, type, delivery_id: deliveryId, issuer_id: profile.id, branch_id: f.branch_id || selRec?.branch_id }, stockByWh)
 
     // Остаток на экране меняем сразу, не дожидаясь перечитывания представления
@@ -273,9 +282,19 @@ export default function OperationSheet({ type, data, profile, can, onDone }) {
                 const camp = campaigns.find((c) => c.id === p.campaign_id)
                 const type = productTypes.find((t) => t.id === (camp?.product_type_id || p.product_type_id))
                 const dir = directions.find((d) => d.id === (type?.direction_id || p.direction_id))
-                if (dir) up('direction_id', dir.id)
-                if (type) up('product_type_id', type.id)
-                if (camp) up('campaign_id', camp.id)
+                if (dir || type || camp) {
+                  up('direction_id', dir?.id || '')
+                  up('product_type_id', type?.id || '')
+                  up('campaign_id', camp?.id || '')
+                } else {
+                  // У товара классификатора нет — берём последний использованный
+                  const last = readLast()
+                  if (last.direction_id) {
+                    up('direction_id', last.direction_id)
+                    up('product_type_id', last.product_type_id || '')
+                    up('campaign_id', last.campaign_id || '')
+                  }
+                }
               }
             }}
             placeholder="— выбрать товар —"
