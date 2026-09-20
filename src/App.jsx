@@ -9,6 +9,7 @@ import Inventory from './screens/Inventory'
 import Audit from './screens/Audit'
 import Integrations from './screens/Integrations'
 import OfflineBar from './components/OfflineBar'
+import UpdatePrompt from './components/UpdatePrompt'
 import { watchIdle, expireSession, resetIdle } from './lib/idle'
 import { saveProfile, loadProfile, loadProfileSync } from './lib/offline'
 import InstallPrompt from './components/InstallPrompt'
@@ -271,6 +272,7 @@ export default function App() {
           )}
           <div style={{ padding: '0 20px' }}><OfflineBar data={data} /></div>
           <ErrorBoundary k={safeView}>{SCREENS[safeView]}</ErrorBoundary>
+          <UpdatePrompt />
         </main>
         {safeView !== 'lucy' && (
           <button onClick={() => { setAssistAuto(true); setView('lucy') }} title="Люси" className="lucy-fab"
