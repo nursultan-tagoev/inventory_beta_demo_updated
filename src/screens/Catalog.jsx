@@ -6,7 +6,10 @@ import { attrsLine } from '../lib/attrs'
 import { issueBasket } from '../lib/issueBasket'
 import { listTemplates, saveTemplate, deleteTemplate, expandTemplate } from '../lib/templates'
 import Scanner from '../components/Scanner'
+import { createRecipient, pinDept } from '../lib/recipients'
 import SearchSelect from '../components/SearchSelect'
+import Photo from '../components/Photo'
+import PhotoGallery from '../components/PhotoGallery'
 import { supabase } from '../supabaseClient'
 import { cameraOn } from '../lib/integrations'
 
@@ -20,6 +23,7 @@ export default function Catalog({ data, profile, onRequest, scanSku, onScanUsed 
   const [issue, setIssue] = useState(null)   // окно оформления выдачи
   const [busy, setBusy] = useState(false)
   const [scan, setScan] = useState(false)
+  const [gallery, setGallery] = useState(null)
 
 
   /* Шаблоны: заявители набирают одно и то же на каждую акцию */
@@ -161,7 +165,12 @@ export default function Catalog({ data, profile, onRequest, scanSku, onScanUsed 
           const disabled = state === 'bad'
           return (
             <div key={p.id} className="card" style={{ padding: 13, opacity: disabled ? 0.55 : 1, display: 'flex', flexDirection: 'column' }}>
-              <div style={{ width: 36, height: 36, borderRadius: 11, background: 'var(--sur2)', display: 'grid', placeItems: 'center', fontSize: 17, marginBottom: 8 }}>📦</div>
+              {/* Фото во всю ширину карточки: витрина без снимков — просто список */}
+              {/* Нажатие открывает все ракурсы, не уводя из витрины */}
+              <div onClick={(e) => { e.stopPropagation(); setGallery(p) }} style={{ cursor: 'pointer' }}>
+                <Photo product={p} photos={data.photos} size="100%" radius={9}
+                  style={{ height: 96, marginBottom: 9, aspectRatio: 'auto' }} />
+              </div>
               <div style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.3 }}>{p.name}</div>
               {attrsLine(p) && <div style={{ fontSize: 10.5, color: 'var(--tx3)', marginTop: 2 }}>{attrsLine(p)}</div>}
               {chain && <div style={{ fontSize: 10, color: 'var(--tx3)', marginTop: 2 }}>{chain}</div>}
@@ -205,6 +214,7 @@ export default function Catalog({ data, profile, onRequest, scanSku, onScanUsed 
           <div style={{ maxHeight: 120, overflowY: 'auto', marginBottom: 10 }}>
             {draft.map((d, i) => (
               <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 0', borderBottom: '1px solid var(--brd)', fontSize: 12.5 }}>
+                <Photo product={products.find((x) => x.id === d.product_id)} photos={data.photos} size={26} radius={7} />
                 <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.name}</span>
                 {/* Количество правится и здесь: вернуться к карточке ради цифры неудобно */}
                 <button onClick={() => bump(d.product_id, -1)}
@@ -240,6 +250,8 @@ export default function Catalog({ data, profile, onRequest, scanSku, onScanUsed 
           )}
         </div>
       )}
+
+      {gallery && <PhotoGallery product={gallery} canEdit={false} viewerOnly onClose={() => setGallery(null)} />}
 
       {scan && (
         <Scanner title="Наведите на наклейку" onClose={() => setScan(false)}
@@ -341,11 +353,21 @@ export default function Catalog({ data, profile, onRequest, scanSku, onScanUsed 
                   onChange={(v) => {
                     set('recipient_id', v)
                     const r = (data.recipients || []).find((x) => x.id == v)
-                    set('dept', r?.dept || '')
+                    if (r?.dept) set('dept', r.dept)
+                    else { try { set('dept', localStorage.getItem('sklad-last-dept') || '') } catch (e) {} }
                   }}
                   placeholder="— выбрать —" required
                   options={(data.recipients || []).map((r) => ({ value: r.id, label: r.name, hint: r.dept || '' }))}
-                  extra={{ label: '➕ Добавить получателя', onClick: () => set('newRec', { name: '', dept: '' }) }}
+                  createHint="появится в справочнике получателей"
+                  onCreate={async (name) => {
+                    const { data: r, error, existed } = await createRecipient({ name, dept: issue.dept })
+                    if (error) { toast(error, 'error'); return false }
+                    data.invalidate('refs')
+                    setIssue((s) => ({ ...s, recipient_id: r.id, dept: r.dept || s.dept }))
+                    toast(existed ? 'Уже был — выбран' : 'Получатель добавлен')
+                    return true
+                  }}
+                  extra={{ label: '➕ Заполнить подробнее', onClick: () => set('newRec', { name: '', dept: '' }) }}
                 />
 
                 {/* Новый получатель прямо здесь: бежать в справочник посреди выдачи неудобно */}
@@ -424,6 +446,8 @@ export default function Catalog({ data, profile, onRequest, scanSku, onScanUsed 
                 if (!issue.dept) return toast('Выберите департамент или управление', 'error')
                 if (!issue.warehouse_id) return toast('Выберите склад', 'error')
                 setBusy(true)
+                try { localStorage.setItem('sklad-last-dept', issue.dept) } catch (e) {}
+                pinDept(rec.id, issue.dept)   // закрепится, если в карточке пусто
                 const { data: res, error } = await issueBasket({
                   basket: draft, warehouseId: issue.warehouse_id,
                   recipient: { id: rec.id, name: rec.name, branch_id: rec.branch_id, profile_id: rec.profile_id },
