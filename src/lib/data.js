@@ -21,7 +21,7 @@ export const AFFECTS = {
   send:      ['requests'],
   cancel:    ['requests'],
   issue:     ['requests', 'movements', 'stock', 'acts', 'reservations'],
-  receive:   ['movements', 'stock', 'deliveries'],
+  receive:   ['movements', 'stock', 'deliveries', 'products'],
   writeoff:  ['movements', 'stock'],
   defect:    ['movements', 'stock', 'deliveries'],
   adjust:    ['movements', 'stock', 'inventories'],

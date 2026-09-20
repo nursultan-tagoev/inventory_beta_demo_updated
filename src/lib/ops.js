@@ -59,6 +59,23 @@ export async function saveMovement(a, stockByWh) {
     return { error: null, queued: true }
   }
 
+  /* Классификатор закрепляем за товаром: указали при первом приходе —
+     при следующем подтянется сам. Перезаписываем только пустое,
+     чтобы не менять то, что уже закреплено осознанно. */
+  if (a.type === 'in' && !isTempId(a.product_id) && (a.direction_id || a.product_type_id || a.campaign_id)) {
+    const { data: prod } = await supabase.from('products')
+      .select('direction_id, product_type_id, campaign_id').eq('id', a.product_id).maybeSingle()
+    if (prod) {
+      const patch = {}
+      if (!prod.direction_id && a.direction_id) patch.direction_id = Number(a.direction_id)
+      if (!prod.product_type_id && a.product_type_id) patch.product_type_id = Number(a.product_type_id)
+      if (!prod.campaign_id && a.campaign_id) patch.campaign_id = Number(a.campaign_id)
+      if (Object.keys(patch).length) {
+        await supabase.from('products').update(patch).eq('id', a.product_id)
+      }
+    }
+  }
+
   const { error } = await supabase.from('movements').insert(row)
   if (error && /fetch|network|failed/i.test(error.message)) {
     // Связь оборвалась посреди запроса — не теряем операцию
