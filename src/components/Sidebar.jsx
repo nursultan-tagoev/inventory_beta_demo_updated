@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import OfflineStatus from './OfflineStatus'
-import { buildLabel } from './UpdatePrompt'
+import { buildLabel, checkForUpdate } from './UpdatePrompt'
 const I = {
   home: <path d="M3 10.5 12 3l9 7.5M5 9.5V21h14V9.5" />,
   catalog: <path d="M3 6h18M3 12h18M3 18h18" />,
@@ -55,6 +55,8 @@ const ROLE_RU = { admin: 'Суперадминистратор', warehouse: 'А�
 
 export default function Sidebar({ view, setView, profile, onLogout, badges = {}, branchName, onTour }) {
   const [more, setMore] = useState(false)
+  const [checking, setChecking] = useState(false)
+  const [updMsg, setUpdMsg] = useState('')
   const role = profile?.role || 'employee'
   const items = NAV.filter((n) => n.roles.includes(role)).map((n) =>
     // Складу понятнее «Выдача» — рядом есть «Товары», их легко перепутать
@@ -144,14 +146,20 @@ export default function Sidebar({ view, setView, profile, onLogout, badges = {},
           <OfflineStatus />
           <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '9px 12px', borderRadius: 11, background: 'var(--bg)', flexWrap: 'wrap' }}>
             <span style={{ fontSize: 11.5, color: 'var(--tx3)', flex: 1 }}>версия {buildLabel()}</span>
-            <button onClick={async () => {
-              // Обычно обновление приходит само, но проверить вручную полезно
-              const reg = await navigator.serviceWorker?.getRegistration?.()
-              if (reg) { await reg.update().catch(() => {}); }
-              location.reload()
+            <button disabled={checking} onClick={async () => {
+              setChecking(true)
+              const { found, error } = await checkForUpdate()
+              setChecking(false)
+              if (error) return setUpdMsg(error)
+              if (!found) return setUpdMsg('У вас последняя сборка')
+              setUpdMsg('Есть новая версия — обновляю…')
+              setTimeout(() => location.reload(), 900)
             }} style={{ fontSize: 11.5, color: 'var(--ink)', minHeight: 34, padding: '0 8px', fontWeight: 600 }}>
-              проверить обновление
+              {checking ? 'проверяю…' : 'проверить обновление'}
             </button>
+            {updMsg && (
+              <div style={{ width: '100%', fontSize: 11.5, color: 'var(--tx2)', paddingTop: 2 }}>{updMsg}</div>
+            )}
           </div>
           {restItems.length > 0 && (
             <div style={{ border: '1px solid var(--brd)', borderRadius: 12, overflow: 'hidden' }}>

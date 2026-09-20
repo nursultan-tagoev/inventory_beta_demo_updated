@@ -15,6 +15,24 @@ export const buildLabel = () => {
   return `${APP_VERSION} · ${d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })} ${d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}`
 }
 
+/* Проверка вручную: спрашиваем у сервера, есть ли новая сборка, и говорим
+   словами, что нашли. Раньше кнопка просто перезагружала страницу,
+   и человек не понимал, обновился он или и так был на свежей. */
+export async function checkForUpdate() {
+  if (!navigator.serviceWorker) return { error: 'Обновления доступны только в установленном приложении' }
+  try {
+    const reg = await navigator.serviceWorker.getRegistration()
+    if (!reg) return { error: 'Приложение не установлено — обновите страницу обычным способом' }
+
+    await reg.update()
+    // Новая сборка появляется как ожидающая или устанавливающаяся
+    const pending = reg.waiting || reg.installing
+    return pending ? { found: true } : { found: false }
+  } catch (e) {
+    return { error: 'Не удалось проверить: ' + e.message }
+  }
+}
+
 export default function UpdatePrompt() {
   const [ready, setReady] = useState(false)
   const [busy, setBusy] = useState(false)
