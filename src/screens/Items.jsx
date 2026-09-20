@@ -67,7 +67,7 @@ export default function Items({ data, can, profile, scanSku, onScanUsed }) {
   const save = async () => {
     if (!nf.name.trim()) return toast('Название обязательно', 'error')
     setLoading(true)
-    const body = { name: nf.name.trim(), sku: nf.sku?.trim() || uniqueSku(nf, data, products), size_type: nf.size_type || null, size: nf.size?.trim() || null, color: nf.color?.trim() || null, gender: nf.gender || null, season: nf.season || null, category_id: nf.category_id ? Number(nf.category_id) : null, price: Number(nf.price) || 0, location_id: nf.location_id ? Number(nf.location_id) : null, supplier_id: nf.supplier_id ? Number(nf.supplier_id) : null, campaign_id: nf.campaign_id ? Number(nf.campaign_id) : null, direction_id: nf.direction_id ? Number(nf.direction_id) : null, archived: false }
+    const body = { name: nf.name.trim(), sku: nf.sku?.trim() || uniqueSku(nf, data, products), size_type: nf.size_type || null, size: nf.size?.trim() || null, color: nf.color?.trim() || null, gender: nf.gender || null, season: nf.season || null, category_id: nf.category_id ? Number(nf.category_id) : null, price: Number(nf.price) || 0, location_id: nf.location_id ? Number(nf.location_id) : null, supplier_id: nf.supplier_id ? Number(nf.supplier_id) : null, campaign_id: nf.campaign_id ? Number(nf.campaign_id) : null, direction_id: nf.direction_id ? Number(nf.direction_id) : null, product_type_id: nf.product_type_id ? Number(nf.product_type_id) : null, archived: false }
 
     let { error } = await supabase.from('products').insert(body)
     // Артикул мог занять другой товар, пока форма была открыта
@@ -317,6 +317,7 @@ function ItemModal({ p, data, can, onClose }) {
       supplier_id: ef.supplier_id ? Number(ef.supplier_id) : null,
       campaign_id: ef.campaign_id ? Number(ef.campaign_id) : null,
       direction_id: ef.direction_id ? Number(ef.direction_id) : null,
+      product_type_id: ef.product_type_id ? Number(ef.product_type_id) : null,
     }).eq('id', p.id)
     if (error) return toast('Ошибка: ' + error.message, 'error')
     toast('Сохранено'); setEditing(false); invalidate(['products', 'stock']); onClose()
