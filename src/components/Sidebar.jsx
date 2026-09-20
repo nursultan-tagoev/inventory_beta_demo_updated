@@ -37,6 +37,9 @@ const NAV = [
   { id: 'requests', label: 'Заявки', roles: ['admin', 'warehouse', 'manager', 'employee', 'director'] },
   { id: 'acts', label: 'Акты', roles: ['admin', 'warehouse', 'manager', 'employee', 'director'] },
   { id: 'inventory', label: 'Инвентаризация', roles: ['admin', 'warehouse', 'director'] },
+  // Люди, которым выдают товар. Пункт был закомментирован со времён второго
+  // блока — экран работал, а попасть на него было нельзя
+  { id: 'recipients', label: 'Получатели', roles: ['admin', 'warehouse', 'director'] },
   { id: 'reports', label: 'Аналитика', roles: ['admin', 'warehouse', 'director', 'manager'] },
   { id: 'lucy', label: 'Люси', roles: ['admin', 'warehouse', 'manager', 'employee', 'director'] },
   { id: 'integrations', label: 'Интеграции', roles: ['admin', 'warehouse'] },
