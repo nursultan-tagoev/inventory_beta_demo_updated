@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import OfflineStatus from './OfflineStatus'
+import { buildLabel } from './UpdatePrompt'
 const I = {
   home: <path d="M3 10.5 12 3l9 7.5M5 9.5V21h14V9.5" />,
   catalog: <path d="M3 6h18M3 12h18M3 18h18" />,
@@ -113,6 +114,9 @@ export default function Sidebar({ view, setView, profile, onLogout, badges = {},
             <button onClick={onLogout} style={{ flex: 1, height: 32, borderRadius: 8, color: 'var(--navm)', fontSize: 12, background: 'var(--nav2)' }}>Выйти</button>
           </div>
         </div>
+        <div style={{ fontSize: 10, color: 'var(--navm)', textAlign: 'center', padding: '8px 0 2px' }}>
+          версия {buildLabel()}
+        </div>
       </aside>
 
       {/* Телефон — нижнее меню: четыре главных плюс «Ещё» */}
@@ -138,6 +142,17 @@ export default function Sidebar({ view, setView, profile, onLogout, badges = {},
       <Sheet open={more} onClose={() => setMore(false)} title="Ещё">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <OfflineStatus />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '9px 12px', borderRadius: 11, background: 'var(--bg)', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 11.5, color: 'var(--tx3)', flex: 1 }}>версия {buildLabel()}</span>
+            <button onClick={async () => {
+              // Обычно обновление приходит само, но проверить вручную полезно
+              const reg = await navigator.serviceWorker?.getRegistration?.()
+              if (reg) { await reg.update().catch(() => {}); }
+              location.reload()
+            }} style={{ fontSize: 11.5, color: 'var(--ink)', minHeight: 34, padding: '0 8px', fontWeight: 600 }}>
+              проверить обновление
+            </button>
+          </div>
           {restItems.length > 0 && (
             <div style={{ border: '1px solid var(--brd)', borderRadius: 12, overflow: 'hidden' }}>
               {restItems.map((n, i) => (
