@@ -7,6 +7,7 @@ import LabelPrint from './LabelPrint'
 import Scanner from './Scanner'
 import SearchSelect from './SearchSelect'
 import { createDirection, createProductType, createCampaign } from '../lib/classifier'
+import { createRecipient, pinDept } from '../lib/recipients'
 import Photo from './Photo'
 import { Btn, Field, Input, Select, Confirm, useToast } from './ui'
 import { som } from '../lib/format'
@@ -40,9 +41,31 @@ export default function OperationSheet({ type, data, profile, can, onDone }) {
 
   /* Последний использованный классификатор: у нового товара его негде взять,
      а закупки обычно идут подряд под одну акцию. */
+  const LAST_DEPT = 'sklad-last-dept'
   const LAST = 'sklad-last-classifier'
   const readLast = () => { try { return JSON.parse(localStorage.getItem(LAST) || '{}') } catch (e) { return {} } }
   const saveLast = (v) => { try { localStorage.setItem(LAST, JSON.stringify(v)) } catch (e) {} }
+
+  /* Подставляем классификатор товара, а если у него нет — последний
+     использованный. Нужна и при выборе из списка, и при сканировании. */
+  const fillClassifier = (p) => {
+    if (!p) return
+    const camp = campaigns.find((c) => c.id === p.campaign_id)
+    const type = productTypes.find((t) => t.id === (p.product_type_id || camp?.product_type_id))
+    const dir = directions.find((d) => d.id === (p.direction_id || type?.direction_id))
+    if (dir || type || camp) {
+      up('direction_id', dir?.id || '')
+      up('product_type_id', type?.id || '')
+      up('campaign_id', camp?.id || '')
+      return
+    }
+    const last = readLast()
+    if (last.direction_id) {
+      up('direction_id', last.direction_id)
+      up('product_type_id', last.product_type_id || '')
+      up('campaign_id', last.campaign_id || '')
+    }
+  }
   const [f, setF] = useState({
     product_id: '', qty: 1, recipient_id: '', branch_id: '', dept: '', is_test: false,
     warehouse_id: warehouses[0]?.id || '', warehouse_to_id: '', location_id: '',
@@ -175,6 +198,11 @@ export default function OperationSheet({ type, data, profile, can, onDone }) {
       } catch (e) {}
     }
 
+    if (type === 'out' && f.dept) {
+      try { localStorage.setItem(LAST_DEPT, f.dept) } catch (e) {}
+      // Закрепляем за получателем, если в карточке пусто
+      pinDept(f.recipient_id, f.dept)
+    }
     if (type === 'in' && f.direction_id) {
       saveLast({ direction_id: f.direction_id, product_type_id: f.product_type_id, campaign_id: f.campaign_id })
     }
@@ -228,6 +256,7 @@ export default function OperationSheet({ type, data, profile, can, onDone }) {
           if (!p) return toast('Товар с артикулом ' + sku + ' не найден', 'error')
           up('product_id', p.id)
           setCreatedProd(null)
+          fillClassifier(p)
           toast(p.name)
         }} />
     )}
@@ -277,25 +306,7 @@ export default function OperationSheet({ type, data, profile, can, onDone }) {
               setCreatedProd(null)
               /* У товара классификатор часто уже заполнен — подставляем,
                  чтобы не спрашивать одно и то же дважды. */
-              const p = products.find((x) => x.id == v)
-              if (p) {
-                const camp = campaigns.find((c) => c.id === p.campaign_id)
-                const type = productTypes.find((t) => t.id === (camp?.product_type_id || p.product_type_id))
-                const dir = directions.find((d) => d.id === (type?.direction_id || p.direction_id))
-                if (dir || type || camp) {
-                  up('direction_id', dir?.id || '')
-                  up('product_type_id', type?.id || '')
-                  up('campaign_id', camp?.id || '')
-                } else {
-                  // У товара классификатора нет — берём последний использованный
-                  const last = readLast()
-                  if (last.direction_id) {
-                    up('direction_id', last.direction_id)
-                    up('product_type_id', last.product_type_id || '')
-                    up('campaign_id', last.campaign_id || '')
-                  }
-                }
-              }
+              fillClassifier(products.find((x) => x.id == v))
             }}
             placeholder="— выбрать товар —"
             required
@@ -528,12 +539,26 @@ export default function OperationSheet({ type, data, profile, can, onDone }) {
               const r = recList.find((x) => x.id == v)
               // Департамент и филиал подтягиваются из карточки получателя
               if (r?.branch_id) up('branch_id', r.branch_id)
-              up('dept', r?.dept || '')
+              /* Департамент из карточки, а если пусто — последний использованный:
+                 выдают обычно партиями в один отдел. */
+              if (r?.dept) up('dept', r.dept)
+              else { try { up('dept', localStorage.getItem(LAST_DEPT) || '') } catch (e) {} }
             }}
             placeholder="— выбрать —"
             required
             options={recList.map((r) => ({ value: r.id, label: r.name, hint: r.dept || '' }))}
-            extra={{ label: '➕ Добавить получателя', onClick: () => setShowNewRec(true) }}
+            createHint="появится в справочнике получателей"
+            onCreate={async (name) => {
+              const { data: r, error, existed, offline } = await createRecipient({ name, dept: f.dept })
+              if (error) { toast(error, 'error'); return false }
+              setExtraRecs((l) => [...l, r])
+              up('recipient_id', r.id)
+              if (r.dept) up('dept', r.dept)
+              data.invalidate?.('refs')
+              toast(offline ? 'Записан — создастся при связи' : existed ? 'Уже был — выбран' : 'Получатель добавлен')
+              return true
+            }}
+            extra={{ label: '➕ Заполнить подробнее', onClick: () => setShowNewRec(true) }}
           />
         </Field>
         {showNewRec && <div className="card" style={{ padding: 14, background: 'var(--bg)' }}>
